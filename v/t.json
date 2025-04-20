@@ -92,7 +92,7 @@
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
     
 {"name": "ryplay","hosts": ["ryplay"],"regex": [
-"#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:*?80000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
+"#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5.480000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:10.000000,[\\s\\S]*?#EXTINF:1.266667,[\\s\\S]*?"]},
   
 {"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
