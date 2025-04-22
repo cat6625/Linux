@@ -86,9 +86,8 @@
     {"name":"XY","type":0,"url":"https://jx.xymp4.cc/?url="},
     {"name":"推荐","type":1,"url":"https://zy.qiaoji8.com/gouzi.php?url=94b07e0b2c0e8244&url="},
     {"name":"臻享","type":1,"url":"https://150.138.78.37:4399/api?key=94b07e0b2c0e8244&url="},
-    {"name":"优选","type":1,"url":"http://1.94.221.189:88/algorithm.php?url="},
-    {"name":"巧技三","type":1,"url":"https://zy.qiaoji8.com/xiafan.php?url=","ext":{"flag":["QD4K","iyf","duanju","gzcj","GTV","GZYS","weggz","Ace"],"header":{"User-Agent":"okhttp/4.9.1"}}}
-  ],
+    {"name":"优选","type":1,"url":"http://1.94.221.189:88/algorithm.php?url="}
+     ],
 
 
 "rules":[
