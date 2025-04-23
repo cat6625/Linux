@@ -60,6 +60,14 @@
                        "searchContent": {"loadUrl": "https://m.yfsp.tv/search"}}}
 },
 
+{"key":"低端","name":"🔅低端","type":3,"api":"csp_Ddys","searchable":1,"quickSearch":1,"filterable":1,
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/欧歌/spider.jar"},
+{"key":"雨滴","name":"💧雨滴","type":3,"api":"csp_Xdai","playerType":2,"ext":"jaHR0cHM6Ly95ZHlzZHluYW1pY2RvbWFpbm5hbWUuNjguZ3k6MTA2NzgvYzltMmpzMjk4eDgyaDYvbDltOGJ4MjNqMm8ycDlxL2R5bmFtaWNkb21haW5uYW1lLnR4dHxrOW8zcDJjOGI3bTN6MG84fGs5bzNwMmM4YjdtM3owbzh8MTAw",
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/欧歌/spider.jar"},
+
+{"key":"优质","name":"🖼️优质","type":3,"api":"csp_Xdai","playerType":2,"ext":"jaHR0cHM6Ly9sYnlzYXBpZHR5bWd4LjY4Lmd5OjE2Nzg5L2xieXNhcGlkdHltL2FwcC50eHR8YXBpYXBwbGJ5c2tleTE2OHxhcGlhcHBsYnlza2V5MTY4fDEwNw==",
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/欧歌/spider.jar"  },
+
  {"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_Lib","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
  "ext": "faHR0cHM6Ly93d3cubGlidmlvLmNjL3N0YXRpYy9qcy9wbGF5ZXJjb25maWcuanM=",
  "jar": "http://cdn.qiaoji8.com/fix250304.jar;md5;9d8407a76b2abeeaabdd147b1b93799f"
