@@ -1,6 +1,7 @@
 {
   "spider": "https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/ewn6_vfs.png;md5;51f7a95ef27b89e968c02fe5a632cc0e",
-
+  "logo": "./gif/cat.gif", 
+  
   "sites": [
   
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
