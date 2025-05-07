@@ -40,9 +40,6 @@
 {"key":"py_UpFuHn","name": "🙋Hi视频(T4)","type":4,"playerType": 2,"api":"https://py.doube.eu.org/spider?site=UpFuHn","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
 {"key":"py_BaHaoTV","name": "8️⃣八号影院(T4)","type":4,"playerType": 2,"api":"https://py.doube.eu.org/spider?site=BaHaoTV","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
- 
-{"key":"黑木影视","name": "♠️黑木","type":1,"playerType": 2,"searchable":1,"quickSearch":1,"filterable":0,"timeout":10,
-  "api":"https://heimuer.ggff.net/api.php/tvbox"},
 
 {"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,"playerType": 2,"api":"https://py.doube.eu.org/spider?site=OleVod","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
