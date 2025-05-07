@@ -3,7 +3,11 @@
   "logo": "./gif/cat.gif", 
   
   "sites": [
-  
+
+{"key":"華人直播️","name":"😚華人直播️","type":1,"api":"https://huaren.live/api.php/tvbox","playUrl":"json:https://parse.okhuaren.com/?url=","searchable":1,"quickSearch":1,"filterable":1,"header":{"User-Agent":"Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/131.0.0.0Safari/537.36","Referer":"test"}},
+
+{"key":"Qile優視頻","name":"😚優視頻","type":3,"changeable":1,"api":"csp_Uvod","jar":"https://boyss180.github.io/fm/fm_cs.jar","searchable":1,"playerType":2,"filterable":1},
+ 
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
 
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10},
