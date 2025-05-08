@@ -4,18 +4,18 @@
   
   "sites": [
 
-{"key":"華人直播️","name":"📺華人直播️","type":1,"api":"https://huaren.live/api.php/tvbox","playUrl":"json:https://parse.okhuaren.com/?url=","searchable":1,"quickSearch":1,"filterable":1,"header":{"User-Agent":"Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/131.0.0.0Safari/537.36","Referer":"test"}},
-
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
+
+{"key": "Lib2", "name": "🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard","timeout":10,
+ "ext": "https://libvio.link/"},
 
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10},
 
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_XpgGuard","timeout":10},
 
-{"key": "Lib2", "name": "🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard","timeout":10,
- "ext": "https://libvio.link/"},
- 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10},
+
+{"key":"華人直播️","name":"📺華人直播️","type":1,"api":"https://huaren.live/api.php/tvbox","playUrl":"json:https://parse.okhuaren.com/?url=","searchable":1,"quickSearch":1,"filterable":1,"header":{"User-Agent":"Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/131.0.0.0Safari/537.36","Referer":"test"}},
 
 {"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://raw.githubusercontent.com/JJBJJ/PyramidStore/refs/heads/main/plugin/app/云端APP.py","timeout":10}, 
 
