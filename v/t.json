@@ -19,7 +19,7 @@
 
 {"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py?ref_type=heads","timeout":10}, 
 
-{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_爱.py?ref_type=heads","timeout":10}, 
+{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://raw.githubusercontent.com/fastbuild7099/fastbuild7099/refs/heads/main/py/py_aigua.py","timeout":10}, 
 
 {"key": "py_quickvod","name": "🏃QuickVod｜沐辰PY","type":3,"playerType": 2,"api":"https://json.doube.eu.org/python/py_quickvod.py","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
