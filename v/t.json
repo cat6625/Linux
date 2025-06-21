@@ -91,7 +91,7 @@
     
 
 {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_Ddys","searchable":1,"quickSearch":1,"filterable":1,
-"jar": "https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
  {"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_Lib","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
  "ext": "faHR0cHM6Ly93d3cubGlidmlvLmNjL3N0YXRpYy9qcy9wbGF5ZXJjb25maWcuanM=",
