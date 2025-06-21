@@ -1,5 +1,5 @@
 {
-  "spider":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e",
+  "spider":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar",
   "logo": "./gif/bee-11531_256.gif",
 
   "sites": [
@@ -22,14 +22,15 @@
 {"key": "Lib2", "name":"🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard", "timeout": 10,
  "ext": "https://libvio.link/"},
 
-{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard", "timeout": 10},
+{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard", "timeout": 10,
+"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e"},
 
     {
       "key": "韩小圈",
       "name": "🥇｜韩圈｜高清◎秒播(無廣告+無首頁)",
       "type": 3,
       "api": "csp_HanXiaoQuan",
-      "jar": "https://github.com/PizazzGY/TVBox/raw/refs/heads/main/spider.jar",
+      "jar": "https://gitlab.com/newrecha/tvbox/-/raw/main/jar/pizza.jar?ref_type=heads",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1
