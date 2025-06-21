@@ -11,7 +11,7 @@
 
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard", "timeout": 10},
 
-{"key": "小苹果","name":"🍎苹果","type":3,"playerType": 2,"api":"csp_XpgGuard", "timeout": 10,
+{"key": "小苹果","name":"🍎苹果","type":3,"playerType": 2,"api":"csp_LiteAppleGuard", "timeout": 10,
  "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard", "timeout": 10},
@@ -80,7 +80,7 @@
 
 //{"key":"Wexduboku","name":"🥇｜獨播庫(牛二)","type":3,"api":"csp_WexdubokuGuard","searchable":1,"changeable":1,"jar":"https://raw.githubusercontent.com/fastbuild7099/fastbuild7099/refs/heads/main/jar1/wex.jar"},
 
-{"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_Ddys","searchable":1,"quickSearch":1,"filterable":1,
+{"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
  "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
  {"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_Lib","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
