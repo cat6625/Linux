@@ -1,29 +1,28 @@
 {
-  "spider":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e",
+  
   "logo": "./gif/cat.gif", 
   
   "sites": [
 
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_Jpys","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10,
-"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
 
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
-"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
 
     
 {"key": "Lib2", "name": "🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard","timeout":10,
  "ext": "https://libvio.link/",
-"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
-
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
 {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
-"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
+{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10,
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
 
-{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10},
-
-
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10},
+{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10,
+"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e"},
 
 //{"key":"華人直播️","name":"📺華人直播️","type":1,"api":"https://huaren.live/api.php/tvbox","playUrl":"json:https://parse.okhuaren.com/?url=","searchable":1,"quickSearch":1,"filterable":1,"header":{"User-Agent":"Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/131.0.0.0Safari/537.36","Referer":"test"}},
 
