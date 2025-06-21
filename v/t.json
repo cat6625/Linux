@@ -4,14 +4,18 @@
   
   "sites": [
 
-{"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
+{"key":"文才","name": "🌺文才","type": 3,"api":"csp_Jpys","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10,
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
 
+{"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
+
+    
 {"key": "Lib2", "name": "🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard","timeout":10,
  "ext": "https://libvio.link/"},
 
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10},
 
-{"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_XpgGuard","timeout":10},
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10},
 
