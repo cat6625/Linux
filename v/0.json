@@ -9,23 +9,23 @@
   "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"},
     
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_Jpys","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10,
-"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
 
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
-"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
 
 {"key": "Lib2", "name": "🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard","timeout":10,
  "ext": "https://libvio.link/",
-"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
-"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
     
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10,
-"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
+"jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E5%B0%8F%E7%B1%B3/spider.jar"},
     
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10,
-"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5"},
+"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png"},
 
 {"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py?ref_type=heads","timeout":10}, 
 
