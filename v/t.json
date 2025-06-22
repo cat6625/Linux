@@ -14,8 +14,7 @@
  "ext": "https://libvio.link/",
 "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
- {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
-"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+//{"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,"jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
 
