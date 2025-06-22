@@ -18,11 +18,13 @@
 {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
 "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
+    
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10,
 "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
 
+    
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10,
-"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e"},
+"jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5"},
 
 //{"key":"華人直播️","name":"📺華人直播️","type":1,"api":"https://huaren.live/api.php/tvbox","playUrl":"json:https://parse.okhuaren.com/?url=","searchable":1,"quickSearch":1,"filterable":1,"header":{"User-Agent":"Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/131.0.0.0Safari/537.36","Referer":"test"}},
 
@@ -30,24 +32,28 @@
 
 {"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://raw.githubusercontent.com/fastbuild7099/fastbuild7099/refs/heads/main/py/py_aigua.py","timeout":10}, 
 
+    
 //{"key": "py_quickvod","name": "🏃QuickVod｜沐辰PY","type":3,"playerType": 2,"api":"https://json.doube.eu.org/python/py_quickvod.py","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
 //{"key": "py_jieyingshi","name": "🌐界影视｜沐辰PY","type":3,"playerType": 2,"api":"https://json.doube.eu.org/python/py_jieyingshi.py","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
+    
 {"key": "国外剧APP.py","name": "🌏国外剧[py]","type": 3,"playerType": 2,"searchable": 1,"quickSearch": 1,"filterable": 1,"timeout":10,
  "api": "https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_国外剧app.py?ref_type=heads"},
 
 {"key": "零度影视APP[py]","name": "0️⃣零度影视[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_零度影视APP.py?ref_type=heads","timeout":10}, 
 
 {"key":"csp_If101","name":"️🅾️歐樂","type":3,"api":"csp_XBPQ","searchable":1,"quickSearch":1,"filterable":1,"ext":{"简介":"content_desc context clearfix\">&&</span>","分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html","分类":"電影$1#電視劇$2#綜藝$3#動漫$4","地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
- "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5"},
+ "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
 
+    
 {"key": "如意資源","name": "🔮如意|有廣告","type": 1,"api": "https://cj.rycjapi.com/api.php/provide/vod/", 
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] }, 
 
 {"key": "暴风資源","name": "🎈暴风|有廣告","type":1,"api":"https://app.bfzyapi.com/api.php/provide/vod/",
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
+    
 {"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,"playerType": 2,"api":"https://py.doube.eu.org/spider?site=OleVod","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":10},
 
 {"key": "yfsp","name": "🎖︎｜愛壹帆｜","type": 3,"playerType": 2,"searchable": 1,"changeable": 1,"quickSearch": 1,"timeout":10,
@@ -77,7 +83,6 @@
     "timeout": 60,
     "style": {"type": "rect","ratio": 1.3},
     "click": "document.querySelector(\"#playleft iframe\").contentWindow.document.querySelector(\"button.vjs-big-play-button\").click();",
-    "jar": "https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5",
     "ext": {
            "主页url":"https://www.duboku.tv/",
            "分类url":"https://www.duboku.tv/vodshow/{cateId}-{area}-{by}------{catePg}---{year}.html",
@@ -95,9 +100,11 @@
            "线路数组":"<li class=\"active\"&&</li>",
            "线路标题":"独播库",
            "搜索url":"https://u.duboku.io/vodsearch/-------------.html?wd={wd}&submit="
-           }
+           },
+    "jar": "https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"
     },    
     
+//{"key":"Wexduboku","name":"🥇｜獨播庫(牛二)","type":3,"api":"csp_WexdubokuGuard","searchable":1,"changeable":1,"jar":"https://raw.githubusercontent.com/fastbuild7099/fastbuild7099/refs/heads/main/jar1/wex.jar"},
 
 
  {"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_Lib","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
