@@ -21,7 +21,7 @@
 {"key":"csp_Ddys","name":"🐞低端影视","type":3,"api":"csp_DdrkGuard","searchable":1,"quickSearch":1,"filterable":1,
 "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
     
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10,
+{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":""csp_Gz360","timeout":10,
 "jar":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png"},
     
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10,
