@@ -9,10 +9,10 @@
   "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"},
   
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
- "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar;md5;9b8e295927dccaf6f96cd9008174fe11"},
+ "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar"},
  
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_Gz360","timeout":10,
- "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar;md5;9b8e295927dccaf6f96cd9008174fe11"},
+ "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar"},
 
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
     
