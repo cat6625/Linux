@@ -37,9 +37,9 @@
 {"key":"萌新XBPQ_独播库","name":"🏆｜獨播｜藍光◎秒播(無廣告+無圖)","type":3,"api":"csp_XBPQ","playerType":2,"searchable":1,"quickSearch":1,"changeable":1,"filterable":1,"timeout":60,"style":{"type":"rect","ratio":1.3},"click":"document.querySelector(\"#playleft iframe\").contentWindow.document.querySelector(\"button.vjs-big-play-button\").click();","ext":{"主页url":"https://www.duboku.tv/","分类url":"https://www.duboku.tv/vodshow/{cateId}-{area}-{by}------{catePg}---{year}.html","分类":"电影$1#剧集$2#综艺$3#动漫$4","地区":"大陆&香港&台湾&美国&英国&日本&韩国&印度&西班牙&加拿大&法国&意大利&荷兰&澳大利亚&俄罗斯||内地&韩国&香港&台湾&美国&英国&巴西&泰国&法国&日本&新加坡||内地&香港&台湾&韩国&美国||国产&日本&美国&法国&其他","数组":"myui-vodlist__box&&</p>","标题":"title=\"&&\"","副标题":"class=\"pic-text text-right\">&&</span>","图片":"data-original=\"&&\"","链接":"href=\"&&\"","播放数组":"myui-content__list scrollbar sort-list clearfix&&</ul>","播放列表":"<a&&</a>","播放标题":">&&</a>","跳转播放链接":"src=\"&&\"","线路数组":"<li class=\"active\"&&</li>","线路标题":"独播库","搜索url":"https://u.duboku.io/vodsearch/-------------.html?wd={wd}&submit="},
   "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/xyqxbpq.jar"},
     
-{"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_Lib","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
- "ext": "7lj763gg402i7942463j9j9jhi558k84lhg7845kili62l35535512l0h61j48410h9g5igk9j40908h351hh484h8l60h",
- "jar": "http://cdn.qiaoji8.com/fix250611.jar"}
+{"key": "Lib1","name": "🤖Lib","type": 3,"playerType": 2,"api": "csp_LibvioGuard","searchable": 1,"quickSearch": 1,"filterable": 0,"timeout":10,
+ "ext": {"from": "4k|auto"},
+ "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}
 
 ],
 
