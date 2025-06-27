@@ -15,7 +15,8 @@
   
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
 
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10},
+{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_Gz360","timeout":10,
+ "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar"},
     
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard","timeout":10},
 
