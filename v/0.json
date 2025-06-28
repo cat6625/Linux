@@ -13,8 +13,6 @@
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
  "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/mi-0619.jar"},
 
-{"key": "Lib2", "name":"🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard", "timeout": 10,
- "ext": "https://libvio.link/"},
  
 {"key":"文才","name": "🌺文才","type": 3,"api":"csp_JpysGuard","searchable":1,"quickSearch":1,"filterable":1, "timeout": 10},
 
