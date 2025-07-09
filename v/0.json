@@ -8,7 +8,7 @@
     
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_XpgGuard","timeout":10},
  
-{"key": "Lib2", "name":"🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard", "timeout": 10"},
+{"key": "Lib2", "name":"🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard", "timeout": 10},
 
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard", "timeout": 10},
 
