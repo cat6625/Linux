@@ -18,12 +18,12 @@
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":20},   
 
-{"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py?ref_type=heads","timeout":10}, 
+{"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py","timeout":10}, 
 
 {"key": "国外剧APP.py","name": "🌏国外剧[py]","type": 3,"playerType": 2,"searchable": 1,"quickSearch": 1,"filterable": 1,"timeout":20,
  "api": "https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_国外剧app.py?ref_type=heads"},
 
-{"key": "零度影视APP[py]","name": "0️⃣零度影视[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_零度影视APP.py?ref_type=heads","timeout":20}, 
+{"key": "零度影视APP[py]","name": "0️⃣零度影视[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_零度影视APP.py","timeout":20}, 
 
 {"key": "如意資源","name": "🔮如意|有廣告","type": 1,"api": "https://cj.rycjapi.com/api.php/provide/vod/","changeable":0,
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] }, 
@@ -42,10 +42,9 @@
 
 {"key": "爱瓜TV","name": "🥇｜愛瓜｜藍光◎秒播(無廣告)","type": 4,"api": "http://zhangqun66.com/aigua.php","searchable": 1,"style": {"type": "rect", "ratio": 1.33},"changeable": 1},
     
-{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://json.doube.eu.org/python/py_aigua.py","timeout":20}, 
-  
-{"key": "py_jieyingshi","name": "🌐界影视｜沐辰PY","type":3,"playerType": 2,"api":"https://json.doube.eu.org/python/py_jieyingshi.py","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":20},
+{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_aigua.py","timeout":20}, 
 
+{"key": "py_jieyingshi","name": "🌐界影视[PY]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_jieyingshi.py","searchable":1,"quickSearch":0,"filterable":0,"changeable":1,"timeout":20},
 
 {"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,"playerType":2,"searchable":1,"changeable":1,"quickSearch":1,"timeout":20,"style":{"type":"rect","ratio":0.75},"api":"csp_GM","ext":{"userScript":"https://raw.githubusercontent.com/CatVodSpider-GM/SFW-Spiders/refs/heads/main/userScripts/ysfp.user.js","debug":false,"webViewSettings":{"blockNetworkImage":true,"blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},"spider":{"homeContent":{"loadUrl":"https://m.yfsp.tv/"},"categoryContent":{"loadUrl":"https://m.yfsp.tv/list/${tid}?type=${index-0:-0}${index-1:-,0}${index-2:-,0}${index-3:-,0}${index-4:-,0}${index-5:-}"},"detailContent":{"loadUrl":"https://m.yfsp.tv/play/${id}"},"playerContent":{"loadUrl":"https://m.yfsp.tv/play/${mediaKey}?id=${episodeKey}"},"searchContent":{"loadUrl":"https://m.yfsp.tv/search"}}},
   "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/GM.jar"}
