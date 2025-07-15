@@ -1,5 +1,6 @@
 {
-  "spider":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/NrbhCKlf.png;md5;90a9894976ed957c7219d2d556bd394e",
+  "spider":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/XzWYuCoI.png;md5;bbf1cb84522bf22049e7345040384d4d",
+  
   "logo": "./gif/bee-11531_256.gif",
 
   "sites": [
@@ -9,8 +10,9 @@
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType": 2,"api":"csp_LiteApple","timeout":10,
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
  
-{"key": "Lib2", "name":"🌟立播","type":3,"playerType": 2,"api":"csp_LibvioGuard", "timeout": 10},
-
+{"key":"立播弹幕版","name":"🐰立播┃4K弹幕","type":3,"api":"csp_LibvioGuard","searchable":1,"filterable":1,"changeable":1,"ext":{"site":"https://libvio.link","danmu":true},
+"timeout":30},
+    
 {"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType": 2,"api": "csp_HanXiaoQuanGuard", "timeout": 10},
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":10},
