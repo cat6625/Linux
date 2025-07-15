@@ -18,10 +18,10 @@
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":20},   
 
-{"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py","timeout":10}, 
+{"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py","timeout":20}, 
 
 {"key": "国外剧APP.py","name": "🌏国外剧[py]","type": 3,"playerType": 2,"searchable": 1,"quickSearch": 1,"filterable": 1,"timeout":20,
- "api": "https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_国外剧app.py?ref_type=heads"},
+ "api": "https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_%E9%9B%B6%E5%BA%A6%E5%BD%B1%E8%A7%86APP.py"},
 
 {"key": "零度影视APP[py]","name": "0️⃣零度影视[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_零度影视APP.py","timeout":20}, 
 
