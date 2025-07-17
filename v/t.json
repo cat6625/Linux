@@ -76,6 +76,8 @@
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5.480000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:10.000000,[\\s\\S]*?#EXTINF:1.266667,[\\s\\S]*?"]},
 
+{"name": "ryplay17","hosts": ["ryplay17"],"regex": ["#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:4.533,[\\s\\S]*?#EXT-X-DISCONTINUITY"]},
+
 {"name":"黑木耳","hosts":["heimuer,hmrvideovip"],"regex":["24.024"]},  
   
 {"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
