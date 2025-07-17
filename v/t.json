@@ -26,9 +26,6 @@
 
 {"key":"嗷呜剧爸爸","name":"嗷呜剧爸爸","type":3,"api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jubaba.py","searchable":1,"filterable":0,"changeable":1},   
 
-{"key": "如意資源","name": "🔮如意|有廣告","type": 1,"api": "https://cj.rycjapi.com/api.php/provide/vod/","changeable":0,
- "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] }, 
-
 {"key": "暴风資源","name": "🎈暴风|有廣告","type":1,"api":"https://app.bfzyapi.com/api.php/provide/vod/","changeable":0,
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
@@ -70,14 +67,10 @@
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
 
-{"name": "ryplay17","hosts": ["ryplay17"],"regex": ["21.1","#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:4.533,[\\s\\S]*?#EXT-X-DISCONTINUITY"]},
- 
 {"name": "ryplay","hosts": ["ryplay"],"regex": ["11.266667",
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5.480000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:10.000000,[\\s\\S]*?#EXTINF:1.266667,[\\s\\S]*?"]},
 
-{"name":"黑木耳","hosts":["heimuer,hmrvideovip"],"regex":["24.024"]},  
-  
 {"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
 
 {"name":"火山嗅探","hosts":["huoshan.com"],"regex":["item_id="]},
