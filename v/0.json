@@ -17,8 +17,6 @@
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType": 2,"api":"csp_GuaziGuard","timeout":20},
 
-{"key": "雨滴[py]","name": "💧雨滴[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/云端APP.py","timeout":20}, 
-
 {"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_aigua.py","timeout":20}, 
 
 {"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"playerType": 2,"api":"https://app.bfzyapi.com/api.php/provide/vod/",
