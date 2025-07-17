@@ -72,7 +72,7 @@
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
 
-{"name": "ryplay17","hosts": ["ryplay17"],"regex": ["#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:4.533,[\\s\\S]*?#EXT-X-DISCONTINUITY"]},
+{"name": "ryplay17","hosts": ["ryplay17"],"regex": ["21.1","#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:4.533,[\\s\\S]*?#EXT-X-DISCONTINUITY"]},
  
 {"name": "ryplay","hosts": ["ryplay"],"regex": ["11.266667",
 "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5.480000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
