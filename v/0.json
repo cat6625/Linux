@@ -21,9 +21,6 @@
 
 {"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_aigua.py","timeout":20}, 
 
-{"key": "如意資源","name": "🔮如意|有廣告","type": 1,"playerType": 2,"api": "https://cj.rycjapi.com/api.php/provide/vod/", 
- "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] }, 
-
 {"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"playerType": 2,"api":"https://app.bfzyapi.com/api.php/provide/vod/",
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
@@ -53,16 +50,6 @@
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
     
-    {
-        "name": "ryplay",
-        "hosts": [
-            "ryplay"
-        ],
-        "regex": [
-            "#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5\\.533,[\\s\\S]*?#EXT-X-DISCONTINUITY"
-        ]
-    },
-
 {"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
 
 {"name":"火山嗅探","hosts":["huoshan.com"],"regex":["item_id="]},
