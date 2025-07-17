@@ -20,8 +20,7 @@
 
 {"key":"嗷呜小苹果","name":"🍏小苹果[py]","type":3,"api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_pingguo.py","searchable":1,"filterable":0,"changeable":1}, 
 
-{"key":"瓜子影视","name":"🥒‍瓜子影视[js]","type":3,"api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js","ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js"},
-
+{"key":"瓜子影视","name":"🥒‍瓜子影视","type":3,"searchable":1,"quickSearch":1,"api":"csp_Gz360","jar":"https://fs-im-kefu.7moor-fs1.com/ly/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/1752223235214/0711.gif;md5;05d526179fb3b9f8bb597e632b"}
 {"key":"嗷呜金牌影院","name":"🏆金牌影院[py]","type":3,"api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jinpai.py","searchable":1,"filterable":0,"changeable":1},
 
 {"key":"嗷呜剧爸爸","name":"👨剧爸爸[py]","type":3,"api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jubaba.py","searchable":1,"filterable":0,"changeable":1},   
