@@ -36,11 +36,11 @@
 
 {"key": "爱瓜TV","name": "🍈愛瓜","type": 4,"api": "http://zhangqun66.com/aigua.php","searchable": 1,"style": {"type": "rect", "ratio": 1.33},"changeable": 1},
     
-{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://gitlab.com/newrecha/tvbox/-/raw/main/py/py_aigua.py","timeout":20}, 
+{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"api":"https://raw.githubusercontent.com/meinvtuzai/PyramidStore-18/refs/heads/main/plugin/app/%E7%88%B1%E7%93%9CTVAPP.py","timeout":20}, 
 
 
 {"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,"playerType":2,"searchable":1,"changeable":1,"quickSearch":1,"timeout":20,"style":{"type":"rect","ratio":0.75},"api":"csp_GM","ext":{"userScript":"https://raw.githubusercontent.com/CatVodSpider-GM/SFW-Spiders/refs/heads/main/userScripts/ysfp.user.js","debug":false,"webViewSettings":{"blockNetworkImage":true,"blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},"spider":{"homeContent":{"loadUrl":"https://m.yfsp.tv/"},"categoryContent":{"loadUrl":"https://m.yfsp.tv/list/${tid}?type=${index-0:-0}${index-1:-,0}${index-2:-,0}${index-3:-,0}${index-4:-,0}${index-5:-}"},"detailContent":{"loadUrl":"https://m.yfsp.tv/play/${id}"},"playerContent":{"loadUrl":"https://m.yfsp.tv/play/${mediaKey}?id=${episodeKey}"},"searchContent":{"loadUrl":"https://m.yfsp.tv/search"}}},
-  "jar":"https://gitlab.com/newrecha/tvbox/-/raw/main/jar/GM.jar"}
+  "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"}
 ],
   
   "doh":[
