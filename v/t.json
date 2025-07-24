@@ -51,19 +51,13 @@
 {}
       ],
  
-  "doh":[
-{"name": "Google","url":"https://dns.google/dns-query","ips":["8.8.4.4","8.8.8.8","2001:4860:4860::8888","2001:4860:4860::8844"]},
-{"name": "Cloudflare","url":"https://cloudflare-dns.com/dns-query","ips":["1.1.1.1","1.0.0.1","2606:4700:4700::1111","2606:4700:4700::1001"]},
-{"name": "AdGuard","url":"https://dns.adguard-dns.com/dns-query","ips":["94.140.14.14","94.140.15.15","2a10:50c0::ad1:ff","2a10:50c0::ad2:ff"]},
-{"name": "Quad9","url":"https://dns.quad9.net/dns-query","ips":["9.9.9.9","149.112.112.112","2620:fe::9", "2620:fe::fe"]}
+"doh":[
+{"name":"Google","url":"https://dns.google/dns-query","ips":["8.8.4.4","8.8.8.8"]},
+{"name":"Cloudflare","url":"https://cloudflare-dns.com/dns-query","ips":["1.1.1.1","1.0.0.1","2606:4700:4700::1111","2606:4700:4700::1001"]},
+{"name":"AdGuard","url":"https://dns.adguard.com/dns-query","ips":["94.140.14.140","94.140.14.141"]},
+{"name":"DNSWatch","url":"https://resolver2.dns.watch/dns-query","ips":["84.200.69.80","84.200.70.40"]},
+{"name":"Quad9","url":"https://dns.quad9.net/dns-quer","ips":["9.9.9.9","149.112.112.112"]}
 ],
-
-"parses":[
- {"name":"解析聚合","type":3,"url":"Demo"},
- {"name":"Json轮询","type":2,"url":"Sequence"},
- {"name":"-虾米-","type":0,"url":"https://jx.xmflv.com/?url=","ext":{"header":{"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.57"}}}
- ],
-
 
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
