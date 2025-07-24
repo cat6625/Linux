@@ -49,27 +49,6 @@
 
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
-    
-{"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
-
-{"name":"火山嗅探","hosts":["huoshan.com"],"regex":["item_id="]},
-
-{"name":"抖音嗅探","hosts":["douyin.com"],"regex":["is_play_url="]},
-
-{"name":"农民嗅探","hosts":["toutiaovod.com"],"regex":["video/tos/cn"]},
-
-{"name":"七新嗅探","hosts":["api.52wyb.com"],"regex":["m3u8?pt=m3u8"]},
-
-{"name":"夜市","hosts":["yeslivetv.com"],"script":["document.getElementsByClassName('vjs-big-play-button')[0].click()"]},
-
-{"name":"毛驴","hosts":["www.maolvys.com"],"script":["document.getElementsByClassName('swal-button swal-button--confirm')[0].click()"]},
-
-{"name":"czzy","hosts":["10086.cn"],"regex":["/storageWeb/servlet/downloadServlet"]},
-   
-{"name":"bdys","hosts":["bytetos.com", "byteimg.com", "bytednsdoc.com", "pstatp.com"],"regex":["/tos-cn"],"exclude":[".m3u8"]},
-    
-{"name":"bdys10","hosts":["bdys10.com"], "regex":["/obj/"], "exclude":[".m3u8"]},
-
 {"name":"ofiii","hosts":["www.ofiii.com"],"script":["const play=document.getElementsByClassName('play_icon')[0],event=new MouseEvent('click',{bubbles:!0,cancelable:!0,view:window,screenX:100,screenY:100,clientX:50,clientY:50,button:0,shiftKey:!1,ctrlKey:!1,altKey:!1,metaKey:!1,modifierState:0});play.dispatchEvent(event);"]}
 ],
 
