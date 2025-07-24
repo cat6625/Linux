@@ -1,7 +1,7 @@
 {
   "spider":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/ok.jar",
-
   "logo": "./gif/bee-11531_256.gif",
+  "wallpaper":"https://深色壁纸.xxooo.cf/",
 
   "sites": [
 
@@ -73,6 +73,6 @@
 {"name":"ofiii","hosts":["www.ofiii.com"],"script":["const play=document.getElementsByClassName('play_icon')[0],event=new MouseEvent('click',{bubbles:!0,cancelable:!0,view:window,screenX:100,screenY:100,clientX:50,clientY:50,button:0,shiftKey:!1,ctrlKey:!1,altKey:!1,metaKey:!1,modifierState:0});play.dispatchEvent(event);"]}
 ],
 
-"ads":["static-mozai.4gtv.tv","s3t3d2y8.afcdn.net","googletagmanager.com","google-analytics.com"]
+"ads":["static-mozai.4gtv.tv"]
 
 }
