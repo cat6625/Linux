@@ -1,8 +1,7 @@
 {
  
-//"spider":"https://fs-im-kefu.7moor-fs2.com/im/2768a390-5474-11ea-afc9-7b323e3e16c0/XzWYuCoI.png;md5;bbf1cb84522bf22049e7345040384d4d",
  "spider":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/ok.jar",
-
+ "wallpaper":"https://深色壁纸.xxooo.cf/",
  "logo": "./gif/cat.gif", 
   
   "sites": [
@@ -67,34 +66,9 @@
 
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
-
-{"name": "ryplay","hosts": ["ryplay"],"regex": ["11.266667",
-"#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:5.480000,[\\s\\S]*?#EXT-X-DISCONTINUITY",
-"#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:10.000000,[\\s\\S]*?#EXTINF:1.266667,[\\s\\S]*?"]},
-
-{"name":"cl","hosts":["magnet"],"regex":["最 新","直 播","更 新"]},
-
-{"name":"火山嗅探","hosts":["huoshan.com"],"regex":["item_id="]},
-
-{"name":"抖音嗅探","hosts":["douyin.com"],"regex":["is_play_url="]},
-
-{"name":"农民嗅探","hosts":["toutiaovod.com"],"regex":["video/tos/cn"]},
-
-{"name":"七新嗅探","hosts":["api.52wyb.com"],"regex":["m3u8?pt=m3u8"]},
-
-{"name":"夜市","hosts":["yeslivetv.com"],"script":["document.getElementsByClassName('vjs-big-play-button')[0].click()"]},
-
-{"name":"毛驴","hosts":["www.maolvys.com"],"script":["document.getElementsByClassName('swal-button swal-button--confirm')[0].click()"]},
-
-{"name":"czzy","hosts":["10086.cn"],"regex":["/storageWeb/servlet/downloadServlet"]},
-   
-{"name":"bdys","hosts":["bytetos.com", "byteimg.com", "bytednsdoc.com", "pstatp.com"],"regex":["/tos-cn"],"exclude":[".m3u8"]},
-    
-{"name":"bdys10","hosts":["bdys10.com"], "regex":["/obj/"], "exclude":[".m3u8"]},
-
 {"name":"ofiii","hosts":["www.ofiii.com"],"script":["const play=document.getElementsByClassName('play_icon')[0],event=new MouseEvent('click',{bubbles:!0,cancelable:!0,view:window,screenX:100,screenY:100,clientX:50,clientY:50,button:0,shiftKey:!1,ctrlKey:!1,altKey:!1,metaKey:!1,modifierState:0});play.dispatchEvent(event);"]}
 ],
     
-"ads":["static-mozai.4gtv.tv","s3t3d2y8.afcdn.net","googletagmanager.com","google-analytics.com"]
+"ads":["static-mozai.4gtv.tv"]
 
 }
