@@ -5,39 +5,39 @@
 
   "sites": [
 
-{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":10,"api":"csp_JpysGuard"},
+{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":30,"api":"csp_JpysGuard"},
     
-{"key": "小苹果","name": "🍎苹果","type":3,"playerType":2,"timeout":10,"api":"csp_LiteApple",
+{"key": "小苹果","name": "🍎苹果","type":3,"playerType":2,"timeout":30,"api":"csp_LiteApple",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
  
-{"key":"立播弹幕版","name":"🌟立播","type":3,"playerType":2,"timeout":10,"api":"csp_LibvioGuard",
+{"key":"立播弹幕版","name":"🌟立播","type":3,"playerType":2,"timeout":30,"api":"csp_LibvioGuard",
  "ext":{"site":"https://libvio.link","danmu":true}},
     
-{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType":2,"timeout":10,"api": "csp_HanXiaoQuanGuard"},
+{"key": "韩小圈(APP)","name": "🔘韩小圈","type": 3,"playerType":2,"timeout":30,"api": "csp_HanXiaoQuanGuard"},
 
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType":2,"timeout":10,"api":"csp_GuaziGuard"},
+{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType":2,"timeout":30,"api":"csp_GuaziGuard"},
 
-{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType":2,"timeout":10,
+{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType":2,"timeout":30,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_aigua.py"}, 
 
-{"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"playerType":2,"timeout":10,"changeable":0,
+{"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"playerType":2,"timeout":30,"changeable":0,
  "api":"https://app.bfzyapi.com/api.php/provide/vod/",
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
-{"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,"playerType":2,"timeout":10,
+{"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,"playerType":2,"timeout":30,
  "api":"https://py.doube.eu.org/spider?site=OleVod"},
 
-{"key":"drpy_js_金牌","name":"🏆金牌影视[js]","type":3,"playerType":2,"timeout":10,
+{"key":"drpy_js_金牌","name":"🏆金牌影视[js]","type":3,"playerType":2,"timeout":30,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
-{"key":"drpy_js_瓜子","name":"🥒瓜子影视[js]","type":3,"playerType":2,"timeout":10,
+{"key":"drpy_js_瓜子","name":"🥒瓜子影视[js]","type":3,"playerType":2,"timeout":30,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},    
     
-{"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,"playerType":2,"timeout":10,"style":{"type":"rect","ratio":0.75},"api":"csp_GM",
+{"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,"playerType":2,"timeout":30,"style":{"type":"rect","ratio":0.75},"api":"csp_GM",
   "ext":{"userScript":"https://raw.githubusercontent.com/CatVodSpider-GM/SFW-Spiders/refs/heads/main/userScripts/ysfp.user.js",
          "debug":false,"webViewSettings":{"blockNetworkImage":true,
          "blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},
