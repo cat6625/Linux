@@ -48,3 +48,7 @@
 0.0.0.0 prod-mediate-events.applovin.com
 0.0.0.0 sdk-events.inner-active.mobi
 0.0.0.0 aax.amazon-adsystem.com
+0.0.0.0 sdkopmetrics-asia.dsp-api.moloco.com
+0.0.0.0 tapestry.tapad.com
+0.0.0.0 rt.applvn.com
+
