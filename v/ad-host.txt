@@ -66,5 +66,4 @@
 0.0.0.0 policy.video.iqiyi.com
 0.0.0.0 msga.cupid.iqiyi.com
 0.0.0.0 t7z.cupid.iqiyi.com
-
-
+0.0.0.0 t7z.cupid.ptqy.gitv.tv
