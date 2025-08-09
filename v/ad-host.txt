@@ -59,6 +59,4 @@
 0.0.0.0 i.l-new.inmobicdn.net
 0.0.0.0 i.l.inmobicdn.net
 0.0.0.0 supply.inmobicdn.net
-
-
-
+0.0.0.0 sg-ali-ad-track-sdk.mtgglobals.com
