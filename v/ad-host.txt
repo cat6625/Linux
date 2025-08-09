@@ -1,33 +1,33 @@
-googleads.g.doubleclick.net
-pubads.g.doubleclick.net
-securepubads.g.doubleclick.net
-googleads4.g.doubleclick.net
-pagead2.googlesyndication.com
-census-app.scorecardresearch.com
-sb.scorecardresearch.com
-ad-specs.guoshipartners.com
-s.amazon-adsystem.com
-aax-eu.amazon-adsystem.com
-acs2.svc.litv.tv
-acs-go.svc.litv.tv
-ads.aralego.com
-sin3-ib.adnxs.com
-data.flurry.com
-tw.popin.cc
-ad.setn.com
-tv.springserve.com
-a.line.me
-r2d2.aotter.net
-tw.c.appier.net
-ad.ettoday.net
-ad1.ettoday.net
-ad2.ettoday.net
-adv.ettoday.net
-ad-ettoday.cdn.hinet.net
-c-app.dhub.hinet.net
-p-app.dhub.hinet.net
-ssp.hinet.net
-t.ssp.hinet.net
-onead.onevision.com.tw
-tw-api.vpadn.com
-m.yap.yahoo.com
+0.0.0.0 googleads.g.doubleclick.net
+0.0.0.0 pubads.g.doubleclick.net
+0.0.0.0 securepubads.g.doubleclick.net
+0.0.0.0 googleads4.g.doubleclick.net
+0.0.0.0 pagead2.googlesyndication.com
+0.0.0.0 census-app.scorecardresearch.com
+0.0.0.0 sb.scorecardresearch.com
+0.0.0.0 ad-specs.guoshipartners.com
+0.0.0.0 s.amazon-adsystem.com
+0.0.0.0 aax-eu.amazon-adsystem.com
+0.0.0.0 acs2.svc.litv.tv
+0.0.0.0 acs-go.svc.litv.tv
+0.0.0.0 ads.aralego.com
+0.0.0.0 sin3-ib.adnxs.com
+0.0.0.0 data.flurry.com
+0.0.0.0 tw.popin.cc
+0.0.0.0 ad.setn.com
+0.0.0.0 tv.springserve.com
+0.0.0.0 a.line.me
+0.0.0.0 r2d2.aotter.net
+0.0.0.0 tw.c.appier.net
+0.0.0.0 ad.ettoday.net
+0.0.0.0 ad1.ettoday.net
+0.0.0.0 ad2.ettoday.net
+0.0.0.0 adv.ettoday.net
+0.0.0.0 ad-ettoday.cdn.hinet.net
+0.0.0.0 c-app.dhub.hinet.net
+0.0.0.0 p-app.dhub.hinet.net
+0.0.0.0 ssp.hinet.net
+0.0.0.0 t.ssp.hinet.net
+0.0.0.0 onead.onevision.com.tw
+0.0.0.0 tw-api.vpadn.com
+0.0.0.0 m.yap.yahoo.com
