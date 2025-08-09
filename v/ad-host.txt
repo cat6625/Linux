@@ -51,4 +51,7 @@
 0.0.0.0 sdkopmetrics-asia.dsp-api.moloco.com
 0.0.0.0 tapestry.tapad.com
 0.0.0.0 rt.applvn.com
+0.0.0.0 cdn.liftoff-creatives.io
+0.0.0.0 impression-asia.liftoff.io
+
 
