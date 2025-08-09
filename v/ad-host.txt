@@ -6,7 +6,6 @@
 0.0.0.0 a.line.me
 0.0.0.0 aax-eu.amazon-adsystem.com
 0.0.0.0 aax.amazon-adsystem.com
-0.0.0.0 acs-go.svc.litv.tv
 0.0.0.0 acs2.svc.litv.tv
 0.0.0.0 ad-ettoday.cdn.hinet.net
 0.0.0.0 ad-specs.guoshipartners.com
@@ -61,3 +60,4 @@
 0.0.0.0 tw.popin.cc
 0.0.0.0 ssp.adpies.com
 0.0.0.0 ad.cauly.co.kr
+
