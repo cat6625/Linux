@@ -60,3 +60,5 @@
 0.0.0.0 ssp.adpies.com
 0.0.0.0 ad.cauly.co.kr
 0.0.0.0 sp.tnkad.net
+0.0.0.0 trc.taboola.com
+
