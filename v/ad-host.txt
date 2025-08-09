@@ -59,5 +59,7 @@
 0.0.0.0 tw.popin.cc
 0.0.0.0 ssp.adpies.com
 0.0.0.0 ad.cauly.co.kr
+0.0.0.0 sp.tnkad.net
+
 
 
