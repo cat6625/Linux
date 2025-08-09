@@ -61,3 +61,6 @@
 0.0.0.0 supply.inmobicdn.net
 0.0.0.0 sg-ali-ad-track-sdk.mtgglobals.com
 0.0.0.0 c-eus.w.inmobi.com
+0.0.0.0 logs.ads.vungle.com
+0.0.0.0 api16-access-wf-sg.pangle.io
+0.0.0.0 ms.applvn.com
