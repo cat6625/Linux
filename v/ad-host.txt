@@ -61,4 +61,10 @@
 0.0.0.0 ad.cauly.co.kr
 0.0.0.0 sp.tnkad.net
 0.0.0.0 trc.taboola.com
+0.0.0.0 msg-intl.qy.net
+0.0.0.0 ibd-as-api.iq.com
+0.0.0.0 policy.video.iqiyi.com
+0.0.0.0 msga.cupid.iqiyi.com
+0.0.0.0 t7z.cupid.iqiyi.com
+
 
