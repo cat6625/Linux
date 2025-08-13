@@ -71,4 +71,5 @@
 0.0.0.0 static.addtoany.com
 0.0.0.0 cdn.adsfactor.net
 0.0.0.0 l.logly.co.jp
+0.0.0.0 apis.pchome.com.tw
 
