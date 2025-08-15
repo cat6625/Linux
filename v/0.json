@@ -1,6 +1,6 @@
 {
   "spider":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/ok.jar",
-  "wallpaper":"https://深色壁纸.xxooo.cf/",
+  "wallpaper":"./gif/pexels-photo-66997.jpeg",
   "logo": "./gif/bee-11531_256.gif",
 
   "sites": [
@@ -63,3 +63,4 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
