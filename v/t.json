@@ -74,13 +74,14 @@
 ],
 
 "rules":[
-{"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1","bbffvip","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
+{"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
 {"name":"ofiii","hosts":["www.ofiii.com"],"script":["const play=document.getElementsByClassName('play_icon')[0],event=new MouseEvent('click',{bubbles:!0,cancelable:!0,view:window,screenX:100,screenY:100,clientX:50,clientY:50,button:0,shiftKey:!1,ctrlKey:!1,altKey:!1,metaKey:!1,modifierState:0});play.dispatchEvent(event);"]}
 ],
 
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
