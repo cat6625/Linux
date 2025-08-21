@@ -3,12 +3,12 @@
 
   "sites": [
 
-{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":15,"api":"csp_JpysGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
-    
 {"key": "小苹果","name": "🍎苹果","type":3,"playerType":2,"timeout":15,"api":"csp_LiteApple",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
- 
+    
+{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":15,"api":"csp_JpysGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
+
 {"key":"立播","name":"🌟立播","type":3,"playerType":2,"timeout":15,"api":"csp_LibvioGuard",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
 
@@ -78,6 +78,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
