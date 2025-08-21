@@ -11,7 +11,6 @@
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
  
 {"key":"立播","name":"🌟立播","type":3,"playerType":2,"timeout":15,"api":"csp_LibvioGuard",
- "ext": {"from": "4k|auto"},
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
     
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType":2,"timeout":15,"api":"csp_Gz360",
@@ -80,6 +79,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
