@@ -9,11 +9,11 @@
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType":2,"timeout":10,"api":"csp_Gz360",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
 
-{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":10,"api":"csp_JpysGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
+{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":10,"api":"csp_Jpys",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
 
 {"key":"立播","name":"🌟立播","type":3,"playerType":2,"timeout":10,"api":"csp_LibvioGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/摸鱼儿/spider.jar"},
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
 {"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType":2,"timeout":10,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_aigua.py"}, 
@@ -78,6 +78,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
