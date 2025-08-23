@@ -3,64 +3,71 @@
 
   "sites": [
 
-{"key": "小苹果","name": "🍎苹果","type":3,"playerType":2,"timeout":10,"api":"csp_LiteApple",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
-
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,"playerType":2,"timeout":10,"api":"csp_Gz360",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
-
-{"key":"文才","name":"🌺文才","type": 3,"playerType":2,"timeout":10,"api":"csp_Jpys",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/小米/spider.jar"},
-
-{"key":"立播","name":"🌟立播","type":3,"playerType":2,"timeout":10,"api":"csp_LibvioGuard",
+{"key": "小苹果","name":"🍎苹果","type":3,
+ "api":"csp_LiteAppleGuard",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
-{"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType":2,"timeout":10,
+{"key":"文才","name":"🌺文才","type":3,
+ "api":"csp_JpysGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+
+{"key":"立播","name":"🌟立播","type":3,
+ "api":"csp_LibvioGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+
+{"key": "低端","name":"⏮️低端","type":3,
+ "api":"csp_DdrkGuard", 
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+
+{"key": "爱瓜TVAPP[py]","name":"🍋‍爱瓜TV[py]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_aigua.py"}, 
 
-{"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"playerType":2,"timeout":10,"changeable":0,
+{"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"changeable":0,
  "api":"https://app.bfzyapi.com/api.php/provide/vod/",
  "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
-{"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,"playerType":2,"timeout":10,
+{"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,
  "api":"https://py.doube.eu.org/spider?site=OleVod"},
  
- {"key":"csp_If101","name":"️🅾️歐樂[XBPQ]","type":3,"timeout":10,"api":"csp_XBPQ",
- "ext":{
+ {"key":"csp_If101","name":"️🅾️歐樂[XBPQ]","type":3,
+  "api":"csp_XBPQ",
+  "ext":{
     "简介":"content_desc context clearfix\">&&</span>",
     "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
     "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
- "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
+  "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
  
- {"key":"嗷呜小苹果","name":"🍏小苹果[py]","type":3,"timeout":10,
-   "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_pingguo.py"}, 
+ {"key":"嗷呜小苹果","name":"🍏小苹果[py]","type":3,
+  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_pingguo.py"}, 
 
-{"key": "爱瓜TV","name": "🍈愛瓜","type": 4,"timeout":10,
-  "api": "http://zhangqun66.com/aigua.php","searchable": 1,"style": {"type": "rect", "ratio": 1.33}},
+{"key":"爱瓜TV","name":"🍈愛瓜","type":4,
+ "api":"http://zhangqun66.com/aigua.php","searchable": 1,"style": {"type": "rect", "ratio": 1.33}},
     
 {"key": "爱瓜TVAPP[py]","name": "🍋‍爱瓜TV[py]","type":3,"playerType": 2,"timeout":10,
   "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_aigua.py"}, 
 
-{"key":"drpy_js_金牌","name":"🏆金牌影视[js]","type":3,"playerType":2,"timeout":10,
+{"key":"drpy_js_金牌","name":"🏆金牌影视[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
-{"key":"drpy_js_瓜子","name":"🥒瓜子影视[js]","type":3,"playerType":2,"timeout":10,
+{"key":"drpy_js_瓜子","name":"🥒瓜子影视[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},    
     
-{"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,"playerType":2,"timeout":10,"style":{"type":"rect","ratio":0.75},"api":"csp_GM",
-  "ext":{"userScript":"https://raw.githubusercontent.com/CatVodSpider-GM/SFW-Spiders/refs/heads/main/userScripts/ysfp.user.js",
+{"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,
+ "style":{"type":"rect","ratio":0.75},
+ "api":"csp_GM",
+ "ext":{"userScript":"https://raw.githubusercontent.com/CatVodSpider-GM/SFW-Spiders/refs/heads/main/userScripts/ysfp.user.js",
          "debug":false,"webViewSettings":{"blockNetworkImage":true,
          "blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},
          "spider":{"homeContent":{"loadUrl":"https://m.yfsp.tv/"},
          "categoryContent":{"loadUrl":"https://m.yfsp.tv/list/${tid}?type=${index-0:-0}${index-1:-,0}${index-2:-,0}${index-3:-,0}${index-4:-,0}${index-5:-}"},
          "detailContent":{"loadUrl":"https://m.yfsp.tv/play/${id}"},"playerContent":{"loadUrl":"https://m.yfsp.tv/play/${mediaKey}?id=${episodeKey}"},
          "searchContent":{"loadUrl":"https://m.yfsp.tv/search"}}},
-  "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"}
+ "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"}
 ],
 
 "doh":[
@@ -78,6 +85,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
