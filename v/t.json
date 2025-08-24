@@ -3,19 +3,19 @@
 
   "sites": [
 
-{"key": "小苹果","name":"🍎苹果","type":3,"quickSearch": 1,
+{"key": "小苹果","name":"🍎苹果","type":3,
  "api":"csp_LiteAppleGuard",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
-{"key":"文才","name":"🌺文才","type":3,"quickSearch": 1,
+{"key":"文才","name":"🌺文才","type":3,
  "api":"csp_JpysGuard",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
-{"key":"立播","name":"🌟立播","type":3,"quickSearch": 1,
+{"key":"立播","name":"🌟立播","type":3,
  "api":"csp_LibvioGuard",
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
-{"key": "低端","name":"⏮️低端","type":3,"quickSearch": 1,
+{"key": "低端","name":"⏮️低端","type":3,
  "api":"csp_DdrkGuard", 
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
 
@@ -37,6 +37,15 @@
     "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
   "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
+
+{"key":"csp_XBPQ_瓜子影视","name":"💥瓜子影视","type":3,
+ "api":"csp_XBPQ",
+ "ext":{"请求头": "User-Agent$MOBILE_UA",
+        "编码": "UTF-8",
+        "主页url":"https://www.gzvod.cc/",
+        "分类url":"https://www.gzvod.cc/index.php/vod/show/by/{by}/class/{class}/id/{cateId}/page/{catePg}/year/{year}.html",
+        "分类":"电影$1#电视剧$2#综艺$3#动漫$4#短剧$5"},
+ "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
  
  {"key":"嗷呜小苹果","name":"🍏小苹果[py]","type":3,
   "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_pingguo.py"}, 
@@ -85,6 +94,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
