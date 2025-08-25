@@ -1,23 +1,20 @@
 {
   "logo": "./gif/cat.gif", 
-
+  "spider": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar",
+  
   "sites": [
 
 {"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_LiteAppleGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+ "api":"csp_LiteAppleGuard"},
 
 {"key":"立播","name":"🌟立播","type":3,
- "api":"csp_LibvioGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
+ "api":"csp_LibvioGuard"},
 
 {"key": "低端","name":"⏮️低端","type":3,
- "api":"csp_DdrkGuard", 
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},    
+ "api":"csp_DdrkGuard"},    
     
 {"key":"文才","name":"🌺文才","type": 3,
- "api":"csp_JpysGuard",
- "jar":"./gif/ok.png"},
+ "api":"csp_JpysGuard"},
 
 {"key": "csp_Gz360","name": "🍉瓜子","type":3,
  "api":"csp_GuaziGuard",
@@ -102,6 +99,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
