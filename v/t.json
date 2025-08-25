@@ -8,6 +8,7 @@
  "api":"csp_LiteAppleGuard"},
 
 {"key":"立播","name":"🌟立播","type":3,
+ "timeout":5, 
  "api":"csp_LibvioGuard"},
 
 {"key": "低端","name":"⏮️低端","type":3,
@@ -99,6 +100,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
