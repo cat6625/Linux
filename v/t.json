@@ -17,15 +17,15 @@
 {"key":"文才","name":"🌺文才","type": 3,
  "api":"csp_JpysGuard"},
 
-{"key": "csp_Gz360","name": "🍉瓜子","type":3,
+{"key": "csp_Gz360","name": "🍉瓜子[ok]","type":3,
  "api":"csp_GuaziGuard",
  "jar":"./gif/ok.png"},    
 
-{"key":"韩圈","name":"🦄韩圈","type":3,
+{"key":"韩圈","name":"🦄韩圈[ok]","type":3,
  "api":"csp_HanXiaoQuanGuard",
  "jar":"./gif/ok.png"},
 
-{"key":"天堂影视","name":"🌅天堂影视","type":1,
+{"key":"天堂影视","name":"🌅电影天堂","type":1,
  "api":"https://heimuer.ggff.net/api.php/tvbox"},    
 
 {"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,
@@ -40,7 +40,7 @@
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
   "jar":"https://github.com/fastbuild7099/fastbuild7099/raw/refs/heads/main/jar1/xyqxbpq.jar"},
 
-{"key":"csp_XBPQ_瓜子影视","name":"💥瓜子影视","type":3,
+{"key":"csp_XBPQ_瓜子影视","name":"💥gzvod[XBPQ]","type":3,
  "api":"csp_XBPQ",
  "ext":{"请求头": "User-Agent$MOBILE_UA",
         "编码": "UTF-8",
@@ -63,7 +63,7 @@
  "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
-{"key":"drpy_js_瓜子","name":"🥒瓜子影视[js]","type":3,
+{"key":"drpy_js_瓜子","name":"🥒瓜子[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
  "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
@@ -100,6 +100,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
