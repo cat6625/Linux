@@ -29,12 +29,12 @@
 {"key":"drpy_js_金牌","name":"🏆金牌[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
- "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
+ "jar":"https://github.com/4TVBox/TVBox/raw/refs/heads/main/custom_spider.jar"},
 
 {"key":"drpy_js_瓜子","name":"🥒瓜子[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
-"jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
+"jar":"https://github.com/4TVBox/TVBox/raw/refs/heads/main/custom_spider.jar"},
     
 {"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"changeable":0,
  "api":"https://app.bfzyapi.com/api.php/provide/vod/",
@@ -68,6 +68,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
