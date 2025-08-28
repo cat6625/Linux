@@ -38,7 +38,7 @@
     "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
     "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
-  "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ.jar"},
+  "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
 
 {"key":"csp_XBPQ_瓜子影视","name":"💥gzvod[XBPQ]","type":3,
  "api":"csp_XBPQ",
@@ -47,7 +47,7 @@
         "主页url":"https://www.gzvod.cc/",
         "分类url":"https://www.gzvod.cc/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
         "分类":"电影$1#电视剧$2#综艺$3#动漫$4#短剧$5"},
- "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ.jar"},
+ "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
  
 {"key":"嗷呜小苹果","name":"🍏小苹果|嗷呜","type":4,
  "api":"https://tvbot.ggff.net/pingguo"}, 
@@ -100,6 +100,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
