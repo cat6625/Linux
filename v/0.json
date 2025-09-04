@@ -13,7 +13,8 @@
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key": "低端","name":"⏮️低端","type":3,
- "api":"csp_DdrkGuard"},    
+ "api":"csp_DdrkGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
     
 {"key":"文才","name":"🌺文才","type": 3,
  "api":"csp_JpysGuard",
@@ -70,6 +71,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
