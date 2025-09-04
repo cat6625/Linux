@@ -1,21 +1,23 @@
 {
   "logo": "./gif/bee-11531_256.gif",
-  "spider": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar",
-  
+   
   "sites": [
 
 {"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_LiteAppleGuard"},
+ "api":"csp_LiteAppleGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
- "api":"csp_LibvioGuard"},
+ "api":"csp_LibvioGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
 {"key": "低端","name":"⏮️低端","type":3,
  "api":"csp_DdrkGuard"},    
     
 {"key":"文才","name":"🌺文才","type": 3,
- "api":"csp_JpysGuard"},
+ "api":"csp_JpysGuard",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
 
 {"key":"天堂影视","name":"🌅电影天堂","type":1,
  "api":"https://heimuer.ggff.net/api.php/tvbox"},    
@@ -68,6 +70,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
