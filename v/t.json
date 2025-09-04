@@ -3,9 +3,12 @@
  
   "sites": [
 
- {"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_LiteAppleGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+{"key": "小苹果","name":"🍎苹果","type":3,
+ "api":"csp_LiteApple",
+ "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
+
+{"key":"独播库","name":"独播库","type":4,
+ "api":"https://tvbot.ggff.net/duboku"},    
 
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
@@ -65,12 +68,12 @@
 {"key":"drpy_js_金牌","name":"🏆金牌[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
- "jar":"https://github.com/4TVBox/TVBox/raw/refs/heads/main/custom_spider.jar"},
+ "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
 {"key":"drpy_js_瓜子","name":"🥒瓜子[js]","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
- "jar":"https://github.com/4TVBox/TVBox/raw/refs/heads/main/custom_spider.jar"},
+ "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
 {"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"changeable":0,
  "api":"https://app.bfzyapi.com/api.php/provide/vod/",
@@ -89,13 +92,6 @@
  "jar":"https://github.com/CatVodSpider-GM/SFW-Spiders/raw/refs/heads/main/Spiders-Lib/GM.jar"}
 ],
 
-"doh":[
-{"name":"Google","url":"https://dns.google/dns-query","ips":["8.8.4.4","8.8.8.8"]},
-{"name":"Cloudflare","url":"https://cloudflare-dns.com/dns-query","ips":["1.1.1.1","1.0.0.1"]},
-{"name":"AdGuard","url":"https://dns.adguard.com/dns-query","ips":["94.140.14.140","94.140.14.141"]},
-{"name":"Quad9","url":"https://dns.quad9.net/dns-query","ips":["9.9.9.9","149.112.112.112"]}
-],
-
 "rules":[
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]},
 {"name":"ofiii","hosts":["www.ofiii.com"],"script":["const play=document.getElementsByClassName('play_icon')[0],event=new MouseEvent('click',{bubbles:!0,cancelable:!0,view:window,screenX:100,screenY:100,clientX:50,clientY:50,button:0,shiftKey:!1,ctrlKey:!1,altKey:!1,metaKey:!1,modifierState:0});play.dispatchEvent(event);"]}
@@ -104,6 +100,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
