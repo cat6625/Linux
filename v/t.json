@@ -33,7 +33,7 @@
  "jar":"./gif/ok.png"},
 
 {"key":"天堂影视","name":"🌅电影天堂","type":1,
- "api":"https://heimuer.ggff.net/api.php/tvbox"},    
+ "api":"https://tvbot.ggff.net/dytt"},    
 
 {"key": "py_OleVod","name": "🅾️歐樂｜沐辰","type":4,
  "api":"https://py.doube.eu.org/spider?site=OleVod"},
@@ -113,6 +113,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
