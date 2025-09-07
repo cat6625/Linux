@@ -21,7 +21,7 @@
  "jar":"https://ghfast.top/https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},     
     
 {"key":"天堂影视","name":"🌅电影天堂","type":1,
- "api":"https://heimuer.ggff.net/api.php/tvbox"},    
+ "api":"https://tvbot.ggff.net/dytt"},    
 
 {"key": "嗷呜爱瓜TV","name":"🍋‍爱瓜TV｜嗷呜","type":4,
  "api":"https://tvbot.ggff.net/aigua"}, 
@@ -77,6 +77,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
