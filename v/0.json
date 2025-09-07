@@ -3,9 +3,10 @@
    
   "sites": [
 
-{"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_LiteApple",
- "jar":"https://ghfast.top/https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
+{"key":"小苹果","name":"🍎苹果","type":4,"api":"https://tvbot.ggff.net/pingguo"},
+
+{"key":"独播库","name":"🔥独播库","type":4,
+ "api":"https://tvbot.ggff.net/duboku"},    
 
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
@@ -26,8 +27,8 @@
 {"key": "嗷呜爱瓜TV","name":"🍋‍爱瓜TV｜嗷呜","type":4,
  "api":"https://tvbot.ggff.net/aigua"}, 
 
-{"key": "py_OleVod","name":"🅾️歐樂｜沐辰","type":4,
- "api":"https://py.doube.eu.org/spider?site=OleVod"},
+{"key": "py_OleVod","name":"🅾️歐樂","type":4,
+ "api":"https://tvbot.ggff.net/oule"},
 
 {"key":"drpy_js_金牌","name":"🏆金牌[js]","type":3,
  "api":"https://ghfast.top/https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
@@ -77,6 +78,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
