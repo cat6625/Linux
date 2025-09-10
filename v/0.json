@@ -39,11 +39,7 @@
  "api":"https://ghfast.top/https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/api/drpy2.min.js",
  "ext":"https://ghfast.top/https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/js/瓜子.js",
  "jar":"https://ghfast.top/https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
-    
-{"key": "暴风資源","name":"🎈暴风|有廣告","type":1,"changeable":0,
- "api":"https://app.bfzyapi.com/api.php/provide/vod/",
- "categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
-    
+
 {"key":"yfsp","name":"🎖︎｜愛壹帆｜","type":3,
  "style":{"type":"rect","ratio":0.75},
  "api":"csp_GM",
@@ -78,6 +74,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
