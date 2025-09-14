@@ -18,7 +18,7 @@
  "api":"https://tvbot.ggff.net/oule"},
 
 {"key":"drpy_js_金牌","name":"🏆金牌","type":3,
- "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jinpai.py"
+ "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jinpai.py"},
 
 {"key":"drpy_js_瓜子","name":"🥒瓜子","type":4,
  "api":"https://tvbot.ggff.net/guazi"},
@@ -70,6 +70,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
