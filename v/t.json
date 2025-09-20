@@ -26,7 +26,7 @@
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
  "api":"csp_LibvioGuard",
- "jar":"https://ghfast.top/https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
  {"key": "低端","name":"⏮️低端","type":3,
  "api":"csp_DdrkGuard",
@@ -52,7 +52,7 @@
         "主页url":"https://www.gzvod.cc/",
         "分类url":"https://www.gzvod.cc/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
         "分类":"电影$1#电视剧$2#综艺$3#动漫$4#短剧$5"},
- "jar":"https://ghfast.top/https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
+ "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
     
 {"key":"zhangqun66爱瓜TV","name":"🍈愛瓜|zhangqun66","type":4,
  "api":"http://zhangqun66.com/aigua.php"},
@@ -95,6 +95,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
