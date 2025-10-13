@@ -28,6 +28,10 @@
 {"key": "py_OleVod","name":"🅾️歐樂","type":4,
  "api":"https://py.doube.eu.org/spider?site=OleVod"},
 
+{"key": "csp_Gz360","name": "🍉┃瓜子","type": 3,
+ "api": "csp_Gz360",
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},    
+
 {"key":"嗷呜金牌","name":"🏆金牌","type":3,
  "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jinpai.py"},
 
@@ -90,6 +94,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
