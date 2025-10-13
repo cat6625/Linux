@@ -6,35 +6,35 @@
 {"key":"小苹果","name":"🍎苹果","type":4,"api":"https://tvbot.ggff.net/pingguo"},
 
 {"key":"独播库","name":"🔥独播库","type":4,
- "api":"https://tvbot.ggff.net/duboku"},    
+ "api":"https://newtv.ggff.net/duboku"},    
     
 {"key":"天堂影视","name":"🌅电影天堂","type":1,
- "api":"https://tvbot.ggff.net/dytt"},    
+ "api":"https://py.doube.eu.org/spider?site=DianYingTanTang"},    
 
 {"key": "嗷呜爱瓜TV","name":"🍋‍爱瓜TV","type":4,
- "api":"https://tvbot.ggff.net/aigua"}, 
+ "api":"https://newtv.ggff.net/aigua"}, 
 
 {"key": "py_OleVod","name":"🅾️歐樂","type":4,
  "api":"https://tvbot.ggff.net/oule"},
 
-{"key":"drpy_js_金牌","name":"🏆金牌","type":3,
- "api":"https://raw.githubusercontent.com/4TVBox/TVBox/refs/heads/main/py/py_jinpai.py"},
+{"key":"嗷呜金牌","name":"🏆金牌","type":3,
+ "api":"https://raw.githubusercontent.com/tvbox/newtv/refs/heads/main/py/py_jinpai.py"},
 
-{"key":"drpy_js_瓜子","name":"🥒瓜子","type":4,
- "api":"https://tvbot.ggff.net/guazi"},
+{"key":"月佬瓜子","name":"🥒瓜子","type":4,
+ "api":"https://newtv.ggff.net/guazi"},
 
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
  "api":"csp_LibvioGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+ "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
  {"key": "低端","name":"⏮️低端","type":3,
  "api":"csp_DdrkGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
+ "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
     
  {"key":"文才","name":"🌺文才","type": 3,
  "api":"csp_JpysGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
+ "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
  
  {"key":"csp_If101","name":"️🅾️歐樂[XBPQ]","type":3,
   "api":"csp_XBPQ",
@@ -43,7 +43,7 @@
     "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
     "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
-  "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
+  "jar":"https://github.com/cluntop/newtv/raw/refs/heads/main/jar/XBPQ1.jar"},
 
 {"key":"csp_XBPQ_瓜子影视","name":"💥gzvod[XBPQ]","type":3,
  "api":"csp_XBPQ",
@@ -52,7 +52,7 @@
         "主页url":"https://www.gzvod.cc/",
         "分类url":"https://www.gzvod.cc/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
         "分类":"电影$1#电视剧$2#综艺$3#动漫$4#短剧$5"},
- "jar":"https://github.com/cluntop/tvbox/raw/refs/heads/main/jar/XBPQ1.jar"},
+ "jar":"https://github.com/cluntop/newtv/raw/refs/heads/main/jar/XBPQ1.jar"},
     
 {"key":"zhangqun66爱瓜TV","name":"🍈愛瓜|zhangqun66","type":4,
  "api":"http://zhangqun66.com/aigua.php"},
@@ -95,6 +95,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
