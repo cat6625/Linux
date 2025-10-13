@@ -15,7 +15,7 @@
  "api":"https://newtv.ggff.net/aigua"}, 
 
 {"key": "py_OleVod","name":"🅾️歐樂","type":4,
- "api":"https://tvbot.ggff.net/oule"},
+ "api":"https://py.doube.eu.org/spider?site=OleVod"},
 
 {"key":"嗷呜金牌","name":"🏆金牌","type":3,
  "api":"https://raw.githubusercontent.com/tvbox/newtv/refs/heads/main/py/py_jinpai.py"},
@@ -26,15 +26,15 @@
 {"key":"立播","name":"🌟立播","type":3,
  "timeout":5, 
  "api":"csp_LibvioGuard",
- "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"},
 
  {"key": "低端","name":"⏮️低端","type":3,
  "api":"csp_DdrkGuard",
- "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
     
  {"key":"文才","name":"🌺文才","type": 3,
  "api":"csp_JpysGuard",
- "jar":"https://github.com/ls125781003/tvbox/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E9%A5%AD%E5%A4%AA%E7%A1%AC/spider.jar"}, 
  
  {"key":"csp_If101","name":"️🅾️歐樂[XBPQ]","type":3,
   "api":"csp_XBPQ",
@@ -95,6 +95,7 @@
 "ads":["static-mozai.4gtv.tv"]
 
 }
+
 
 
 
