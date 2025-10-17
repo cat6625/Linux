@@ -76,3 +76,10 @@
 0.0.0.0 data.video.iqiyi.com
 0.0.0.0 vast.yomeno.xyz
 0.0.0.0 go.xlivrdr.com
+0.0.0.0 s.magsrv.com
+0.0.0.0 tsyndicate.com
+0.0.0.0 a.nel.cloudflare.com
+0.0.0.0 ad.twinrdengine.com
+0.0.0.0 vast.adsturn.com
+
+
