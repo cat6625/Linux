@@ -81,5 +81,5 @@
 0.0.0.0 a.nel.cloudflare.com
 0.0.0.0 ad.twinrdengine.com
 0.0.0.0 vast.adsturn.com
-
-
+0.0.0.0 ads.exoclick.com
+0.0.0.0 ads.ourdream.ai
