@@ -101,3 +101,6 @@
 0.0.0.0 prefecturesuggestions.com
 0.0.0.0 weirdopt.com
 0.0.0.0 wayfarerorthodox.com
+0.0.0.0 torchfriendlypay.com
+0.0.0.0 flushpersist.com
+0.0.0.0 estimatedeferbulk.com
