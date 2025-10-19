@@ -91,3 +91,6 @@
 0.0.0.0 wl.hpyrdr.com
 0.0.0.0 t.snaptrckr.fun
 0.0.0.0 r.trackwilltrk.com
+0.0.0.0 surrit.com
+0.0.0.0 nineyu.com
+0.0.0.0 njavtv.com
