@@ -104,3 +104,5 @@
 0.0.0.0 torchfriendlypay.com
 0.0.0.0 flushpersist.com
 0.0.0.0 estimatedeferbulk.com
+0.0.0.0 adserver.juicyads.com
+0.0.0.0 ads.adxadserv.com
