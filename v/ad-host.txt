@@ -84,3 +84,10 @@
 0.0.0.0 ads.exoclick.com
 0.0.0.0 ads.ourdream.ai
 0.0.0.0 api.dable.io
+0.0.0.0 go.myavlive.com
+0.0.0.0 go.rmhfrtnd.com
+0.0.0.0 creative.myavlive.com
+0.0.0.0 white-label.stripchat.com
+0.0.0.0 wl.hpyrdr.com
+0.0.0.0 t.snaptrckr.fun
+0.0.0.0 r.trackwilltrk.com
