@@ -93,11 +93,8 @@
 0.0.0.0 nineyu.com
 0.0.0.0 njavtv.com
 0.0.0.0 javlink.short.gy
-0.0.0.0 mc.yandex.ru
 0.0.0.0 kettledroopingcontinuation.com
 0.0.0.0 skinnycrawlinglax.com
-0.0.0.0 professionaltrafficmonitor.com
-0.0.0.0 preferencenail.com
 0.0.0.0 prefecturesuggestions.com
 0.0.0.0 weirdopt.com
 0.0.0.0 wayfarerorthodox.com
