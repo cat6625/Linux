@@ -108,3 +108,17 @@
 0.0.0.0 ads.adxadserv.com
 0.0.0.0 preferencenail.com
 0.0.0.0 creative.rmhfrtnd.com
+0.0.0.0 fwarvgktcq.com
+0.0.0.0 primecreditoworld.com
+0.0.0.0 s8i.pixelevoworks.online
+0.0.0.0 totalcartao.com
+0.0.0.0 megacartao.com
+0.0.0.0 mc.yandex.ru
+0.0.0.0 adsco.re
+0.0.0.0 tracker.webtorrent.dev
+0.0.0.0 secure.gravatar.com
+0.0.0.0 oneclickcartao.com
+0.0.0.0 premiumvertising.com
+0.0.0.0 api.linkshortify.com
+0.0.0.0 pulloverupgrademuffled.com
+0.0.0.0 professionaltrafficmonitor.com
