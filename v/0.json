@@ -1,0 +1,51 @@
+{
+  "logo": "./gif/penguin-16171_128.gif",
+   
+  "sites": [
+  
+{"key": "天堂影视","name":"🌅电影天堂","type":4,
+  "api":"https://py.doube.eu.org/spider?site=DianYingTanTang"}, 
+ 
+{"key": "歐樂","name":"🅾️歐樂","type":4,
+  "api":"https://py.doube.eu.org/spider?site=OleVod"},
+
+{"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
+  "api":"http://zhangqun66.com/aigua.php"}, 
+
+{"key": "小苹果","name":"🍎苹果","type":3,
+  "api":"csp_LiteApple",
+  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
+
+{"key": "低端","name":"⏮️低端","type":3,
+ "api":"csp_Ddys",
+ "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
+
+{"key": "金牌", "name": "🥇金牌[py]","type": 3,
+  "api": "https://gitlab.com/test7652843/tvbox/-/raw/main/摸鱼儿/api/金牌影视.py",
+  "ext": {"site": "https://www.hkybqufgh.com,https://www.sizhengxt.com,https://0996zp.com,https://9zhoukj.com/,https://www.sizhengxt.com"}},
+
+{"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,
+  "style":{"type":"rect","ratio":0.75},
+  "api":"csp_GM",
+  "ext":{"userScript":"https://gitlab.com/vios0810/newbox/-/raw/main/js/ysfp.user.js",
+         "debug":false,"webViewSettings":{"blockNetworkImage":true,
+         "blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},
+         "spider":{"homeContent":{"loadUrl":"https://m.yfsp.tv/"},
+         "categoryContent":{"loadUrl":"https://m.yfsp.tv/list/${tid}?type=${index-0:-0}${index-1:-,0}${index-2:-,0}${index-3:-,0}${index-4:-,0}${index-5:-}"},
+         "detailContent":{"loadUrl":"https://m.yfsp.tv/play/${id}"},"playerContent":{"loadUrl":"https://m.yfsp.tv/play/${mediaKey}?id=${episodeKey}"},
+         "searchContent":{"loadUrl":"https://m.yfsp.tv/search"}}},
+  "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/GM.jar"}
+],
+
+"doh":[
+{"name":"Google",
+  "url":"https://dns.google/dns-query",
+  "ips":["8.8.8.8","8.8.4.4","2001:4860:4860::8888","2001:4860:4860::8844"]}
+],
+
+"rules":[
+{"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]}
+]
+
+}
+
