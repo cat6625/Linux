@@ -3,8 +3,9 @@
    
   "sites": [
   
-{"key": "天堂影视","name":"🌅电影天堂","type":0,
- "api": "http://caiji.dyttzyapi.com/api.php/provide/vod/at/xml/"},
+{"key": "天堂影视","name":"🌅电影天堂","type":1,"searchable": 1,"quickSearch": 1,
+ "api": "http://caiji.dyttzyapi.com/api.php/provide/vod/",
+"categories": [ "动作片", "喜剧片", "科幻片", "恐怖片", "爱情片", "剧情片", "战争片", "记录片", "国产剧", "欧美剧", "香港剧", "韩国剧", "台湾剧", "日本剧", "海外剧", "泰国剧", "国产动漫", "日韩动漫", "欧美动漫", "港台动漫", "海外动漫", "大陆综艺", "港台综艺", "日韩综艺", "欧美综艺" ] },
 
 {"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,
  "api":"csp_XBPQ",
@@ -15,8 +16,8 @@
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
  "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/xyqxbpq.jar"},
 
-{"key": "爱瓜TV","name":"🍋‍爱瓜TV[py]","type":3,
-  "api":"https://gitlab.com/vios0810/newbox/-/raw/main/py/py_aigua.py"}, 
+{"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
+ "api":"http://zhangqun66.com/aigua.php"}, 
 
 {"key": "小苹果","name":"🍎苹果","type":3,
   "api":"csp_LiteApple",
@@ -26,9 +27,10 @@
  "api":"csp_Ddys",
  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
 
-{"key": "金牌", "name": "🥇金牌[py]","type": 3,
-  "api": "https://gitlab.com/test7652843/tvbox/-/raw/main/摸鱼儿/api/金牌影视.py",
-  "ext": {"site": "https://www.hkybqufgh.com,https://www.sizhengxt.com,https://0996zp.com,https://9zhoukj.com/,https://www.sizhengxt.com"}},
+{"key": "金牌","name":"🥇金牌[js]","type":3,
+  "api":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/api/drpy2.min.js",
+  "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/金牌影视.js",
+  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,
   "style":{"type":"rect","ratio":0.75},
@@ -54,4 +56,5 @@
 ]
 
 }
+
 
