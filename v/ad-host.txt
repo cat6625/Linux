@@ -119,3 +119,14 @@
 0.0.0.0 api.linkshortify.com
 0.0.0.0 pulloverupgrademuffled.com
 0.0.0.0 professionaltrafficmonitor.com
+0.0.0.0 match.deepintent.com
+0.0.0.0 client-side-metrics.sg1.as.criteo.net
+0.0.0.0 us-u.openx.net
+0.0.0.0 s.company-target.com
+0.0.0.0 sync.mathtag.com
+0.0.0.0 bttrack.com
+0.0.0.0 sync.adkernel.com
+0.0.0.0 ads.pubmatic.com
+0.0.0.0 cdn.adm.admixer.com
+0.0.0.0 eu-rtbstack-cm.admixer.net
+0.0.0.0 pixel.quantcount.com
