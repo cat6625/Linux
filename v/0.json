@@ -1,6 +1,6 @@
 {
   "logo": "./gif/penguin-16171_128.gif",
-   
+  "spider": "https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar", 
   "sites": [
   
 {"key": "天堂影视","name":"🌅电影天堂","type":4,
@@ -16,17 +16,14 @@
  "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/xyqxbpq.jar"},
 
 {"key": "小苹果","name":"🍎苹果","type":3,
-  "api":"csp_LiteApple",
-  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
+  "api":"csp_LiteApple"},
 
 {"key": "低端","name":"⏮️低端","type":3,
- "api":"csp_Ddys",
- "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
+ "api":"csp_Ddys"},
 
 {"key": "金牌","name":"🥇金牌[js]","type":3,
   "api":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/api/drpy2.min.js",
-  "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/金牌影视.js",
-  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
+  "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/金牌影视.js"},
 
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
  "api":"http://zhangqun66.com/aigua.php"}, 
@@ -55,6 +52,7 @@
 ]
 
 }
+
 
 
 
