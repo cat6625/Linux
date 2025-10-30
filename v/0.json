@@ -5,9 +5,15 @@
   
 {"key": "天堂影视","name":"🌅电影天堂","type":4,
   "api":"https://py.doube.eu.org/spider?site=DianYingTanTang"}, 
- 
-{"key": "歐樂","name":"🅾️歐樂","type":4,
-  "api":"https://py.doube.eu.org/spider?site=OleVod"},
+
+{"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,
+ "api":"csp_XBPQ",
+ "ext":{
+    "简介":"content_desc context clearfix\">&&</span>",
+    "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
+    "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
+    "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
+ "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/xyqxbpq.jar"},
 
 {"key": "小苹果","name":"🍎苹果","type":3,
   "api":"csp_LiteApple",
@@ -49,6 +55,7 @@
 ]
 
 }
+
 
 
 
