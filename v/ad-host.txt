@@ -133,3 +133,4 @@
 0.0.0.0 client-side-metrics.as.criteo.net
 0.0.0.0 measurement-api.criteo.com
 0.0.0.0 s.ad.smaato.net
+0.0.0.0 ad.holmesmind.com
