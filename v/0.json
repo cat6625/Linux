@@ -45,10 +45,11 @@
 ],
 
 "rules":[
-{"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]}
+{"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p.","v."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]}
 ]
 
 }
+
 
 
 
