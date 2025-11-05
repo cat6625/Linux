@@ -18,14 +18,8 @@
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
  "api":"http://zhangqun66.com/aigua.php"},
     
-{"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,"timeout":10,
- "api":"csp_XBPQ",
- "ext":{
-    "简介":"content_desc context clearfix\">&&</span>",
-    "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
-    "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
-    "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
- "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/xyqxbpq.jar"},
+{"key": "歐樂","name":"🅾️歐樂","type":4,
+ "api":"https://py.doube.eu.org/spider?site=OleVod"},
 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
   "style":{"type":"rect","ratio":0.75},
@@ -51,6 +45,7 @@
 ]
 
 }
+
 
 
 
