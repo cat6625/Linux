@@ -4,10 +4,10 @@
   "sites": [
   
 {"key": "小苹果","name":"🍎苹果","type":3,
-  "api":"csp_LiteApple"},
+  "api":"csp_LiteApple","timeout":10},
 
 {"key": "低端","name":"⏮️低端","type":3,
- "api":"csp_Ddys"},
+ "api":"csp_Ddys","timeout":10},
 
 {"key": "金牌","name":"🥇金牌[js]","type":3,
   "api":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/api/drpy2.min.js",
@@ -17,7 +17,7 @@
  "api":"http://zhangqun66.com/aigua.php"},
     
 {"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,
- "api":"csp_XBPQ",
+ "api":"csp_XBPQ","timeout":10,
  "ext":{
     "简介":"content_desc context clearfix\">&&</span>",
     "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
@@ -27,7 +27,7 @@
 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,
   "style":{"type":"rect","ratio":0.75},
-  "api":"csp_GM",
+  "api":"csp_GM","timeout":10,
   "ext":{"userScript":"https://gitlab.com/vios0810/newbox/-/raw/main/js/ysfp.user.js",
          "debug":false,"webViewSettings":{"blockNetworkImage":true,
          "blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},
@@ -49,6 +49,7 @@
 ]
 
 }
+
 
 
 
