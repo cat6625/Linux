@@ -15,6 +15,10 @@
  "ext":{"danmu":false},
  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/OK/spider.jar"},
 
+{"key": "厂长","name": "🌸厂长","type": 3,"timeout": 10,
+  "api": "csp_CzzyGuard",
+  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/OK/spider.jar"},    
+
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
  "api":"http://zhangqun66.com/aigua.php"},
     
@@ -45,6 +49,7 @@
 ]
 
 }
+
 
 
 
