@@ -1,18 +1,14 @@
 {
   "logo": "./gif/penguin-16171_128.gif",
-  "spider": "https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar", 
   "sites": [
 
-{"key":"drpy_js_豆瓣","name":"豆瓣[js]","type":3,
- "api":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/api/drpy2.min.js",
- "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/drpy.js"},
-    
-{"key": "小苹果","name":"🍎苹果","type":3,"timeout":10,
-  "api":"csp_LiteApple"},
+{"key": "小苹果","name": "🍎苹果","type": 4,
+ "api":"http://zhangqun66.com/pingguo.php" },
 
-{"key": "金牌","name":"🥇金牌[js]","type":3,"timeout":10,
-  "api":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/api/drpy2.min.js",
-  "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/金牌影视.js"},
+{"key": "文才","name": "🌺文才","type": 3,"timeout": 10,
+ "api": "csp_JpysGuard",
+ "ext":{"danmu":false}, 
+ "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/OK/spider.jar"},
 
 {"key":"韩圈","name":"🦄韩圈","type":3,"timeout":10,"playerType":2,
  "api":"csp_HanXiaoQuanGuard",
@@ -49,6 +45,7 @@
 ]
 
 }
+
 
 
 
