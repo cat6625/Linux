@@ -12,8 +12,9 @@
   "ext":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/js/金牌影视.js",
   "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/香雅情/spider.jar"},
 
-{"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":4,
- "api":"http://zhangqun66.com/aigua.php"},
+{"key": "瓜子","name": "🍉瓜子","type": 3,
+ "api": "csp_Gz360",
+ "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/肥猫/spider.jar"},
     
 {"key":"csp_If101","name":"️🅾️歐樂[XBPQ]","type":3,
  "api":"csp_XBPQ",
@@ -50,6 +51,7 @@
 ]
 
 }
+
 
 
 
