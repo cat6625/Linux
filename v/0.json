@@ -7,14 +7,6 @@
   "ext":"https://raw.githubusercontent.com/xyq254245/xyqonlinerule/refs/heads/main/dr_py/js/金牌影视.js",
   "jar":"https://github.com/xyq254245/xyqonlinerule/raw/refs/heads/main/custom_spider.jar"},
 
-{"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_LiteAppleGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},     
-
-{"key": "立播","name":"🌟立播","type":3,
- "api":"csp_LibvioGuard",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/饭太硬/spider.jar"},
-
 {"key": "瓜子","name": "🍉瓜子","type": 3,
  "api": "csp_Gz360",
  "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/肥猫/spider.jar"},
@@ -54,6 +46,7 @@
 ]
 
 }
+
 
 
 
