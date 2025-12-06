@@ -20,6 +20,10 @@
     "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
  "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/xyqxbpq.jar"},
 
+{"key":"杜北","name":"️🎭杜北","type":3,
+ "api":"csp_DubkAmns",
+ "ext":"https://aw.0890.dpdns.org/wnqiwnquidwiunddneudne/json/dubk.json",
+ "jar":"https://aw.0890.dpdns.org/wnqiwnquidwiunddneudne/custom_spider.jar"},
 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
   "style":{"type":"rect","ratio":0.75},
@@ -46,6 +50,7 @@
 ]
 
 }
+
 
 
 
