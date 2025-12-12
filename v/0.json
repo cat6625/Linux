@@ -9,7 +9,7 @@
 
 {"key": "瓜子","name": "🍉瓜子","type": 3,
  "api": "csp_Gz360",
- "jar":"https://gitlab.com/test7652843/tvbox/-/raw/main/肥猫/spider.jar"},
+ "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
     
 {"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,"timeout":10,
  "api":"csp_XBPQ",
@@ -64,6 +64,7 @@
 ]
 
 }
+
 
 
 
