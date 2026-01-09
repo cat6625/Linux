@@ -12,7 +12,7 @@
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
     
 {"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,"timeout":10,
- "api":"csp_OlyyAmns,
+ "api":"csp_OlyyAmns",
   "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
 
 {"key":"獨播庫","name":"️🎭獨播庫","type":3,
@@ -48,6 +48,7 @@
 ]
 
 }
+
 
 
 
