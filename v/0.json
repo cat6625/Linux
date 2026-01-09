@@ -12,44 +12,28 @@
  "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/肥猫/spider.jar"},
     
 {"key": "歐樂","name":"️🅾️歐樂[XBPQ]","type":3,"timeout":10,
- "api":"csp_XBPQ",
- "ext":{
-    "简介":"content_desc context clearfix\">&&</span>",
-    "分类url":"https://www.olehdtv.com/index.php/vod/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
-    "分类":"電影$1#電視劇$2#綜藝$3#動漫$4",
-    "地区":"大陆&香港&台湾&美国&法国&英国&日本&韩国&德国&泰国&印度&意大利&西班牙&加拿大&其他"},
- "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/xyqxbpq.jar"},
+ "api":"csp_OlyyAmns,
+  "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
 
 {"key":"獨播庫","name":"️🎭獨播庫","type":3,
  "api":"csp_DubkAmns",
  "ext":"https://gitlab.com/tenrecha/recha/-/raw/main/json/獨播庫.json",
- "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/7哥.jar"},
- 
- 
-{"key": "小苹果","name":"🍎苹果","type":3,
- "api":"csp_XpgAmns",
- "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/7哥.jar"},
+ "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
  
 {"key": "优视频","name":"🦄优视频","type":3,
  "api":"csp_YouSPAmns",
  "ext": "1",
- "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/7哥.jar"},
+ "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
  
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":3,
- "api":"https://gitlab.com/tenrecha/recha/-/raw/main/py/py_aigua.py"}, 
+ "api": "csp_AiGuaAmns",
+ "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"}, 
 
 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
   "style":{"type":"rect","ratio":0.75},
-  "api":"csp_GM",
-  "ext":{"userScript":"https://gitlab.com/vios0810/newbox/-/raw/main/js/ysfp.user.js",
-         "debug":false,"webViewSettings":{"blockNetworkImage":true,
-         "blockList":["*.png*","*.mp3*","*.css*","https://*.googletagmanager.com/*","https://*.google-analytics.com/*"]},
-         "spider":{"homeContent":{"loadUrl":"https://m.yfsp.tv/"},
-         "categoryContent":{"loadUrl":"https://m.yfsp.tv/list/${tid}?type=${index-0:-0}${index-1:-,0}${index-2:-,0}${index-3:-,0}${index-4:-,0}${index-5:-}"},
-         "detailContent":{"loadUrl":"https://m.yfsp.tv/play/${id}"},"playerContent":{"loadUrl":"https://m.yfsp.tv/play/${mediaKey}?id=${episodeKey}"},
-         "searchContent":{"loadUrl":"https://m.yfsp.tv/search"}}},
-  "jar":"https://gitlab.com/vios0810/newbox/-/raw/main/jar/GM.jar"}
+  "api":"csp_AiyfAmns",
+  "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"}
 ],
 
 "doh":[
@@ -64,6 +48,7 @@
 ]
 
 }
+
 
 
 
