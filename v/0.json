@@ -17,7 +17,7 @@
 
 {"key":"獨播庫","name":"️🎭獨播庫","type":3,
  "api":"csp_DubkAmns",
- "ext":{"https://gitlab.com/tenrecha/recha/-/raw/main/json/獨播庫.json","danmu":false},
+ "ext":{"site": "https://gitlab.com/tenrecha/recha/-/raw/main/json/獨播庫.json","danmu":false},
  "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
  
 {"key": "优视频","name":"🦄优视频","type":3,
@@ -49,35 +49,3 @@
 ]
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
