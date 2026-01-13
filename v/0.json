@@ -13,7 +13,8 @@
     
 {"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
  "api":"csp_OlyyAmns",
-  "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
+ "ext":{"danmu":false},
+ "jar":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"},
 
 {"key":"獨播庫","name":"️🎭獨播庫","type":3,
  "api":"csp_DubkAmns",
@@ -27,6 +28,7 @@
  
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":3,
  "api": "csp_AiGuaAmns",
+ "ext":{"danmu":false}, 
  "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu.jar;md5;8845da8529a9d2073931d429fcf80b2d"}, 
 
 
@@ -49,3 +51,4 @@
 ]
 
 }
+
