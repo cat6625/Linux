@@ -3,7 +3,6 @@
 0.0.0.0 pagead2.googlesyndication.com
 0.0.0.0 pubads.g.doubleclick.net
 0.0.0.0 securepubads.g.doubleclick.net
-0.0.0.0 a.line.me
 0.0.0.0 aax-eu.amazon-adsystem.com
 0.0.0.0 aax.amazon-adsystem.com
 0.0.0.0 ad-ettoday.cdn.hinet.net
@@ -134,3 +133,4 @@
 0.0.0.0 measurement-api.criteo.com
 0.0.0.0 s.ad.smaato.net
 0.0.0.0 ad.holmesmind.com
+
