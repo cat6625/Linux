@@ -136,3 +136,4 @@
 0.0.0.0 ad.line-scdn.net
 0.0.0.0 gum.criteo.com
 0.0.0.0 adx.g.doubleclick.net
+0.0.0.0 cm.g.doubleclick.net
