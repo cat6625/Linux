@@ -137,3 +137,5 @@
 0.0.0.0 gum.criteo.com
 0.0.0.0 adx.g.doubleclick.net
 0.0.0.0 cm.g.doubleclick.net
+0.0.0.0 ads.as.criteo.com
+0.0.0.0 gat.sg1.as.criteo.com
