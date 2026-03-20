@@ -134,3 +134,5 @@
 0.0.0.0 s.ad.smaato.net
 0.0.0.0 ad.holmesmind.com
 0.0.0.0 ad.line-scdn.net
+0.0.0.0 gum.criteo.com
+0.0.0.0 adx.g.doubleclick.net
