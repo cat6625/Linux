@@ -1,142 +1,149 @@
+##################################################
+# 🟥 Google Ads / AdMob / DoubleClick（核心廣告）
+##################################################
 0.0.0.0 googleads.g.doubleclick.net
 0.0.0.0 googleads4.g.doubleclick.net
-0.0.0.0 pagead2.googlesyndication.com
+0.0.0.0 ad.doubleclick.net
+0.0.0.0 adx.g.doubleclick.net
+0.0.0.0 cm.g.doubleclick.net
 0.0.0.0 pubads.g.doubleclick.net
 0.0.0.0 securepubads.g.doubleclick.net
-0.0.0.0 aax-eu.amazon-adsystem.com
+0.0.0.0 pagead2.googlesyndication.com
+
+# 👉 Google 廣告主系統（安全封鎖）
+
+
+##################################################
+# 🟧 Amazon Ads
+##################################################
 0.0.0.0 aax.amazon-adsystem.com
-0.0.0.0 ad-ettoday.cdn.hinet.net
-0.0.0.0 ad-specs.guoshipartners.com
+0.0.0.0 aax-eu.amazon-adsystem.com
+0.0.0.0 s.amazon-adsystem.com
+
+
+##################################################
+# 🟨 台灣本地媒體廣告（ETtoday / 三立 / Hinet）
+##################################################
 0.0.0.0 ad.ettoday.net
-0.0.0.0 ad.setn.com
 0.0.0.0 ad1.ettoday.net
 0.0.0.0 ad2.ettoday.net
-0.0.0.0 ads.aralego.com
 0.0.0.0 adv.ettoday.net
-0.0.0.0 api16-access-wf-sg.pangle.io
+0.0.0.0 ad.setn.com
+0.0.0.0 ad-ettoday.cdn.hinet.net
+0.0.0.0 ssp.hinet.net
+0.0.0.0 t.ssp.hinet.net
+
+# 👉 對台灣新聞 App 廣告很有效
+
+
+##################################################
+# 🟩 行動廣告 SDK（App內廣告來源）
+##################################################
+# InMobi
 0.0.0.0 c-eus.w.inmobi.com
-0.0.0.0 cdn-f.adsmoloco.com
-0.0.0.0 cdn.liftoff-creatives.io
-0.0.0.0 cdn2.inner-active.mobi
-0.0.0.0 census-app.scorecardresearch.com
+0.0.0.0 et-eus.w.inmobi.com
+0.0.0.0 telemetry.sdk.inmobi.com
+0.0.0.0 i.l.inmobicdn.net
+0.0.0.0 i.l-new.inmobicdn.net
+0.0.0.0 supply.inmobicdn.net
+
+# AppLovin
 0.0.0.0 d.applovin.com
 0.0.0.0 d.applvn.com
-0.0.0.0 data.flurry.com
-0.0.0.0 et-eus.w.inmobi.com
-0.0.0.0 i.l-new.inmobicdn.net
-0.0.0.0 i.l.inmobicdn.net
-0.0.0.0 images.dable.io
-0.0.0.0 impression-asia.liftoff.io
-0.0.0.0 logs.ads.vungle.com
-0.0.0.0 m.yap.yahoo.com
 0.0.0.0 ms.applovin.com
 0.0.0.0 ms.applvn.com
 0.0.0.0 ms4.applovin.com
 0.0.0.0 ms4.applvn.com
-0.0.0.0 onead.onevision.com.tw
-0.0.0.0 prod-mediate-events.applovin.com
-0.0.0.0 r2d2.aotter.net
 0.0.0.0 rt.applovin.com
 0.0.0.0 rt.applvn.com
-0.0.0.0 s.amazon-adsystem.com
-0.0.0.0 sb.scorecardresearch.com
-0.0.0.0 sdk-events.inner-active.mobi
+0.0.0.0 prod-mediate-events.applovin.com
+0.0.0.0 sts.applovin.com
+
+# Moloco
+0.0.0.0 cdn-f.adsmoloco.com
+0.0.0.0 tr-asia.adsmoloco.com
 0.0.0.0 sdkapi.dsp-api.moloco.com
 0.0.0.0 sdkopmetrics-asia.dsp-api.moloco.com
+
+# Liftoff / Vungle
+0.0.0.0 impression-asia.liftoff.io
+0.0.0.0 cdn.liftoff-creatives.io
+0.0.0.0 logs.ads.vungle.com
+
+# Pangle (TikTok Ads)
+0.0.0.0 api16-access-wf-sg.pangle.io
 0.0.0.0 sf16-static.i18n-pglstatp.com
+
+# 👉 App 廣告來源（封了=很多免費App沒廣告）
+
+
+##################################################
+# 🟦 廣告交換 / RTB（競價系統）
+##################################################
 0.0.0.0 sin3-ib.adnxs.com
-0.0.0.0 ssp.hinet.net
-0.0.0.0 sts.applovin.com
-0.0.0.0 supply.inmobicdn.net
-0.0.0.0 t.ssp.hinet.net
-0.0.0.0 tapestry.tapad.com
-0.0.0.0 telemetry.sdk.inmobi.com
-0.0.0.0 tr-asia.adsmoloco.com
-0.0.0.0 tv.springserve.com
-0.0.0.0 tw-api.vpadn.com
-0.0.0.0 tw.c.appier.net
-0.0.0.0 tw.popin.cc
-0.0.0.0 ssp.adpies.com
-0.0.0.0 ad.cauly.co.kr
-0.0.0.0 sp.tnkad.net
+0.0.0.0 us-u.openx.net
+0.0.0.0 ads.pubmatic.com
+0.0.0.0 s.ad.smaato.net
+0.0.0.0 eu-rtbstack-cm.admixer.net
+0.0.0.0 cdn.adm.admixer.com
+0.0.0.0 beacon-sin1.rubiconproject.com
+
+# 👉 廣告即時競價核心
+
+
+##################################################
+# 🟪 數據追蹤 / 分析 / 指紋
+##################################################
+0.0.0.0 census-app.scorecardresearch.com
+0.0.0.0 sb.scorecardresearch.com
+0.0.0.0 pixel.quantcount.com
+0.0.0.0 mc.yandex.ru
+0.0.0.0 sync.mathtag.com
+0.0.0.0 sync.adkernel.com
+0.0.0.0 match.deepintent.com
+0.0.0.0 client-side-metrics.as.criteo.net
+0.0.0.0 client-side-metrics.sg1.as.criteo.net
+0.0.0.0 measurement-api.criteo.com
+0.0.0.0 gum.criteo.com
+
+# 👉 不影響功能，建議保留封鎖
+
+
+##################################################
+# 🟫 內容推薦 / 原生廣告
+##################################################
 0.0.0.0 trc.taboola.com
-0.0.0.0 msg-intl.qy.net
-0.0.0.0 ibd-as-api.iq.com
-0.0.0.0 policy.video.iqiyi.com
-0.0.0.0 msga.cupid.iqiyi.com
-0.0.0.0 t7z.cupid.iqiyi.com
-0.0.0.0 t7z.cupid.ptqy.gitv.tv
-0.0.0.0 s7.addthis.com
-0.0.0.0 static.addtoany.com
-0.0.0.0 cdn.adsfactor.net
+0.0.0.0 api.dable.io
+0.0.0.0 images.dable.io
+0.0.0.0 tw.popin.cc
 0.0.0.0 l.logly.co.jp
-0.0.0.0 apis.pchome.com.tw
-0.0.0.0 ads-cdn.tenmax.io
-0.0.0.0 data.video.iqiyi.com
-0.0.0.0 vast.yomeno.xyz
+
+# 👉 新聞「你可能也喜歡」
+
+
+##################################################
+# ⚫ 可疑 / 成人 / 跳轉廣告（強烈建議封鎖）
+##################################################
+0.0.0.0 ads.exoclick.com
+0.0.0.0 adserver.juicyads.com
 0.0.0.0 go.xlivrdr.com
+0.0.0.0 go.myavlive.com
+0.0.0.0 creative.myavlive.com
 0.0.0.0 s.magsrv.com
 0.0.0.0 tsyndicate.com
-0.0.0.0 a.nel.cloudflare.com
-0.0.0.0 ad.twinrdengine.com
-0.0.0.0 vast.adsturn.com
-0.0.0.0 ads.exoclick.com
-0.0.0.0 ads.ourdream.ai
-0.0.0.0 api.dable.io
-0.0.0.0 go.myavlive.com
-0.0.0.0 go.rmhfrtnd.com
-0.0.0.0 creative.myavlive.com
-0.0.0.0 wl.hpyrdr.com
-0.0.0.0 t.snaptrckr.fun
-0.0.0.0 r.trackwilltrk.com
-0.0.0.0 nineyu.com
-0.0.0.0 njavtv.com
-0.0.0.0 javlink.short.gy
-0.0.0.0 kettledroopingcontinuation.com
-0.0.0.0 skinnycrawlinglax.com
-0.0.0.0 prefecturesuggestions.com
-0.0.0.0 weirdopt.com
-0.0.0.0 wayfarerorthodox.com
-0.0.0.0 torchfriendlypay.com
-0.0.0.0 flushpersist.com
-0.0.0.0 estimatedeferbulk.com
-0.0.0.0 adserver.juicyads.com
-0.0.0.0 ads.adxadserv.com
-0.0.0.0 preferencenail.com
-0.0.0.0 creative.rmhfrtnd.com
-0.0.0.0 fwarvgktcq.com
-0.0.0.0 primecreditoworld.com
-0.0.0.0 s8i.pixelevoworks.online
-0.0.0.0 totalcartao.com
-0.0.0.0 megacartao.com
-0.0.0.0 mc.yandex.ru
-0.0.0.0 adsco.re
-0.0.0.0 tracker.webtorrent.dev
+
+# 👉 惡意跳轉 / 色情廣告
+
+
+##################################################
+# ⚠️ 雜項 / 可能誤傷（需注意）
+##################################################
 0.0.0.0 secure.gravatar.com
-0.0.0.0 oneclickcartao.com
-0.0.0.0 premiumvertising.com
-0.0.0.0 api.linkshortify.com
-0.0.0.0 pulloverupgrademuffled.com
-0.0.0.0 professionaltrafficmonitor.com
-0.0.0.0 match.deepintent.com
-0.0.0.0 client-side-metrics.sg1.as.criteo.net
-0.0.0.0 us-u.openx.net
-0.0.0.0 s.company-target.com
-0.0.0.0 sync.mathtag.com
-0.0.0.0 bttrack.com
-0.0.0.0 sync.adkernel.com
-0.0.0.0 ads.pubmatic.com
-0.0.0.0 cdn.adm.admixer.com
-0.0.0.0 eu-rtbstack-cm.admixer.net
-0.0.0.0 pixel.quantcount.com
-0.0.0.0 client-side-metrics.as.criteo.net
-0.0.0.0 measurement-api.criteo.com
-0.0.0.0 s.ad.smaato.net
-0.0.0.0 ad.holmesmind.com
-0.0.0.0 ad.line-scdn.net
-0.0.0.0 gum.criteo.com
-0.0.0.0 adx.g.doubleclick.net
-0.0.0.0 cm.g.doubleclick.net
-0.0.0.0 ads.as.criteo.com
-0.0.0.0 gat.sg1.as.criteo.com
-0.0.0.0 beacon-sin1.rubiconproject.com
+0.0.0.0 tracker.webtorrent.dev
+0.0.0.0 apis.pchome.com.tw
+0.0.0.0 a.nel.cloudflare.com
+
+# 👉 建議觀察：
+# - gravatar → 頭像服務（封了會沒頭像）
+# - pchome → 可能影響購物功能
+# - cloudflare → 有些網站會異常
