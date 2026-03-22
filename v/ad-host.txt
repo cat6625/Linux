@@ -90,6 +90,7 @@
 0.0.0.0 tv.springserve.com
 0.0.0.0 r2d2.aotter.net
 0.0.0.0 onead.onevision.com.tw
+0.0.0.0 ad.line-scdn.net
 
 
 # 👉 App 廣告來源（封了=很多免費App沒廣告）
