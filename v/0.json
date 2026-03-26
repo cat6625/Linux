@@ -6,9 +6,9 @@
 {"key": "金牌","name":"🥇金牌","type":3,
   "api":"csp_JinPaiAmns"},
 
-{"key": "瓜子","name": "🍉瓜子","type": 3,
- "api": "csp_GuaziAmns",
- "ext": {"sites": "","filters": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/json/guazi.json","danmu":false}},
+{"key": "韩剧","name": "☕韩剧","type": 3,
+ "api": "csp_HxqAmns",
+ "ext": {"danmu":false}},
     
 {"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
  "api":"csp_OlyyAmns",
