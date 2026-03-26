@@ -26,6 +26,10 @@
  "api": "csp_AiGuaAmns",
  "ext":{"danmu":false}}, 
 
+{"key": "py_电影天堂","name": "🏆｜电影天堂)","type": 3,
+ "api": "https://gcore.jsdelivr.net/gh/doube-ba/TVlogo/py/采集去广模板.py",
+ "ext": {"url": "http://caiji.dyttzyapi.com/api.php/provide/vod/from/dyttm3u8/at/json/","a": [1, 2, 3, 4, 5, 33]}}, 
+
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
   "style":{"type":"rect","ratio":0.75},
   "api":"csp_AiyfAmns",
