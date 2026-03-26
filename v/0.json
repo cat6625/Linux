@@ -7,8 +7,8 @@
   "api":"csp_JinPaiAmns"},
 
 {"key": "瓜子","name": "🍉瓜子","type": 3,
- "api": "csp_Gz360",
- "jar":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/%E8%82%A5%E7%8C%AB/spider.jar"},
+ "api": "csp_GuaziAmns",
+ "ext": {"sites": "","filters": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/json/guazi.json","danmu":false}},
     
 {"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
  "api":"csp_OlyyAmns",
