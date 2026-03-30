@@ -2,38 +2,53 @@
   "spider":"https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png",
   "logo": "./gif/penguin-16171_128.gif",
   "sites": [
-
-{"key": "金牌","name":"🥇金牌","type":3,
-  "api":"csp_JinPaiAmns"},
-
-{"key": "韩剧","name": "☕韩剧","type": 3,
- "api": "csp_HxqAmns",
- "ext": {"danmu":false}},
     
+ {"key":"獨播庫","name":"️🎭獨播庫","type":3,
+ "api":"csp_DubkAmns",
+ "ext":{"site": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/json/dubk.json","danmu":false}
+ },
+     
+ {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
+  "style":{"type":"rect","ratio":0.75},
+  "api":"csp_AiyfAmns",
+  "ext":{"danmu":false}
+ },
+    
+{"key": "金牌","name":"🥇金牌","type":3,
+  "api":"csp_JinPaiAmns"
+},
+   
 {"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
  "api":"csp_OlyyAmns",
- "ext":{"danmu":false}},
+ "ext":{"danmu":false}
+},
 
-{"key":"獨播庫","name":"️🎭獨播庫","type":3,
- "api":"csp_DubkAmns",
- "ext":{"site": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/json/dubk.json","danmu":false}},
- 
 {"key": "优视频","name":"🦄优视频","type":3,
  "api":"csp_YouSPAmns",
  "ext": "1"},
  
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":3,
  "api": "csp_AiGuaAmns",
- "ext":{"danmu":false}}, 
+ "ext":{"danmu":false}
+},
+    
+{"key": "韩剧","name": "☕韩剧","type": 3,
+ "api": "csp_HxqAmns",
+ "ext": {"danmu":false}
+},
 
-{"key": "py_电影天堂","name": "👼电影天堂","type": 3,
- "api": "https://gcore.jsdelivr.net/gh/doube-ba/TVlogo/py/采集去广模板.py",
- "ext": {"url": "http://caiji.dyttzyapi.com/api.php/provide/vod/from/dyttm3u8/at/json/","a": [1, 2, 3, 4, 5, 33]}}, 
+{"key": "永乐影视","name": "🎉永乐","type": 3,
+  "api": "csp_XBPQ",
+  "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5",
+  "ext": {
+        "请求头": "User-Agent$MOBILE_UA",
+        "编码": "UTF-8",
+        "分类url": "https://www.ylys.tv/vodshow/{cateId}-{area}-{by}-{class}-{lang}-{letter}---{catePg}---{year}.html",
+        "分类": "电影$1#电视劇$2#综艺$3#动漫$4",
+        "类型": "动作片$6#喜劇片$7#爱情片$8#科幻片$9#奇幻片$10#恐怖片$11#劇情片$12#战争片$20#动画片$26#悬疑片$22#冒险片$23#犯罪片$24#惊悚片$45#歌舞片$46#灾难片$47#网络片$48||国产劇$13#港台劇$14#日劇$15#韩劇$33#欧美劇$16#泰劇$34#新马劇$35#其他劇$25||内地综艺$27#港台综艺$28#日本综艺$29#韩国综艺$36#欧美综艺$30#新马泰综艺$37#其他综艺$38||国产动漫$31#日本动漫$32#韩国动漫$39#港台动漫$40#新马泰动漫$41#欧美动漫$42#其他动漫$43"
+      }
+}
 
-{"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
-  "style":{"type":"rect","ratio":0.75},
-  "api":"csp_AiyfAmns",
-  "ext":{"danmu":false}}
 ],
 
 "doh":[
@@ -48,4 +63,3 @@
 ]
 
 }
-
