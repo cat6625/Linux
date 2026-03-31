@@ -32,9 +32,13 @@
  "ext":{"danmu":false}
 },
     
-{"key": "韩剧","name": "☕韩剧","type": 3,
- "api": "csp_HxqAmns",
- "ext": {"danmu":false}
+{"key": "韩剧","name": "☕韩剧","type": 3,"playerType": 2,
+ "api": "csp_AweSomeGuard",
+ "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/OK/spider.jar", 
+ "ext": {
+        "sp": "HanXiaoQuan",
+        "danmu": false
+      },
 },
 
 {"key": "永乐影视","name": "🎉永乐","type": 3,
