@@ -41,6 +41,33 @@
       }
 },
 
+{"key": "文才","name": "🌺文才","type": 3,"playerType": 2,
+ "api": "csp_AweSomeGuard",
+ "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/OK/spider.jar", 
+ "ext": {
+        "sp": "Jpys",
+        "danmu": false
+      }
+},
+
+{"key": "瓜子","name": "🍉瓜子","type": 3,"playerType": 2,
+ "api": "csp_AweSomeGuard",
+ "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/OK/spider.jar", 
+ "ext": {
+        "sp": "Guazi",
+        "danmu": false
+      }
+},
+
+{"key": "立播","name": "🌟立播","type": 3,"playerType": 2,
+ "api": "csp_AweSomeGuard",
+ "jar": "https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/OK/spider.jar", 
+ "ext": {
+        "sp": "Libvio",
+        "danmu": false
+      }
+},
+
 {"key": "永乐影视","name": "🎉永乐","type": 3,
   "api": "csp_XBPQ",
   "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5",
