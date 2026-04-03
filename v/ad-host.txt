@@ -166,3 +166,7 @@
 # - gravatar → 頭像服務（封了會沒頭像）
 # - pchome → 可能影響購物功能
 # - cloudflare → 有些網站會異常
+
+
+# 新增
+0.0.0.0 t.holmesmind.com
