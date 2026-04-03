@@ -91,3 +91,4 @@
 ||apis.pchome.com.tw^
 ||a.nel.cloudflare.com^
 ||t.holmesmind.com^
+||tpc.googlesyndication.com^
