@@ -1,0 +1,140 @@
+! ##################################################
+! [span_0](start_span)🟥 Google Ads / AdMob / DoubleClick（核心廣告）[span_0](end_span)
+! ##################################################
+[span_1](start_span)||googleads.g.doubleclick.net^[span_1](end_span)
+[span_2](start_span)||googleads4.g.doubleclick.net^[span_2](end_span)
+[span_3](start_span)||ad.doubleclick.net^[span_3](end_span)
+[span_4](start_span)||adx.g.doubleclick.net^[span_4](end_span)
+[span_5](start_span)||cm.g.doubleclick.net^[span_5](end_span)
+[span_6](start_span)||pubads.g.doubleclick.net^[span_6](end_span)
+[span_7](start_span)||securepubads.g.doubleclick.net^[span_7](end_span)
+[span_8](start_span)||pagead2.googlesyndication.com^[span_8](end_span)
+
+! ##################################################
+! [span_9](start_span)🟧 Amazon Ads[span_9](end_span)
+! ##################################################
+[span_10](start_span)||aax.amazon-adsystem.com^[span_10](end_span)
+[span_11](start_span)||aax-eu.amazon-adsystem.com^[span_11](end_span)
+[span_12](start_span)||s.amazon-adsystem.com^[span_12](end_span)
+
+! ##################################################
+! [span_13](start_span)🟨 台灣本地媒體廣告（ETtoday / 三立 / Hinet）[span_13](end_span)
+! ##################################################
+[span_14](start_span)||ad.ettoday.net^[span_14](end_span)
+[span_15](start_span)||ad1.ettoday.net^[span_15](end_span)
+[span_16](start_span)||ad2.ettoday.net^[span_16](end_span)
+[span_17](start_span)||adv.ettoday.net^[span_17](end_span)
+[span_18](start_span)||ad.setn.com^[span_18](end_span)
+[span_19](start_span)||ad-ettoday.cdn.hinet.net^[span_19](end_span)
+[span_20](start_span)||ssp.hinet.net^[span_20](end_span)
+[span_21](start_span)||t.ssp.hinet.net^[span_21](end_span)
+
+! ##################################################
+! [span_22](start_span)🟩 行動廣告 SDK（App內廣告來源）[span_22](end_span)
+! ##################################################
+! [span_23](start_span)InMobi[span_23](end_span)
+[span_24](start_span)||c-eus.w.inmobi.com^[span_24](end_span)
+[span_25](start_span)||et-eus.w.inmobi.com^[span_25](end_span)
+[span_26](start_span)||telemetry.sdk.inmobi.com^[span_26](end_span)
+[span_27](start_span)||i.l.inmobicdn.net^[span_27](end_span)
+[span_28](start_span)||i.l-new.inmobicdn.net^[span_28](end_span)
+[span_29](start_span)||supply.inmobicdn.net^[span_29](end_span)
+
+! [span_30](start_span)AppLovin[span_30](end_span)
+[span_31](start_span)||d.applovin.com^[span_31](end_span)
+[span_32](start_span)||d.applvn.com^[span_32](end_span)
+[span_33](start_span)||ms.applovin.com^[span_33](end_span)
+[span_34](start_span)||ms.applvn.com^[span_34](end_span)
+[span_35](start_span)||ms4.applovin.com^[span_35](end_span)
+[span_36](start_span)||ms4.applvn.com^[span_36](end_span)
+[span_37](start_span)||rt.applovin.com^[span_37](end_span)
+[span_38](start_span)||rt.applvn.com^[span_38](end_span)
+[span_39](start_span)||prod-mediate-events.applovin.com^[span_39](end_span)
+[span_40](start_span)||sts.applovin.com^[span_40](end_span)
+
+! [span_41](start_span)Moloco[span_41](end_span)
+[span_42](start_span)||cdn-f.adsmoloco.com^[span_42](end_span)
+[span_43](start_span)||tr-asia.adsmoloco.com^[span_43](end_span)
+[span_44](start_span)||sdkapi.dsp-api.moloco.com^[span_44](end_span)
+[span_45](start_span)||sdkopmetrics-asia.dsp-api.moloco.com^[span_45](end_span)
+
+! [span_46](start_span)Liftoff / Vungle[span_46](end_span)
+[span_47](start_span)||impression-asia.liftoff.io^[span_47](end_span)
+[span_48](start_span)||cdn.liftoff-creatives.io^[span_48](end_span)
+[span_49](start_span)||logs.ads.vungle.com^[span_49](end_span)
+
+! [span_50](start_span)Pangle (TikTok Ads)[span_50](end_span)
+[span_51](start_span)||api16-access-wf-sg.pangle.io^[span_51](end_span)
+[span_52](start_span)||sf16-static.i18n-pglstatp.com^[span_52](end_span)
+
+! [span_53](start_span)Iqiyi[span_53](end_span)
+[span_54](start_span)||msg-intl.qy.net^[span_54](end_span)
+[span_55](start_span)||ibd-as-api.iq.com^[span_55](end_span)
+[span_56](start_span)||policy.video.iqiyi.com^[span_56](end_span)
+[span_57](start_span)||msga.cupid.iqiyi.com^[span_57](end_span)
+[span_58](start_span)||t7z.cupid.iqiyi.com^[span_58](end_span)
+[span_59](start_span)||t7z.cupid.ptqy.gitv.tv^[span_59](end_span)
+[span_60](start_span)||data.video.iqiyi.com^[span_60](end_span)
+
+! [span_61](start_span)不分類[span_61](end_span)
+[span_62](start_span)||ssp.adpies.com^[span_62](end_span)
+[span_63](start_span)||ad.cauly.co.kr^[span_63](end_span)
+[span_64](start_span)||sp.tnkad.net^[span_64](end_span)
+[span_65](start_span)||tv.springserve.com^[span_65](end_span)
+[span_66](start_span)||r2d2.aotter.net^[span_66](end_span)
+[span_67](start_span)||onead.onevision.com.tw^[span_67](end_span)
+[span_68](start_span)||ad.line-scdn.net^[span_68](end_span)
+
+! ##################################################
+! [span_69](start_span)🟦 廣告交換 / RTB（競價系統）[span_69](end_span)
+! ##################################################
+[span_70](start_span)||sin3-ib.adnxs.com^[span_70](end_span)
+[span_71](start_span)||us-u.openx.net^[span_71](end_span)
+[span_72](start_span)||ads.pubmatic.com^[span_72](end_span)
+[span_73](start_span)||s.ad.smaato.net^[span_73](end_span)
+[span_74](start_span)||eu-rtbstack-cm.admixer.net^[span_74](end_span)
+[span_75](start_span)||cdn.adm.admixer.com^[span_75](end_span)
+[span_76](start_span)||beacon-sin1.rubiconproject.com^[span_76](end_span)
+
+! ##################################################
+! [span_77](start_span)🟪 數據追蹤 / 分析 / 指紋[span_77](end_span)
+! ##################################################
+[span_78](start_span)||census-app.scorecardresearch.com^[span_78](end_span)
+[span_79](start_span)||sb.scorecardresearch.com^[span_79](end_span)
+[span_80](start_span)||pixel.quantcount.com^[span_80](end_span)
+[span_81](start_span)||mc.yandex.ru^[span_81](end_span)
+[span_82](start_span)||sync.mathtag.com^[span_82](end_span)
+[span_83](start_span)||sync.adkernel.com^[span_83](end_span)
+[span_84](start_span)||match.deepintent.com^[span_84](end_span)
+[span_85](start_span)||client-side-metrics.as.criteo.net^[span_85](end_span)
+[span_86](start_span)||client-side-metrics.sg1.as.criteo.net^[span_86](end_span)
+[span_87](start_span)||measurement-api.criteo.com^[span_87](end_span)
+[span_88](start_span)||gum.criteo.com^[span_88](end_span)
+
+! ##################################################
+! [span_89](start_span)🟫 內容推薦 / 原生廣告[span_89](end_span)
+! ##################################################
+[span_90](start_span)||trc.taboola.com^[span_90](end_span)
+[span_91](start_span)||api.dable.io^[span_91](end_span)
+[span_92](start_span)||images.dable.io^[span_92](end_span)
+[span_93](start_span)||tw.popin.cc^[span_93](end_span)
+[span_94](start_span)||l.logly.co.jp^[span_94](end_span)
+
+! ##################################################
+! [span_95](start_span)⚫ 可疑 / 成人 / 跳轉廣告（強烈建議封鎖）[span_95](end_span)
+! ##################################################
+[span_96](start_span)||ads.exoclick.com^[span_96](end_span)
+[span_97](start_span)||adserver.juicyads.com^[span_97](end_span)
+[span_98](start_span)||go.xlivrdr.com^[span_98](end_span)
+[span_99](start_span)||go.myavlive.com^[span_99](end_span)
+[span_100](start_span)||creative.myavlive.com^[span_100](end_span)
+[span_101](start_span)||s.magsrv.com^[span_101](end_span)
+[span_102](start_span)||tsyndicate.com^[span_102](end_span)
+
+! ##################################################
+! [span_103](start_span)⚠️ 雜項 / 可能誤傷（需注意）[span_103](end_span)
+! ##################################################
+[span_104](start_span)||secure.gravatar.com^[span_104](end_span)
+[span_105](start_span)||tracker.webtorrent.dev^[span_105](end_span)
+[span_106](start_span)||apis.pchome.com.tw^[span_106](end_span)
+[span_107](start_span)||a.nel.cloudflare.com^[span_107](end_span)
