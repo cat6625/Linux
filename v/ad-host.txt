@@ -170,3 +170,4 @@
 
 # 新增
 0.0.0.0 t.holmesmind.com
+0.0.0.0 tpc.googlesyndication.com
