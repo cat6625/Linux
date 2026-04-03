@@ -90,3 +90,4 @@
 ||tracker.webtorrent.dev^
 ||apis.pchome.com.tw^
 ||a.nel.cloudflare.com^
+||t.holmesmind.com^
