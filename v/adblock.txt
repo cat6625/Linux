@@ -91,5 +91,6 @@
 ||apis.pchome.com.tw^
 ||a.nel.cloudflare.com^
 ||t.holmesmind.com^
-||ad.holmesmind.com^
 ||tpc.googlesyndication.com^
+||ad.holmesmind.com^
+||cdn.holmesmind.com^
