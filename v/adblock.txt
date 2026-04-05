@@ -24,6 +24,7 @@
 ||prod-mediate-events.applovin.com^
 ||aax.amazon-adsystem.com^
 ||s.amazon-adsystem.com^
+||c.amazon-adsystem.com^
 ||r2d2.aotter.net^
 ||trek-fp-dmp.aotter.net^
 ||static.aottercdn.com^
@@ -41,7 +42,7 @@
 ||api.dable.io^
 ||tw.popin.cc^
 ||api.popin.cc^
-
-!
-
-
+||log.popin.cc^
+||log.popin.cc^
+||log.popin.cc^
+||log.popin.cc^
