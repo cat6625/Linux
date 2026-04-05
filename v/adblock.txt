@@ -37,4 +37,5 @@
 ||logs.ads.vungle.com^
 ||v16-ad.byteoversea.com^
 ||api.popin.cc^
+||tw.popin.cc^
 ||api.dable.io^
