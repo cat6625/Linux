@@ -2,6 +2,7 @@
 ||ad.line-scdn.net^
 ||googleads.g.doubleclick.net^
 ||pubads.g.doubleclick.net^
+||googleads.g.doubleclick.net^
 ||pagead2.googlesyndication.com^
 ||securepubads.g.doubleclick.net^
 ||tpc.googlesyndication.com^
