@@ -3,8 +3,9 @@
 ||googleads.g.doubleclick.net^
 ||pubads.g.doubleclick.net^
 ||googleads.g.doubleclick.net^
-||pagead2.googlesyndication.com^
 ||securepubads.g.doubleclick.net^
+||15230196.fls.doubleclick.net^
+||pagead2.googlesyndication.com^
 ||tpc.googlesyndication.com^
 ||t.holmesmind.com^
 ||ad.holmesmind.com^
@@ -36,9 +37,11 @@
 ||c1.adform.net^
 ||logs.ads.vungle.com^
 ||v16-ad.byteoversea.com^
-||api.popin.cc^
-||tw.popin.cc^
+||avividone.likr.tw^
 ||api.dable.io^
+||tw.popin.cc^
+||api.popin.cc^
+
 !
 
 
