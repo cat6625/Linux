@@ -1,4 +1,3 @@
-!
 ||ad.line-scdn.net^
 ||googleads.g.doubleclick.net^
 ||pubads.g.doubleclick.net^
@@ -39,9 +38,18 @@
 ||logs.ads.vungle.com^
 ||v16-ad.byteoversea.com^
 ||avividone.likr.tw^
+||auto-cdn.likr.com.tw^
+||onead-v6.onevision.com.tw^
+||ps.eyeota.net^
+||b.logly.co.jp^
+||l.logly.co.jp^
+||nt.compass-fit.jp^
+||pixel.quantserve.com^
+||proc.ad.cpe.dotomi.com^
 ||api.dable.io^
 ||tw.popin.cc^
 ||api.popin.cc^
+||log.popin.cc^
 ||log.popin.cc^
 ||log.popin.cc^
 ||log.popin.cc^
