@@ -50,7 +50,10 @@
 ||tw.popin.cc^
 ||api.popin.cc^
 ||log.popin.cc^
-
+||r.popin.cc^
+||rlog.popin.cc^
+||trace.popin.cc^
+||inrecsys.popin.cc^
 
 
 
