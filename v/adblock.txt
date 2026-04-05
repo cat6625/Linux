@@ -29,6 +29,8 @@
 ||static.aottercdn.com^
 ||tv.springserve.com^
 ||t7z.cupid.iqiyi.com^
+||t7z.cupid.ptqy.gitv.tv^
+||msga.cupid.iqiyi.com^
 ||api.adxcorp.kr^
 ||api.mediation.adxcorp.kr^
 ||ssp.adpies.com^
