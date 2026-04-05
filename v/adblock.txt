@@ -44,12 +44,15 @@
 ||v16-ad.byteoversea.com^
 ||avividone.likr.tw^
 ||auto-cdn.likr.com.tw^
+||auto-load-balancer.likr.tw^
 ||onead-v6.onevision.com.tw^
 ||ps.eyeota.net^
 ||b.logly.co.jp^
 ||l.logly.co.jp^
 ||nt.compass-fit.jp^
 ||pixel.quantserve.com^
+||bcp.crwdcntrl.net^
+||pixel.omnisegment.com^
 ||proc.ad.cpe.dotomi.com^
 ||api.dable.io^
 ||tw.popin.cc^
