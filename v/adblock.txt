@@ -42,6 +42,9 @@
 ||c1.adform.net^
 ||logs.ads.vungle.com^
 ||v16-ad.byteoversea.com^
+||ad.ettoday.net^
+||ad*.nownews.com^
+||ad.setn.com^
 ||avividone.likr.tw^
 ||auto-cdn.likr.com.tw^
 ||auto-load-balancer.likr.tw^
