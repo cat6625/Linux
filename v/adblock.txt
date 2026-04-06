@@ -35,6 +35,7 @@
 ||api16-access-wf-sg.pangle.io^
 ||sf16-static.i18n-pglstatp.com^
 ||ibd-as-api.iq.com^
+||acs-go.svc.litv.tv^
 ||api.adxcorp.kr^
 ||api.mediation.adxcorp.kr^
 ||ssp.adpies.com^
