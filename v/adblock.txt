@@ -1,5 +1,4 @@
 ||ad.line-scdn.net^
-||googleads.g.doubleclick.net^
 ||pubads.g.doubleclick.net^
 ||googleads.g.doubleclick.net^
 ||securepubads.g.doubleclick.net^
@@ -18,7 +17,6 @@
 ||ms.applovin.com^
 ||ms.applvn.com^
 ||d.applvn.com^
-||d.applovin.com^
 ||d.applovin.com^
 ||prod-mediate-events.applovin.com^
 ||aax.amazon-adsystem.com^
@@ -64,9 +62,3 @@
 ||rlog.popin.cc^
 ||trace.popin.cc^
 ||inrecsys.popin.cc^
-
-
-
-
-
-
