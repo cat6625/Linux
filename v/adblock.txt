@@ -31,6 +31,7 @@
 ||t7z.cupid.iqiyi.com^
 ||t7z.cupid.ptqy.gitv.tv^
 ||msga.cupid.iqiyi.com^
+||data.video.iqiyi.com^
 ||api16-access-wf-sg.pangle.io^
 ||sf16-static.i18n-pglstatp.com^
 ||ibd-as-api.iq.com^
