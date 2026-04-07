@@ -25,7 +25,7 @@ t7z.cupid.iqiyi.com
 msga.cupid.iqiyi.com
 data.video.iqiyi.com
 api16-access-wf-sg.pangle.io
-sf16-static.i18n-pglstatp.com
+msg-intl.qy.net
 ibd-as-api.iq.com
 acs-go.svc.litv.tv
 api.adxcorp.kr
