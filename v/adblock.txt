@@ -25,7 +25,6 @@ tv.springserve.com
 t7z.cupid.iqiyi.com
 msga.cupid.iqiyi.com
 data.video.iqiyi.com
-msg-intl.qy.net
 ibd-as-api.iq.com
 api16-access-wf-sg.pangle.io
 acs-go.svc.litv.tv
