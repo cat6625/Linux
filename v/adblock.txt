@@ -35,6 +35,8 @@ api.mediation.adxcorp.kr
 ad.ettoday.net
 ad1.ettoday.net
 ad2.ettoday.net
+dcs.ettoday.net
+ad-ettoday.cdn.hinet.net
 ad.setn.com
 avividone.likr.tw
 auto-cdn.likr.com.tw
