@@ -1,4 +1,4 @@
-ad.line-scdn.net
+cm.g.doubleclick.net
 pubads.g.doubleclick.net
 googleads.g.doubleclick.net
 securepubads.g.doubleclick.net
@@ -30,9 +30,9 @@ api16-access-wf-sg.pangle.io
 acs-go.svc.litv.tv
 api.adxcorp.kr
 api.mediation.adxcorp.kr
-ad.ettoday.net
+ad*.ettoday.net
 ad*.nownews.com
-ad.setn.com
+ad*.setn.com
 avividone.likr.tw
 auto-cdn.likr.com.tw
 auto-load-balancer.likr.tw
