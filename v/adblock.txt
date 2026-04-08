@@ -30,9 +30,10 @@ api16-access-wf-sg.pangle.io
 acs-go.svc.litv.tv
 api.adxcorp.kr
 api.mediation.adxcorp.kr
-ad*.ettoday.net
-ad*.nownews.com
-ad*.setn.com
+ad.ettoday.net
+ad1.ettoday.net
+ad2.ettoday.net
+ad.setn.com
 avividone.likr.tw
 auto-cdn.likr.com.tw
 auto-load-balancer.likr.tw
