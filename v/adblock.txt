@@ -9,6 +9,7 @@ t.holmesmind.com
 ad.holmesmind.com
 t.ssp.hinet.net
 trc.taboola.com
+cdn.taboola.com
 gum.criteo.com
 ms4.applovin.com
 ms.applovin.com
