@@ -49,6 +49,8 @@ bcp.crwdcntrl.net
 pixel.quantserve.com
 pixel.omnisegment.com
 api.dable.io
+images.dable.io
+static.dable.io
 tw.popin.cc
 api.popin.cc
 log.popin.cc
