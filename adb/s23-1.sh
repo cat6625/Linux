@@ -41,7 +41,7 @@ echo "[SYSTEM] Animations set to 0.5x" >> "$LOGFILE"
 # --- 2. 你新增的指定套件 (快速共享、跨裝置通話、Android Auto 等) ---
 # 包括: Fast (分享), MdecService (跨裝置通話), Gearhead (Android Auto), 
 # Scribe (即時字幕), Billing (三星帳單), VisualARS (視覺辨識),voiceaccess
-for p in com.samsung.android.fast com.samsung.android.mdecservice \
+for p in com.samsung.android.mdecservice \
 com.google.android.projection.gearhead com.google.audio.hearing.visualization.accessibility.scribe \
 com.sec.android.app.billing com.samsung.android.visualars \ com.google.android.apps.accessibility.voiceaccess; do
     process_pkg "$p"
