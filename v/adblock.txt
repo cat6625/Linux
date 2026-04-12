@@ -25,6 +25,8 @@ s.amazon-adsystem.com
 c.amazon-adsystem.com
 r2d2.aotter.net
 tv.springserve.com
+wyel1b-launches.appsflyersdk.com
+msg-intl.qy.net
 t7z.cupid.iqiyi.com
 msga.cupid.iqiyi.com
 data.video.iqiyi.com
