@@ -23,6 +23,8 @@ d.applvn.com
 aax.amazon-adsystem.com
 s.amazon-adsystem.com
 c.amazon-adsystem.com
+ads.unity3d.com
+unityads.unity3d.com
 r2d2.aotter.net
 tv.springserve.com
 t7z.cupid.iqiyi.com
