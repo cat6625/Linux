@@ -1,88 +1,51 @@
 {
-  "spider":"https://github.com/ls125781003/tvboxtg/raw/refs/heads/main/OK/spider.jar",
+  "spider":"https://gitlab.com/tenrecha/recha/-/raw/main/jar/aowu-0415.jar",
   "logo": "./gif/penguin-16171_128.gif",
+
   "sites": [
-    
-{"key":"獨播庫","name":"️🎭獨播庫","type":3,
- "api":"csp_AweSomeGuard",
- "ext": {
-        "sp": "Duboku",
-        "danmu": true
-      }
+
+{"key":"独播库","name":"🔥独播库","type":3,
+ "api":"csp_DubkAmns",
+ "ext":{"site": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/json/dubk.json","danmu":false}
 },
-     
+ 
 {"key": "yfsp","name":"🎖︎｜愛壹帆｜","type":3,"timeout":10,
- "style":{"type":"rect","ratio":0.75},
- "api":"csp_AiyfAmns",
- "jar": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png",
- "ext":{"danmu":false}
-},
-    
-{"key": "金牌","name":"🥇金牌","type":3,
- "jar": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png", 
- "api":"csp_JinPaiAmns"
-},
-   
-{"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
- "api":"csp_OlyyAmns",
- "jar": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png", 
- "ext":{"danmu":false}
+  "style":{"type":"rect","ratio":0.75},
+  "api":"csp_AiyfAmns",
+  "ext":{"danmu":false}
 },
 
-{"key": "优视频","name":"🦄优视频","type":3,
- "api":"csp_YouSPAmns",
- "jar": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png",
- "ext": "1"},
- 
 {"key": "爱瓜TV","name":"🍋‍爱瓜TV","type":3,
  "api": "csp_AiGuaAmns",
- "jar": "https://raw.githubusercontent.com/ls125781003/testboxapi/refs/heads/main/aowu/bfdb--cvdvds.png",
  "ext":{"danmu":false}
 },
-    
-{"key": "韩剧","name": "☕韩剧","type": 3,"playerType": 2,
- "api": "csp_AweSomeGuard",
- "ext": {
-        "sp": "HanXiaoQuan",
-        "danmu": false
-      }
+
+{"key":"Qile优视频","name":"🦄Qile优视频","type":3,
+ "api":"csp_YouSPAmns",
+ "ext":"1"
 },
 
-{"key": "文才","name": "🌺文才","type": 3,"playerType": 2,
- "api": "csp_AweSomeGuard",
- "ext": {
-        "sp": "Jpys",
-        "danmu": false
-      }
+{"key": "歐樂","name":"️🅾️歐樂","type":3,"timeout":10,
+ "api":"csp_OlyyAmns",
+ "ext":{"danmu":false}
 },
+   
 
-{"key": "瓜子","name": "🍉瓜子","type": 3,"playerType": 2,
- "api": "csp_AweSomeGuard",
+{"key": "恰逢永乐","name": "🎉恰逢永乐","type": 3,
+ "api": "csp_XBPQ",
+ "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5",
  "ext": {
-        "sp": "Guazi",
-        "danmu": false
-      }
-},
-
-{"key": "立播","name": "🌟立播","type": 3,"playerType": 2,
- "api": "csp_AweSomeGuard",
- "ext": {
-        "sp": "Libvio",
-        "danmu": false
-      }
-},
-
-{"key": "永乐影视","name": "🎉永乐","type": 3,
-  "api": "csp_XBPQ",
-  "jar": "https://gitlab.com/tenrecha/recha/-/raw/main/jar/xyqxbpq.jar;md5;fd3cefc7302f3a39a442682f802b11e5",
-  "ext": {
         "请求头": "User-Agent$MOBILE_UA",
         "编码": "UTF-8",
         "分类url": "https://www.ylys.tv/vodshow/{cateId}-{area}-{by}-{class}-{lang}-{letter}---{catePg}---{year}.html",
         "分类": "电影$1#电视劇$2#综艺$3#动漫$4",
         "类型": "动作片$6#喜劇片$7#爱情片$8#科幻片$9#奇幻片$10#恐怖片$11#劇情片$12#战争片$20#动画片$26#悬疑片$22#冒险片$23#犯罪片$24#惊悚片$45#歌舞片$46#灾难片$47#网络片$48||国产劇$13#港台劇$14#日劇$15#韩劇$33#欧美劇$16#泰劇$34#新马劇$35#其他劇$25||内地综艺$27#港台综艺$28#日本综艺$29#韩国综艺$36#欧美综艺$30#新马泰综艺$37#其他综艺$38||国产动漫$31#日本动漫$32#韩国动漫$39#港台动漫$40#新马泰动漫$41#欧美动漫$42#其他动漫$43"
       }
-}
+} ,
+
+{"key": "金牌","name":"🥇金牌","type":3,
+ "api":"csp_JinPaiAmns"
+}   
 
 ],
 
@@ -100,7 +63,6 @@
 ],
   
 "rules":[
-{"name": "dytt","hosts": ["dytt"],"regex": ["#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:6\\.500000,[\\s\\S]*?#EXT-X-DISCONTINUITY"]},  
 {"name": "暴风", "hosts": ["bfzy","bfbfvip","bfengbf","c1.","8.","p.","v."],"regex": ["#EXTINF.*?\\s+.*?adjump.*?\\.ts"]}
 ]
 
