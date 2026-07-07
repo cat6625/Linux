@@ -1,0 +1,6 @@
+#重置桌面首頁設定，不會動到帳號
+Pm clear com.google.android.tvlauncher
+pm clear com.android.tv.settings
+pm clear com.google.android.katniss
+pm clear com.google.android.tvrecommendations
+pm clear com.google.android.apps.tv.launcherx
