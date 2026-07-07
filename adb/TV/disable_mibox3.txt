@@ -1,0 +1,31 @@
+# 小米後台數據統計與分析追蹤（核心精簡目標）
+pm disable-user --user 0 com.xiaomi.statistic
+pm disable-user --user 0 com.miui.tv.analytics
+pm disable-user --user 0 com.xiaomo.tv.milegal
+
+# 小米內建的廣告/免費電視推薦版面（關閉可清空電視首頁雜亂內容）
+pm disable-user --user 0 com.mitv.tvhome.oemtab
+pm disable-user --user 0 com.mitv.tvhome.mitvplus
+pm disable-user --user 0 com.mitv.tvhome.michannel
+pm disable-user --user 0 com.xiaomi.android.tvsetup.partnercustomizer
+
+# Google 基本垃圾與列印服務
+pm disable-user --user 0 com.google.android.feedback
+pm disable-user --user 0 com.google.android.play.games
+pm disable-user --user 0 com.android.printspooler
+
+# 小米內建多媒體（已有替代播放器就可關閉）
+pm disable-user --user 0 com.mitv.gallery
+pm disable-user --user 0 com.xiaomi.mimusic2
+pm disable-user --user 0 com.mitv.videoplayer
+pm disable-user --user 0 com.xiaomi.mitv.mediaexplorer
+
+# 小米原廠投屏與裝置互聯（若改用 Chromecast 或 AirScreen 即可關閉）
+pm disable-user --user 0 com.xiaomi.mitv.smartshare
+pm disable-user --user 0 com.xiaomi.wfdsinkhelperservice
+pm disable-user --user 0 com.xiaomi.mi_connect_service
+
+# 三大主流付費影音
+pm disable-user --user 0 com.netflix.ninja
+pm disable-user --user 0 com.amazon.amazonvideo.livingroom
+pm disable-user --user 0 com.google.android.youtu
