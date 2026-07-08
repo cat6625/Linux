@@ -1,0 +1,82 @@
+這份是依照SAMPO EM-43JTD230（Android 11／Realtek RTD2851M），整理的 ADB 除錯
+指令大全。全部都使用 tee 存到 /sdcard/，方便日後一次複製貼上。
+建議先建立資料夾：
+mkdir -p /sdcard/adb_debug
+一、系統資訊
+getprop | tee /sdcard/adb_debug/getprop.txt
+getprop | grep build | tee /sdcard/adb_debug/build.txt
+getprop | grep realtek | tee /sdcard/adb_debug/realtek.txt
+getprop | grep rtk | tee /sdcard/adb_debug/rtk.txt
+二、Power Manager
+dumpsys power | tee /sdcard/adb_debug/power.txt
+dumpsys power | grep Wake | tee /sdcard/adb_debug/power_wake.txt
+三、Device Idle
+dumpsys deviceidle | tee /sdcard/adb_debug/deviceidle.txt
+四、Alarm
+dumpsys alarm | tee /sdcard/adb_debug/alarm.txt
+五、Logcat
+完整 Log：
+logcat -d | tee /sdcard/adb_debug/logcat.txt
+System：
+logcat -b system -d | tee /sdcard/adb_debug/systemlog.txt
+Power：
+logcat -d | grep PowerManager | tee /sdcard/adb_debug/powerlog.txt
+Suspend：
+logcat -d | grep suspend | tee /sdcard/adb_debug/suspend.txt
+Wake：
+logcat -d | grep Wake | tee /sdcard/adb_debug/wake.txt
+Realtek：
+logcat -d | grep realtek | tee /sdcard/adb_debug/realteklog.txt
+六、Package
+全部套件：
+pm list packages | tee /sdcard/adb_debug/packages.txt
+含 APK 路徑：
+pm list packages -f | tee /sdcard/adb_debug/packages_f.txt
+停用套件：
+pm list packages -d | tee /sdcard/adb_debug/disabled.txt
+系統套件：
+pm list packages -s | tee /sdcard/adb_debug/system_packages.txt
+第三方：
+pm list packages -3 | tee /sdcard/adb_debug/user_packages.txt
+七、Realtek
+Power：
+dumpsys package com.realtek.power | tee /sdcard/adb_debug/realtek_power.txt
+APK：
+pm path com.realtek.power | tee /sdcard/adb_debug/realtek_power_path.txt
+八、記憶體
+RAM：
+dumpsys meminfo | tee /sdcard/adb_debug/meminfo.txt
+Procrank：
+procrank | tee /sdcard/adb_debug/procrank.txt
+九、程序
+ps -A | tee /sdcard/adb_debug/ps.txt
+十、磁碟
+df | tee /sdcard/adb_debug/df.txt
+十一、設定
+Global：
+settings list global | tee /sdcard/adb_debug/global.txt
+System：
+settings list system | tee /sdcard/adb_debug/system.txt
+Secure：
+settings list secure | tee /sdcard/adb_debug/secure.txt
+十二、待機設定
+settings get global stay_on_while_plugged_in | tee /sdcard/adb_debug/stay_on.txt
+十三、無權限但可留作測試
+dmesg | tee /sdcard/adb_debug/dmesg.txt
+ls /data/tombstones | tee /sdcard/adb_debug/tombstones.txt
+ls -l /mnt/vendor/rtdlog | tee /sdcard/adb_debug/rtdlog.txt
+建議保留的常用「一鍵診斷」清單
+如果之後電視再發生異常，建議優先收集這幾個檔案：
+mkdir -p /sdcard/adb_debug
+getprop | tee /sdcard/adb_debug/getprop.txt
+dumpsys power | tee /sdcard/adb_debug/power.txt
+dumpsys deviceidle | tee /sdcard/adb_debug/deviceidle.txt
+dumpsys alarm | tee /sdcard/adb_debug/alarm.txt
+dumpsys meminfo | tee /sdcard/adb_debug/meminfo.txt
+procrank | tee /sdcard/adb_debug/procrank.txt
+logcat -b system -d | tee /sdcard/adb_debug/systemlog.txt
+logcat -d | tee /sdcard/adb_debug/logcat.txt
+pm list packages -d | tee /sdcard/adb_debug/disabled.txt
+pm list packages -f | tee /sdcard/adb_debug/packages_f.txt
+這一套就是我們這幾天分析 RTD2851M 待機無法喚醒 時最有用的診斷指令，日後若再遇到
+待機、開機、ADB 或系統穩定性問題，可以直接執行並保留結果供分析。
