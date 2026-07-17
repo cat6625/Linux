@@ -9,6 +9,7 @@ pm disable-user --user 0 com.mk.tv.meeting.service
 pm disable-user --user 0 com.apps.esticker
 pm disable-user --user 0 com.apps.plugins
 pm disable-user --user 0 com.apps.channels
+pm disable-user --user 0 com.apps.tvmanager
 
 
 #③ 投放功能（不用就停）
@@ -31,7 +32,6 @@ pm disable-user --user 0 com.google.android.videos
 
 #⑥ Android 內建
 pm disable-user --user 0 com.android.gallery3d
-pm disable-user --user 0 com.android.printspooler
 
 
 #⑦ 不使用串流時
