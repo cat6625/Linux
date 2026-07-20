@@ -61,3 +61,5 @@ r.popin.cc
 rlog.popin.cc
 trace.popin.cc
 inrecsys.popin.cc
+androidtvwatsonfe-pa.googleapis.com
+androidtvchannels-pa.googleapis.com
