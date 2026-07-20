@@ -173,3 +173,5 @@
 0.0.0.0 ad.holmesmind.com
 0.0.0.0 cdn.holmesmind.com
 0.0.0.0 tpc.googlesyndication.com
+0.0.0.0 androidtvchannels-pa.googleapis.com
+0.0.0.0 androidtvwatsonfe-pa.googleapis.com
