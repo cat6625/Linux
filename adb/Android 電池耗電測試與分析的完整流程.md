@@ -226,3 +226,55 @@ dumpsys alarm | grep "NetworkLocationScanner"
 dumpsys batterystats | grep -Ei "idling|suspend"
 ```
 *   **預期結果**：不應再密集出現 `Abort: Callback failed on alarmtimer...` 的錯誤訊息，且 `Device full idling` 的時間能持續延長。
+
+# 🧩 Android 桌面小工具 (Widget) 後台耗電與喚醒排查指南
+
+桌面小工具（Widget）為了即時更新畫面（如 Wi-Fi SSID、天氣、時鐘、系統監測），經常會在後台頻繁調用系統廣播或定時器。如果編寫不良或遇到特定環境（如沒插 SIM 卡），很容易成為隱形耗電元兇。
+
+---
+
+## 🔍 1. 核心關鍵字與排查重點
+
+在分析 Android 日誌時，桌面小工具的行為通常伴隨著以下特徵：
+
+*   **`AppWidgetService`**：Android 系統專門管理桌面小工具的核心服務。
+*   **`ACTION_APPWIDGET_UPDATE`**：小工具觸發畫面更新時的系統廣播事件。
+*   **`+proc` 與 `fg`**：小工具所屬的應用程序長期處於啟動（Process）或前台/常駐（Foreground）狀態。
+
+---
+
+## 🛠️ 2. aShell 實戰排查指令
+
+你可以透過以下三條指令，直接抓出到底是哪個 Widget 在後台搞鬼：
+
+### 📊 指令 A：抓出目前「所有已在桌面創建」的 Widget 資訊
+這個指令可以列出目前桌面上到底存在哪些小工具，以及它們的更新頻率設定。
+```bash
+dumpsys appwidget | grep -Ei "provider|updatePeriodMillis"
+```
+*   **檢查重點**：注意 `updatePeriodMillis`（更新週期毫秒數）。如果數值設定得太小（例如小於 1800000 毫秒，即 30 分鐘），代表它在後台更新得太頻繁。
+
+### 🚨 指令 B：抓出 Widget 觸發的後台定時器（Alarms）
+Widget 通常會註冊定時器來強行喚醒 CPU 進行資料更新。
+```bash
+dumpsys alarm | grep -Ei "appwidget|update" -A 2
+```
+*   **檢查重點**：觀察是否有特定小工具包名（例如先前看到的 `jp.rallewll.siriuth.ssidwidget`）高頻率出現在 `wakeups` 欄位中。
+
+### ⏳ 指令 C：查看特定 Widget 應用程式的後台總耗電與喚醒次數
+直接鎖定特定小工具的應用程式包名（Package Name），查看它的歷史總帳。
+```bash
+dumpsys batterystats | grep -A 15 "你的小工具包名"
+```
+*   **檢查重點**：查看 `wakeups`（總喚醒次數）與 `mAh`（估算耗電）。如果待機期間喚醒次數破百，就是不正常的偷跑。
+
+---
+
+## 💡 3. Widget 耗電的優化建議
+
+如果你發現某個桌面小工具是耗電元兇，可以採取以下步驟調整：
+
+1.  **拉長更新間隔**：進入該小工具的 App 設定內，將「更新頻率」從即時或 1 分鐘，改為 30 分鐘或 1 小時。
+2.  **移除不必要的 Widget**：長時間不需要監測的資訊（如沒插 SIM 卡時的行動訊號 Widget、不常看的天氣），直接從桌面長按並移除。
+3.  **檢查權限限制**：有些小工具（如 SSID Wi-Fi 小工具）需要「精確位置權限」才能抓取資料，若定位掃描已被你關閉，該 Widget 可能會因抓不到資料而卡死在後台不斷重試，此時建議直接將其卸載或更換其他開源替代品。
+
