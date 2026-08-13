@@ -113,4 +113,76 @@
 2. 搜尋 `Idle mode full time` 檢查**待機休眠是否正常**（看 longest 持續多久）。
 3. 搜尋 `All partial wakelocks:` 往下拉，**直接抓出後台耗電時間最長的 App**。
 
+# 🛠️ ADB 電池日誌關鍵字過濾與精簡指南
+
+當你不想生成或閱讀數百 KB 的完整 Bugreport 時，可以使用以下指令，在導出或讀取日誌的當下直接完成關鍵字篩選，大幅縮短內容。
+
+---
+
+## 📱 1. 手機端專用 (aShell / Termux)
+手機版終端機環境（如 `sh`、`mksh`）的 `grep` 版本與跳脫符號支援度不同，**請務必使用以下三種相容寫法**（指令前不需加 `adb shell`）：
+
+### 💡 寫法 A：使用 `egrep` (最推薦，語法最乾淨)
+```bash
+dumpsys batterystats | egrep -i "capacity|discharge|idling|wakelock time|Screen on:"
+```
+
+### 💡 寫法 B：使用 `grep -E` (標準延伸正規表示式)
+```bash
+dumpsys batterystats | grep -Ei "capacity|discharge|idling|wakelock time|Screen on:"
+```
+
+### 💡 寫法 C：使用 `awk` (最古老、絕對通用的保險寫法)
+```bash
+dumpsys batterystats | awk 'tolower(\$0) ~ /capacity|discharge|idling|wakelock time|screen on:/'
+```
+
+---
+
+## 💻 2. 電腦端專用 (透過 USB 連接手機)
+請依據你電腦的作業系統，在終端機（Terminal / CMD）中輸入以下對應指令：
+
+### 🍎 Mac / Linux 系統
+使用 `\|` 來隔開並串聯多個你想保留的關鍵字：
+```bash
+adb shell dumpsys batterystats | grep -i "capacity\|discharge\|idling\|wakelock time\|Screen on:"
+```
+
+### 🪟 Windows 系統 (CMD)
+使用 `findstr`，多個關鍵字之間直接用**空白鍵**隔開即可（`/I` 代表不區分大小寫）：
+```cmd
+adb shell dumpsys batterystats | findstr /I "capacity discharge idling wakelock Screen"
+```
+
+---
+
+## 📂 3. 進階：直接輸出為「精簡版純文字檔」
+如果你不想讓數據直接在畫面上閃過，想存成一個只有幾十行核心數據的小檔案，請在指令最後加上 `> 檔名.txt`：
+
+*   **Mac / Linux 電腦端：**
+    ```bash
+    adb shell dumpsys batterystats | grep -i "capacity\|discharge\|idling\|wakelock time\|Screen on:" > mini_battery_report.txt
+    ```
+*   **Windows 電腦端：**
+    ```cmd
+    adb shell dumpsys batterystats | findstr /I "capacity discharge idling wakelock Screen" > mini_battery_report.txt
+    ```
+*   **手機端 aShell：**
+    ```bash
+    dumpsys batterystats | egrep -i "capacity|discharge|idling|wakelock time|Screen on:" > /sdcard/mini_battery_report.txt
+    ```
+
+---
+
+## 🔍 4. 衍生排查：抓取音訊與後台 App 喚醒源
+如果你從過濾後的日誌發現 `audio` 或 `wakelock` 有異常開關，可使用以下指令追查具體 App：
+
+*   **查看是哪個 App 觸發了音訊晶片（如三星鍵盤按鍵音）：**
+    ```bash
+    dumpsys audio | grep -i "player"
+    ```
+*   **查看最近的音訊事件日誌（抓取觸發時間點）：**
+    ```bash
+    dumpsys audio | grep -A 10 "Events log"
+    ```
 
