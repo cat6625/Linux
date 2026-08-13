@@ -186,3 +186,43 @@ adb shell dumpsys batterystats | findstr /I "capacity discharge idling wakelock 
     dumpsys audio | grep -A 10 "Events log"
     ```
 
+# 🔍 Android 後台定位喚醒與休眠失敗排查指南
+
+當 Android 裝置在「沒插 SIM 卡」或「重開機後」，常因 Google 服務無法順利取得基地台訊號，導致後台定位機制卡死，引發內核休眠失敗（Suspend Abort）與隱形耗電。
+
+---
+
+## 🛑 1. 核心問題診斷 (Top Alarms)
+透過 ADB 抓取高頻率定時器時，若發現以下關鍵字，即為耗電元兇：
+
+*   **異常欄位**：`*walarm*:NetworkLocationScanner` (來自 `com.google.android.gms`)
+*   **現象**：在短時間內觸發數十次 **`wakeups`（強制喚醒）**。
+*   **原因**：Google Play 服務在缺乏行動網路時，會瘋狂強制喚醒 Wi-Fi 與藍牙硬體進行掃描，進而打斷系統內核的深度休眠（錯誤碼：`platform_pm_suspend returned -16`）。
+
+---
+
+## 🛠️ 2. 手機端優化解決步驟 (SOP)
+直接切斷 Google 服務在後台無故喚醒硬體的權限，可大幅改善待機續航：
+
+1.  **進入設定**：開啟手機的 **「設定」** > **「位置」**（或隱私與定位）。
+2.  **關閉硬體掃描**：點選 **「定位服務」**，將 **「Wi-Fi 掃描」** 與 **「藍牙掃描」** 全面 **關閉**。
+    *   *註：此功能關閉後，可阻止 Google 在 Wi-Fi/藍牙關閉時仍強行喚醒硬體。*
+3.  **降低定位精確度（選用）**：若該裝置無導航需求，可將 **「Google 定位精確度」關閉**，避免後台持續運算網路定位。
+
+---
+
+## 📊 3. aShell 驗證與監控指令
+
+完成設定後，可使用手機端 aShell 執行以下指令，驗證優化效果：
+
+### 🔄 驗證定位掃描是否已停止喚醒
+```bash
+dumpsys alarm | grep "NetworkLocationScanner"
+```
+*   **預期結果**：觀察其 `wakeups` 次數是否已經停止飆升。
+
+### 🔄 檢查系統底層是否順利進入深度休眠
+```bash
+dumpsys batterystats | grep -Ei "idling|suspend"
+```
+*   **預期結果**：不應再密集出現 `Abort: Callback failed on alarmtimer...` 的錯誤訊息，且 `Device full idling` 的時間能持續延長。
