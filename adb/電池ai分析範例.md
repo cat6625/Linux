@@ -164,4 +164,5 @@ $$\text{螢幕關閉耗電佔比} = \frac{351 \text{ mAh}}{4066 \text{ mAh}} \ap
 ### 🔍 建議下一步（精確鎖定 App）
 若要精確指出到底是哪幾個 App（例如確認 `u0a274` 是否為 Google Play Services 或特定的通訊/社群軟體），建議補充 BatteryStats Log 中的以下段落：
 ```text
-packages:
+PKGS=$(cmd package list packages -U); for u in u0a274 u0a182 u0a1176 u0a181 u0a1175 u0a178 u0a161; do echo "$PKGS" | grep "uid:$((10000 + ${u#u0a}))"; done
+
