@@ -1,5 +1,18 @@
 # Android BatteryStats 電池統計數據深度分析報告
 
+> **📋 adb 擷取指令**
+>
+```text
+adb shell dumpsys batterystats | awk '
+  /Statistics since last charge:/ { flag=1 }
+  /All wakeup reasons:/ { in_wakeup=1 }
+  flag {
+    if (in_wakeup && !/^ / && !/All wakeup reasons:/) { flag=0 }
+    else { print }
+  }
+'
+```
+
 > **📋 原始提問與分析需求**
 ```text
 請幫我分析以下這段 Android 系統的 batterystats（電池統計數據）日誌檔。
