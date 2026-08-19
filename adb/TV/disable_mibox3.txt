@@ -8,6 +8,10 @@ pm disable-user --user 0 com.mitv.tvhome.oemtab
 pm disable-user --user 0 com.mitv.tvhome.mitvplus
 pm disable-user --user 0 com.mitv.tvhome.michannel
 pm disable-user --user 0 com.xiaomi.android.tvsetup.partnercustomizer
+pm disable-user --user 0 com.xm.webcontent
+pm disable-user --user 0 com.xiaomi.tvqs.overseas.y24
+pm disable-user --user 0 com.mitv.tvhome.atv
+
 
 # Google 基本垃圾與列印服務
 pm disable-user --user 0 com.google.android.feedback
@@ -28,4 +32,4 @@ pm disable-user --user 0 com.xiaomi.mi_connect_service
 # 三大主流付費影音
 pm disable-user --user 0 com.netflix.ninja
 pm disable-user --user 0 com.amazon.amazonvideo.livingroom
-pm disable-user --user 0 com.google.android.youtu
+pm disable-user --user 0 com.google.android.youtube.tv
