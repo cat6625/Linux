@@ -1,6 +1,22 @@
 
 # SM-G610Y 極致精簡版 只能 adb uninstall
 
+## 斬草除根前：先備份/記錄原廠 APK 路徑
+
+```text
+adb shell pm list packages -f
+```
+
+>在還沒執行 uninstall 之前，先用這行指令把所有你想動刀的套件與它們的 /system 原始路徑整合成一張清單<br>
+
+## 重新注入（安裝）恢復格式
+
+```text
+adb shell pm install -r --user 0 <原廠APK的絕對路徑>
+```
+
+>參數解析：-r 代表重新安裝並保留既有資料（Reinstall），--user 0 代表指定安裝回目前的主使用者帳戶。<br>
+
 ## 第一批：
 
 ```text
