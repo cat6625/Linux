@@ -27,7 +27,7 @@ adb shell pm install -r --user 0 <原廠APK的絕對路徑>
 ## 第一批：Google 預載影音與雲端套件（安全精簡）
 
 ```text
-for pkg in com.google.android.youtube com.google.android.music com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs com.google.android.apps.photos com.google.android.calendar com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
+for pkg in com.google.android.youtube com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs  com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
 
 ```
 
