@@ -1,9 +1,9 @@
-# htc-a9s-debloat
+# htc-a9sx-debloat
 
 ## 斬草除根前：先備份/記錄原廠 APK 路徑
 
 ```text
-adb shell pm list packages -f -s > a9s.txt
+adb shell pm list packages -f -s > a9sx.txt
 
 ```
 
