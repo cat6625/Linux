@@ -151,6 +151,14 @@ for pkg in com.htc.community com.htc.guide com.htc.sense.socialnetwork.googleplu
 > 
 > 
 > com.htc.sense.socialnetwork.twitter：HTC Sense 整合之 Twitter 外掛（服務已終止）。
-> 
-> 
->
+
+
+## TouchPal 額外語言包（保留繁中/簡中/倉頡）
+```text
+for pkg in com.cootek.smartinputv5.language.oem.malayan com.cootek.smartinputv5.language.oem.spanishus com.cootek.smartinputv5.language.oem.russian com.cootek.smartinputv5.language.oem.portuguesept com.cootek.smartinputv5.language.oem.italian com.cootek.smartinputv5.language.oem.norwegian com.cootek.smartinputv5.language.oem.hungarian com.cootek.smartinputv5.language.oem.englishgb com.cootek.smartinputv5.language.oem.slovenian com.cootek.smartinputv5.language.oem.swedish com.cootek.smartinputv5.language.oem.estonian com.cootek.smartinputv5.language.oem.bulgarian com.cootek.smartinputv5.language.oem.armenian com.cootek.smartinputv5.language.oem.indonesian com.cootek.smartinputv5.language.oem.turkish com.cootek.smartinputv5.language.oem.arabic com.cootek.smartinputv5.language.oem.finnish com.cootek.smartinputv5.language.oem.ukrainian com.cootek.smartinputv5.language.oem.lithuanian com.cootek.smartinputv5.language.oem.danish com.cootek.smartinputv5.language.oem.french com.cootek.smartinputv5.language.oem.german com.cootek.smartinputv5.language.oem.persian com.cootek.smartinputv5.language.oem.hebrew com.cootek.smartinputv5.language.oem.kazakh com.cootek.smartinputv5.language.oem.polish com.cootek.smartinputv5.language.oem.slovak com.cootek.smartinputv5.language.oem.romanian com.cootek.smartinputv5.language.oem.latvian com.cootek.smartinputv5.language.oem.czech com.cootek.smartinputv5.language.oem.dutch com.cootek.smartinputv5.language.oem.greek com.cootek.smartinputv5.language.oem.serbianlatin com.cootek.smartinputv5.language.oem.catalan ; do adb shell pm uninstall --user 0 "$pkg"; done
+
+
+```
+
+
+
