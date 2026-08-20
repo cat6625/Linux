@@ -1,7 +1,9 @@
+# htc-a9s-debloat
+
 ## 斬草除根前：先備份/記錄原廠 APK 路徑
 
 ```text
-adb shell pm list packages -f
+adb shell pm list packages -f -s > a9s.txt
 
 ```
 
@@ -13,11 +15,11 @@ adb shell pm list packages -f
 ## 重新注入（安裝）恢復格式
 
 ```text
-adb shell pm install-existing <套件名稱>
+adb shell pm install -r --user 0 <原廠APK的絕對路徑>
 
 ```
 
-> 說明：當套件僅被 --user 0 移除時，實體 APK 仍保留在 /system 中，使用此指令可直接將指定套件重新安裝回主使用者帳戶。
+> 參數解析：-r 代表重新安裝並保留既有資料（Reinstall），--user 0 代表指定安裝回目前的主使用者帳戶。
 > 
 > 
 > 
