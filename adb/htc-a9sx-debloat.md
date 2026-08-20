@@ -27,7 +27,7 @@ adb shell pm install -r --user 0 <原廠APK的絕對路徑>
 ## 第一批：Google 預載影音與雲端套件（安全精簡）
 
 ```text
-for pkg in com.google.android.youtube com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs  com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
+for pkg in com.google.android.youtube com.google.android.music com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs com.google.android.apps.photos com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
 
 ```
 
@@ -108,20 +108,7 @@ for pkg in com.facebook.katana com.facebook.orca com.instagram.android com.mobil
 > 
 > 
 > 
-> com.nero.android.htc.sync：Nero 提供的 HTC Sync 多媒體同步工具。
-> 
-> 
-> 
-> 
-> com.nero.android.htc.sync.installer：HTC Sync 安裝程式背景組件。
-> 
-> 
-> 
-> 
-> com.futuredial.idevicecloud：舊版 iOS 轉移與雲端備份輔助工具。
-> 
-> 
-> 
+ 
 
 ## 第三批：HTC 廢棄社交與附加服務（安全精簡）
 
