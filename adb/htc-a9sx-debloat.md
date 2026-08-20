@@ -21,8 +21,8 @@ adb shell pm clear com.google.android.gms<br>
 adb shell am force-stop com.google.android.gms<br> 
 
 >Install or update a downloaded APK:<br>
-adb install -r path/to/play-services.apk<br>
-adb install -r /system/priv-app/GmsCore/GmsCore.apk=com.google.android.gms
+adb install -r --user 0 path/to/play-services.apk<br>
+adb shell pm install -r -d --user 0 /system/priv-app/GmsCore/GmsCore.apk
 
 >Uninstall/Disable (for advanced users/debloating):<br>
 adb shell pm uninstall -k --user 0 com.google.android.gms<br>
