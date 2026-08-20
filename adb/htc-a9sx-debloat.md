@@ -1,5 +1,14 @@
 # htc-a9sx-debloat
 
+
+# Google Paly Service更新會導致手機無限重啟
+```text
+adb devices && adb shell am force-stop com.google.android.gms
+```
+>進入桌面馬上在ubuntu下達指令<br>
+
+
+
 ## 斬草除根前：先備份/記錄原廠 APK 路徑
 
 ```text
@@ -27,15 +36,19 @@ adb shell pm install -r --user 0 <原廠APK的絕對路徑>
 ## 第一批：Google 預載影音與雲端套件（安全精簡）
 
 ```text
-for pkg in com.google.android.youtube com.google.android.music com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs com.google.android.apps.photos com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
+for pkg in com.google.android.youtube com.google.android.apps.maps com.google.android.music com.google.android.videos com.google.android.apps.docs com.google.android.apps.docs.editors.docs com.google.android.apps.photos com.google.android.calendar com.google.android.gm com.google.android.talk com.google.android.apps.tachyon ; do adb shell pm uninstall --user 0 "$pkg"; done
 
 ```
 
 > com.google.android.youtube：YouTube 主程式。
 > 
+>
+>
+> com.google.android.apps.maps：Google 地圖
 > 
-> 
-> 
+>
+>
+
 > com.google.android.music：Google Play 音樂（已停用服務，純佔用空間）。
 > 
 > 
