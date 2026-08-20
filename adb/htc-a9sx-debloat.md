@@ -3,7 +3,7 @@
 
 # Google Paly Service更新會導致手機無限重啟
 ```text
-adb devices && adb shell am force-stop com.google.android.gms
+adb devices && adb shell am force-stop com.google.android.gms && adb shell pm clear com.google.android.gms
 ```
 >進入桌面馬上在ubuntu下達指令<br>
 
