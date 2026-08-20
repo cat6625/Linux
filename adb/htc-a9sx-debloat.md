@@ -9,6 +9,27 @@ adb devices && adb shell am force-stop com.google.android.gms
 
 
 
+## Common ADB Commands for Google Play Services
+
+>Check if installed:<br>
+adb shell pm path com.google.android.gms<br> 
+
+>Clear cache and data:<br>
+adb shell pm clear com.google.android.gms<br> 
+
+>Stop the service process:<br>
+adb shell am force-stop com.google.android.gms<br> 
+
+>Install or update a downloaded APK:<br>
+adb install -r path/to/play-services.apk<br>
+adb install -r /system/priv-app/GmsCore/GmsCore.apk=com.google.android.gms
+
+>Uninstall/Disable (for advanced users/debloating):<br>
+adb shell pm uninstall -k --user 0 com.google.android.gms<br>
+
+
+
+
 ## 斬草除根前：先備份/記錄原廠 APK 路徑
 
 ```text
