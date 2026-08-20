@@ -84,7 +84,7 @@ for pkg in com.google.android.youtube com.google.android.videos com.google.andro
 ## 第二批：第三方軟體與社群 App 本體（安全精簡）
 
 ```text
-for pkg in com.facebook.katana com.facebook.orca com.instagram.android com.mobilesrepublic.appy com.nero.android.htc.sync com.nero.android.htc.sync.installer com.futuredial.idevicecloud ; do adb shell pm uninstall --user 0 "$pkg"; done
+for pkg in com.facebook.katana com.facebook.orca com.instagram.android ; do adb shell pm uninstall --user 0 "$pkg"; done
 
 ```
 
