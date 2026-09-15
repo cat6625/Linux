@@ -48,7 +48,7 @@ sudo waydroid init -f -s GAPPS
 # 1. 安裝相依套件
 sudo apt install git lzip python3 python3-pip python3-venv -y
 # 2. 下載轉譯器腳本專案
-cd  ~
+cd ~
 git clone https://github.com/casualsnek/waydroid_script
 cd waydroid_script
 # 3. 建立並設定 Python 虛擬環境
