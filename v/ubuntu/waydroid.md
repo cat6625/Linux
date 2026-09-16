@@ -89,6 +89,20 @@ waydroid show-full-ui
 ## 🛠️ 第三部分：常見問題微調## Q1. Android 顯示沒有網路連線？
 在 Ubuntu 終端機重啟防火牆即可解決：
 
+sudo ufw reset   刪除自訂規則，關閉防火牆
+
+sudo ufw enable  啟用防火牆
+
+sudo ufw route allow in on waydroid0 comment Waydroid
+
+sudo ufw allow out on waydroid0 to any port 67 comment waydroid
+
+sudo ufw allow out on waydroid0 to any port 53 comment waydroid
+
+sudo ufw allow in on waydroid0 to any port 53 comment waydroid
+
+sudo ufw allow in on waydroid0 to any port 67 comment waydroid  
+
 sudo systemctl restart ufw
 
 ## Q2. 開啟 Google Play 商店提示「裝置未獲得認證」？
