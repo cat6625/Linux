@@ -32,9 +32,13 @@ rm -f ~/.local/share/applications/*waydroid*
 ## 1. 新增官方儲存庫並安裝 Waydroid
 
 sudo apt update
+
 sudo apt install curl ca-certificates -y
+
 curl -s https://waydroid.tech | sudo bash
+
 sudo apt update
+
 sudo apt install waydroid -y
 
 ## 2. 初始化 Waydroid（下載 GAPPS 版本）
@@ -49,7 +53,9 @@ sudo waydroid init -f -s GAPPS
 sudo apt install git lzip python3 python3-pip python3-venv -y
 # 2. 下載轉譯器腳本專案
 cd ~
+
 git clone https://github.com/casualsnek/waydroid_script
+
 cd waydroid_script
 # 3. 建立並設定 Python 虛擬環境
 python3 -m venv venv
