@@ -45,6 +45,9 @@ sudo apt update
 sudo apt install waydroid -y
 
 ## 2. 初始化 Waydroid（下載 GAPPS 版本）
+
+sudo waydroid init
+
 若您需要使用 Google Play 商店與服務，請指定下載 GAPPS 映像檔：
 
 sudo waydroid init -f -s GAPPS
