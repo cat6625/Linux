@@ -59,9 +59,11 @@ git clone https://github.com/casualsnek/waydroid_script
 cd waydroid_script
 # 3. 建立並設定 Python 虛擬環境
 python3 -m venv venv
+
 sudo venv/bin/pip install -r requirements.txt
 # 4. 建立硬碟暫存資料夾並執行安裝 (Intel 專用 libhoudini)
 mkdir -p ~/waydroid_tmp
+
 sudo TMPDIR=/home/$USER/waydroid_tmp venv/bin/python3 main.py install libhoudini
 # 5. 清理硬碟暫存資料夾
 rm -rf ~/waydroid_tmp
