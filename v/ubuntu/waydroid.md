@@ -7,12 +7,15 @@
 ## 1. 停止所有 Waydroid 服務
 
 sudo waydroid session stop
+
 sudo waydroid container stop
+
 sudo systemctl stop waydroid-container.service
 
 ## 2. 移除系統套件
 
 sudo apt purge waydroid -y
+
 sudo apt autoremove -y
 
 ## 3. 刪除所有殘留的資料與設定檔
@@ -51,12 +54,14 @@ sudo waydroid init -f -s GAPPS
 
 # 1. 安裝相依套件
 sudo apt install git lzip python3 python3-pip python3-venv -y
+
 # 2. 下載轉譯器腳本專案
 cd ~
 
 git clone https://github.com/casualsnek/waydroid_script
 
 cd waydroid_script
+
 # 3. 建立並設定 Python 虛擬環境
 python3 -m venv venv
 
