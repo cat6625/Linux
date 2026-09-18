@@ -175,3 +175,17 @@
 0.0.0.0 tpc.googlesyndication.com
 0.0.0.0 androidtvchannels-pa.googleapis.com
 0.0.0.0 androidtvwatsonfe-pa.googleapis.com
+0.0.0.0 appier.net
+0.0.0.0 www.appier.net
+0.0.0.0 ad.appier.net
+0.0.0.0 ad2.apx.appier.net
+0.0.0.0 jscdn.appier.net
+0.0.0.0 a.c.appier.net
+0.0.0.0 g.c.appier.net
+0.0.0.0 s.c.appier.net
+0.0.0.0 vst.c.appier.net
+0.0.0.0 usrtb.c.appier.net
+0.0.0.0 aiqua-sdk.c.appier.net
+0.0.0.0 aiqua-user.c.appier.net
+0.0.0.0 td-pixel.c.appier.net
+
