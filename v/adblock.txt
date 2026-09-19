@@ -63,3 +63,16 @@ trace.popin.cc
 inrecsys.popin.cc
 androidtvwatsonfe-pa.googleapis.com
 androidtvchannels-pa.googleapis.com
+appier.net
+www.appier.net
+ad.appier.net
+ad2.apx.appier.net
+jscdn.appier.net
+a.c.appier.net
+g.c.appier.net
+s.c.appier.net
+vst.c.appier.net
+usrtb.c.appier.net
+aiqua-sdk.c.appier.net
+aiqua-user.c.appier.net
+td-pixel.c.appier.net
