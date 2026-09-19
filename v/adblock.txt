@@ -1,4 +1,127 @@
+# Google / DoubleClick — 廣告投放、廣告追蹤
+dart.l.doubleclick.net
+cm.g.doubleclick.net
+pubads.g.doubleclick.net
+googleads.g.doubleclick.net
+securepubads.g.doubleclick.net
+15230196.fls.doubleclick.net
+pagead2.googlesyndication.com
+tpc.googlesyndication.com
+
+# AppLovin — App 廣告 / 廣告中介
+ms4.applovin.com
+ms.applovin.com
+rt.applvn.com
+d.applovin.com
+ms.applvn.com
+rt.applovin.com
+d.applvn.com
+
+# Amazon Ads — 廣告
+aax.amazon-adsystem.com
+s.amazon-adsystem.com
+c.amazon-adsystem.com
+
+# Unity Ads — 遊戲 / App 廣告
+ads.unity3d.com
+unityads.unity3d.com
+
+# Taboola — 原生廣告 / 推薦內容
+trc.taboola.com
+cdn.taboola.com
+
+# Appier — 廣告 / 追蹤
+ad.appier.net
+ad2.apx.appier.net
+td-pixel.c.appier.net
+aiqua-sdk.c.appier.net
+aiqua-user.c.appier.net
+
+# Dable — 原生廣告 / 內容推薦
+api.dable.io
+images.dable.io
+static.dable.io
+
+# PopIn — 原生廣告 / 推薦 / 追蹤
+tw.popin.cc
+api.popin.cc
+log.popin.cc
+r.popin.cc
+rlog.popin.cc
+trace.popin.cc
+inrecsys.popin.cc
+
+# Eyeota — 廣告受眾資料
+ps.eyeota.net
+
+# Quantcast — 廣告受眾分析
+pixel.quantserve.com
+
+# CrowdControl / Lotame — 受眾資料
+bcp.crwdcntrl.net
+
+# Omnisegment — 行銷追蹤 / 分析
+pixel.omnisegment.com
+
+# Logly — 原生廣告
+l.logly.co.jp
+
+# Compass-Fit — 廣告 / 受眾分析
+nt.compass-fit.jp
+
+# Aotter — 數位廣告
+r2d2.aotter.net
+
+# SpringServe — 影音廣告 / SSP
+tv.springserve.com
+
+# Pangle — App / 行動廣告
+api16-access-wf-sg.pangle.io
+
+# ADX Corp — 廣告交換 / Mediation
+api.adxcorp.kr
+api.mediation.adxcorp.kr
+
+# HolmesMind — 廣告 / 追蹤
+t.holmesmind.com
+ad.holmesmind.com
+
+# OneVision — 廣告
+onead-v6.onevision.com.tw
+
+# LINE — 廣告相關 CDN
 ad.line-scdn.net
+
+# Likr — 廣告 / 推薦
+avividone.likr.tw
+auto-cdn.likr.com.tw
+auto-load-balancer.likr.tw
+
+# iQIYI — 影音 / Cupid 相關服務
+t7z.cupid.iqiyi.com
+msga.cupid.iqiyi.com
+ibd-as-api.iq.com
+data.video.iqiyi.com
+api16-access-wf-sg.pangle.io
+
+# LiTV — 影音服務
+acs-go.svc.litv.tv
+  
+# ETtoday — 新聞網站廣告 / 訊息 / CDN
+ad.ettoday.net
+ad1.ettoday.net
+ad2.ettoday.net
+msg.ettoday.net
+ad-ettoday.cdn.hinet.net
+
+# 三立新聞 — 廣告
+ad.setn.com
+
+# HiNet — ISP / CDN 相關
+t.ssp.hinet.net
+ad-ettoday.cdn.hinet.net
+
+  ad.line-scdn.net
 dart.l.doubleclick.net
 cm.g.doubleclick.net
 pubads.g.doubleclick.net
