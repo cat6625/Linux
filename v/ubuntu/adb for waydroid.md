@@ -53,5 +53,37 @@ adb logcat -v time | grep --line-buffered -iE 'libvio|PoW|Challenge|QuickJS|Spid
 * 遇到無權限或找不到裝置？
 如果執行後畫面動也不動，請先輸入 adb devices 確認裝置是否為 device 狀態。如果是 unauthorized，請記得看一眼手機螢幕並點選「允許 USB 偵錯」。
 
+---
+
+在 Android 手機上使用 aShell（一個手機端的本地 ADB 外殼工具）執行此指令時，由於 aShell 本身就已經在 ADB 環境內，因此語法有兩個關鍵的調整：
+
+   1. 不需要加上 adb 開頭：直接從 logcat 開始寫。
+   2. 處理 Shizuku / aShell 的權限緩衝問題：有時手機端 grep 的 --line-buffered 在某些 Android 系統上支援度不佳，或者 aShell 的 UI 重新整理較慢。
+
+以下是適合 aShell 的寫法與優化建議：
+## 1. 標準寫法（最推薦）
+直接在 aShell 的輸入框中貼上以下指令並執行：
+
+logcat -v time | grep --line-buffered -iE 'libvio|PoW|Challenge|QuickJS|Spider' | tee /sdcard/Download/fongmi.txt
+
+⚠️ 路徑非常重要：
+原始指令中的 fongmi.txt 在電腦上會存到當前目錄。但在手機 aShell 內部，如果直接寫 fongmi.txt，檔案會被存在 aShell 的內部私有目錄，你用一般檔案瀏覽器會找不到。
+將路徑改為 /sdcard/Download/fongmi.txt，檔案就會直接存入手機的 「下載（Download）」 資料夾，方便你後續查看或分享。
+
+------------------------------
+## 2. 進階：如果畫面上遲遲沒有出現 log（替代方案）
+有時手機系統的 grep 機制會導致 tee 無法即時把文字推送到 aShell 的螢幕畫面上。如果你發現畫面卡住，請改用 logcat 自帶的過濾語法，效率更高且絕對不會卡快取：
+
+logcat -v time | grep -iE 'libvio|PoW|Challenge|QuickJS|Spider' > /sdcard/Download/fongmi.txt
+
+(注意：這個方法會全速把 log 寫入檔案，畫面上不會顯示任何東西。等你想結束時點擊 aShell 的停止按鈕，再用內建檔案瀏覽器去 Download 資料夾開 fongmi.txt 即可。)
+------------------------------
+## 💡 手機端執行的額外檢查
+
+* 儲存權限：執行前，請確保 aShell 已經獲得檔案與媒體存取權限，否則會無法在 /sdcard/Download/ 建立文字檔（會跳出 Permission denied 錯誤）。
+* 背景執行：logcat 是持續性的指令，在 aShell 中執行後，只要不按停止，它就會一直背景記錄。建議測試完特定操作後就手動停止，避免檔案過大佔用手機空間。
+
+
+
 
 
