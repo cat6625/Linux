@@ -13,6 +13,12 @@ echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time 
 'libvio|PoW|Challenge|QuickJS|Spider' \
 | tee fongmi.txt
 ```
+```txt
+echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time | grep --line-buffered -iE \
+'TV-quickjs|框架診斷|PoW偵測' \
+| tee fongmi.txt
+```
+
 
 ```txt
 logcat -v time | grep -E 'TV-quickjs|框架診斷|PoW偵測'
