@@ -13,6 +13,12 @@ echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time 
 'libvio|PoW|Challenge|QuickJS|Spider' \
 | tee fongmi.txt
 ```
+
+```txt
+logcat -v time | grep -E 'TV-quickjs|框架診斷|PoW偵測'
+```
+
+
 ---
 
 這個指令本身已經寫得非常完整且正確，它結合了 即時過濾（Grepping）、不區分大小寫（Case-insensitive）、正則表達式（Regex） 以及 同時輸出到螢幕與檔案（Teeing） 的進階技巧。
