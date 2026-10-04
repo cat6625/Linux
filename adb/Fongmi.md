@@ -77,7 +77,24 @@ fongmi.txt 會儲存在你目前終端機所在的工作目錄（預設通常是
   ```txt
   adb disconnect
   ```
+---
 
+## Termux
 
+**下載**
+https://play.google.com/store/apps/details?id=com.termux
+
+**安裝套件**
+```txt
+pkg update && pkg install android-tools
+```
+
+**連接**
+```txt
+adb tcpip 5555
+```
+```txt
+adb connect 192.168.1.188:5555
+```
 
 
