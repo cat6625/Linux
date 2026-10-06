@@ -107,7 +107,16 @@ adb -s 192.168.1.188:5555 shell
 ```txt
 adb -s emulator-5554 shell
 ```
-
+**範例**
 ```txt
 logcat -v time | grep -E 'TV-quickjs|框架診斷|PoW偵測' | tee -a /sdcard/Download/fongmi.txt
+```
+```txt
+for p in $(comm -13 \
+  <(adb shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
+  <(adb shell pm list packages -s -u --user 0 | sed 's/^package://' | tr -d '\r' | sort)); do
+    echo "=== $p ==="
+    adb shell pm path "$p"
+done
+
 ```
