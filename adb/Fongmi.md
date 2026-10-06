@@ -111,12 +111,15 @@ adb -s emulator-5554 shell
 ```txt
 logcat -v time | grep -E 'TV-quickjs|框架診斷|PoW偵測' | tee -a /sdcard/Download/fongmi.txt
 ```
+
+>指定emulator-5554
 ```txt
 for p in $(comm -13 \
-  <(adb shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
-  <(adb shell pm list packages -s -u --user 0 | sed 's/^package://' | tr -d '\r' | sort)); do
+  <(adb -s emulator-5554 shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
+  <(adb -s emulator-5554 shell pm list packages -s -u --user 0 | sed 's/^package://' | tr -d '\r' | sort)); do
     echo "=== $p ==="
-    adb shell pm path "$p"
+    adb -s emulator-5554 shell pm path "$p"
 done
+
 
 ```
