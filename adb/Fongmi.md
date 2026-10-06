@@ -98,3 +98,12 @@ adb connect 192.168.1.188:5555
 ```
 
 
+
+```txt
+adb -s 192.168.1.188:5555 shell
+```
+
+
+```txt
+adb -s emulator-5554 shell
+```
