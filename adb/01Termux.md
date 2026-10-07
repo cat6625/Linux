@@ -16,22 +16,18 @@ adb tcpip 5555
 adb connect 192.168.1.188:5555
 ```
 
-**指定裝置**
->無線（android TV）
-```txt
-adb -s 192.168.1.188:5555 shell
-```
->本機（手機）
-```txt
-adb -s emulator-5554 shell
-```
 **範例**
-> libvio 除錯 （手機）
+> libvio.js 除錯 （手機）
 ```txt
-logcat -v time | grep -E 'PoW' | tee -a /sdcard/Download/fongmi.txt
+adb -s emulator-5554 shell logcat -v time | grep -E 'PoW' | tee -a /sdcard/Download/fongmi.txt
+```
+> libvio.js 除錯 無線（android TV）
+
+```txt
+adb -s 192.168.1.188:5555 shell logcat -v time | grep -E 'PoW' | tee -a /sdcard/Download/fongmi.txt
 ```
 
-> 列出指定emulator-5554系統反安裝套件
+> 列出 指定 手機 emulator-5554 系統反安裝套件
 ```txt
 for p in $(comm -13 \
   <(adb -s emulator-5554 shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
@@ -42,7 +38,7 @@ done
 
 
 ```
-> 列出指定裝置系統停用套件
+> 列出 指定裝置如 android tv 系統停用套件
 ```txt
 adb -s 192.168.1.188:5555 shell pm list packages -s -d --user 0
 ```
