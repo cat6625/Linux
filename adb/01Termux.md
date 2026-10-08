@@ -19,12 +19,12 @@ adb connect 192.168.1.188:5555
 **範例**
 > libvio.js 除錯 （手機）
 ```txt
-adb -s emulator-5554 shell logcat -v time | grep -E 'remain=|OK i='
+adb -s emulator-5554 shell logcat -v time | grep -E 'PoW偵測'
 ```
 > libvio.js 除錯 無線（android TV）
 
 ```txt
-adb -s 192.168.1.188:5555 shell logcat -v time | grep -E 'remain=|OK i='
+adb -s 192.168.1.188:5555 shell logcat -v time | grep -E 'PoW偵測'
 ```
 
 > 列出 指定 手機 emulator-5554 系統反安裝套件
