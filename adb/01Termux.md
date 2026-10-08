@@ -58,3 +58,19 @@ adb connect localhost:37267
 2. 直接看當下的連接埠號（例如今天變成 39871）。
 3. 直接在 Termux 輸入：adb connect localhost:39871（不用再輸入配對碼）。
 ```
+
+
+```txt
+adb shell logcat -v time | grep -E 'PoW偵測'
+```
+```txt
+for p in $(comm -13 \
+  <(adb shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
+  <(adb shell pm list packages -s -u --user 0 | sed 's/^package://' | tr -d '\r' | sort)); do
+    echo "=== $p ==="
+    adb shell pm path "$p"
+done
+```
+```txt
+adb shell pm list packages -s -d --user 0
+```
