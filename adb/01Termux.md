@@ -10,42 +10,41 @@ pkg update && pkg install android-tools -y
 ```
 
 **無線調試配對**
-> 紅米10需要使用小窗應用程式
+> 紅米10需要使用小窗應用程式，其他用分割視窗。
 >「配對 (adb pair)」只需要成功做一次。
 
 
 ```txt
 adb pair localhost:[配對連接埠]
 ```
-
-**本機連接**
-> localhost:5555
-
+**斷開所有裝置**
 ```txt
 adb disconnect
+```
+
+**本機連接localhost:5555**
+```txt
 adb tcpip 5555
 adb connect localhost:5555
-adb devices
 ```
- 
 
 **無線連接**
 ```txt
 adb connect 192.168.1.188:5555
 ```
 
-**範例**
-> libvio.js 除錯 （手機）
+**範例多裝置要用 -s 指定**
+> libvio.js 除錯 （localhost:5555）
 ```txt
 adb -s localhost:5555 shell logcat -v time | grep -E 'PoW偵測'
 ```
-> libvio.js 除錯 無線（android TV）
+> libvio.js 除錯 無線（192.168.1.188:5555）
 
 ```txt
 adb -s 192.168.1.188:5555 shell logcat -v time | grep -E 'PoW偵測'
 ```
 
-> 列出 本機手機 系統反安裝套件
+> 列出 localhost:5555 系統反安裝套件
 ```txt
 for p in $(comm -13 \
   <(adb -s localhost:5555 shell pm list packages -s --user 0 | sed 's/^package://' | tr -d '\r' | sort) \
@@ -73,7 +72,7 @@ adb -s 192.168.1.188:5555 shell pm list packages -s -d --user 0
 3. 直接在 Termux 輸入：adb connect localhost:39871（不用再輸入配對碼）。
 ```
 
-**ubuntu**
+**只有一個裝置**
 ```txt
 adb shell logcat -v time | grep -E 'PoW偵測'
 ```
