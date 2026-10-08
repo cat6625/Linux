@@ -61,6 +61,7 @@ adb connect localhost:37267
 ```
 > localhost:5555
 ```txt
+adb disconnect
 adb tcpip 5555
 adb connect localhost:5555
 adb devices
