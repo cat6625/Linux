@@ -42,3 +42,11 @@ done
 ```txt
 adb -s 192.168.1.188:5555 shell pm list packages -s -d --user 0
 ```
+
+---
+
+紅米10需要使用小窗應用程式
+無線調試配對
+
+adb pair localhost:[配對連接埠]
+adb connect localhost:37267
