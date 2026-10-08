@@ -45,8 +45,9 @@ adb -s 192.168.1.188:5555 shell pm list packages -s -d --user 0
 
 ---
 
-紅米10需要使用小窗應用程式
-無線調試配對
+## 紅米10需要使用小窗應用程式
+
+**無線調試配對**
 
 adb pair localhost:[配對連接埠]
 adb connect localhost:37267
@@ -58,7 +59,12 @@ adb connect localhost:37267
 2. 直接看當下的連接埠號（例如今天變成 39871）。
 3. 直接在 Termux 輸入：adb connect localhost:39871（不用再輸入配對碼）。
 ```
-
+> 會產生一個常駐emulator-5554
+```txt
+adb disconnect 
+adb tcpip 5555
+adb devices
+```
 
 ```txt
 adb shell logcat -v time | grep -E 'PoW偵測'
