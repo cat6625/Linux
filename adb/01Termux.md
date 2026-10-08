@@ -59,10 +59,10 @@ adb connect localhost:37267
 2. 直接看當下的連接埠號（例如今天變成 39871）。
 3. 直接在 Termux 輸入：adb connect localhost:39871（不用再輸入配對碼）。
 ```
-> 會產生一個常駐emulator-5554
+> localhost:5555
 ```txt
-adb disconnect 
 adb tcpip 5555
+adb connect to localhost:5555
 adb devices
 ```
 
