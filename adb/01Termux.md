@@ -50,3 +50,11 @@ adb -s 192.168.1.188:5555 shell pm list packages -s -d --user 0
 
 adb pair localhost:[配對連接埠]
 adb connect localhost:37267
+
+```txt
+雖然連接埠號會變，但 「配對 (adb pair)」只需要成功做一次。
+以後你只要發現斷線了，或隔天想再使用，步驟會變得很簡單：
+1. 打開手機的 無線偵錯 畫面。
+2. 直接看當下的連接埠號（例如今天變成 39871）。
+3. 直接在 Termux 輸入：adb connect localhost:39871（不用再輸入配對碼）。
+```
