@@ -15,6 +15,9 @@ echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time 
 ```txt
 sudo waydroid shell -- logcat -c && sudo waydroid shell -- logcat -v time | grep --line-buffered -iE 'TV-player|TV-detail|TV-category|TV-search|Spider' | tee fongmi-py.txt
 ```
+```txt
+sudo waydroid shell -- logcat -c && sudo waydroid shell -- logcat -v time | grep --line-buffered -iE '暴风资源|AD-DIAG|原始m3u8_url|切片路径检测|检测到广告段|处理耗时|System.out|fongmi|TV-' | tee bf_test-5.txt
+```
 
 **aShell 的寫法**
 ```txt
