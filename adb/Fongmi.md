@@ -13,7 +13,7 @@ echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time 
 echo "logcat -c" | sudo waydroid shell && sudo waydroid shell -- logcat -v time | grep --line-buffered -A 15 -E 'Executing HlsAdsParser|開始執行 HlsAdsParser' | tee fongmi.txt
 ```
 ```txt
-sudo waydroid shell -- logcat -c && sudo waydroid shell -- logcat -v time | grep --line-buffered -iE 'TV-|postProtobuf|decodeUrl|quickjs|JS-|Console|System\.out|System\.err|Spider' | tee fongmi.txt
+sudo waydroid shell -- logcat -c && sudo waydroid shell -- logcat -v time | grep --line-buffered -iE 'TV-player|TV-detail|TV-category|TV-search|Spider' | tee fongmi-py.txt
 ```
 
 **aShell 的寫法**
