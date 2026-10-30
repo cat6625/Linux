@@ -87,3 +87,6 @@ done
 ```txt
 adb shell pm list packages -s -d --user 0
 ```
+```txt
+adb shell -- logcat -c && adb shell -- logcat -v time | grep --line-buffered -iE   'DUODUO|XIAOJI|GULUGULU' | tee -a /sdcard/Download/fongmi-log.txt
+```
