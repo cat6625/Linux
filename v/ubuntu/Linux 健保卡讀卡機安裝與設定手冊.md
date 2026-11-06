@@ -141,18 +141,18 @@ Ctrl + C
 
 衛生福利部中央健康保險署－個人健保資料網路服務作業：
 
-https://eservice.nhi.gov.tw/personal1/system/HealthCard.aspx
+https://cloudicweb.nhi.gov.tw/cloudic/system/SMC/Eventesting.aspx
 
 ### 步驟 1：下載 Linux 安裝檔
 
 ```bash
-wget https://cloudicweb.nhi.gov.tw/cloudic/System/SMC/CMS_mNHIICC_Setup.Linux_112.zip
+wget https://cloudicweb.nhi.gov.tw/cloudic/system/SMC/CMS_mNHIICC_Setup.Linux.zip
 ```
 
 ### 步驟 2：解壓縮 ZIP 檔案
 
 ```bash
-unzip CMS_mNHIICC_Setup.Linux_112.zip
+unzip CMS_mNHIICC_Setup.Linux.zip
 ```
 
 ### 步驟 3：解壓縮 TAR.XZ 檔案
@@ -243,8 +243,9 @@ find $HOME/.mozilla/firefox/ -name "cert9.db" -execdir certutil -A -n "NHIICC CA
 2. 點擊右上角「選單（三條橫線）」。
 3. 選擇「設定」（Settings）。
 4. 左側選擇「隱私與安全」（Privacy & Security）。
-5. 向下找到「憑證」（Certificates）。
-6. 點擊「檢視憑證」（View Certificates）。
+5. 連線與軟體安全性 => 進階  或 about:preferences#connectionSecurity
+6. 向下找到「管理憑證」（Certificates）。
+7. 點擊「檢視憑證」（View Certificates）。
 
 #### 步驟 2：匯入健保署根憑證
 
