@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Redmi Note 15 5G (HyperOS) debloat script
-# 保留小米帳號相關功能（Shizuku 需要）
-# 已卸載的套件會顯示 Failure，屬正常現象，腳本會繼續執行
-
 echo "=== 檢查裝置連線 ==="
 adb devices
 
@@ -45,20 +41,21 @@ adb shell pm uninstall --user 0 com.xiaomi.mipicks           # 小米應用推�
 adb shell pm uninstall --user 0 com.miui.msa.global          # 小米廣告服務（MSA）
 adb shell pm uninstall --user 0 com.miui.analytics           # 小米數據分析
 adb shell pm uninstall --user 0 com.miui.securityadd         # 安全附加元件
+# adb shell pm uninstall --user 0 com.miui.guardprovider   # 系統安全元件（已確認會影響檔案上傳，建議保留）
 adb shell pm uninstall --user 0 com.miui.yellowpage          # 黃頁
 adb shell pm uninstall --user 0 com.xiaomi.glgm              # 遊戲中心
 adb shell pm uninstall --user 0 com.xiaomi.smarthome         # 米家（Mi Home）
 
 # 掃一掃（系統保護，只能禁用）
-adb shell pm disable-user --user 0 com.xiaomi.scanner        # 掃一掃（有識別碼與行為統計）
+adb shell pm disable-user --user 0 com.xiaomi.scanner        # 掃一掃
 
 # Google 附加應用
 adb shell pm uninstall --user 0 com.google.android.apps.youtube.music  # YouTube Music
 adb shell pm uninstall --user 0 com.google.android.videos              # Google 影片／Movies
 
 echo ""
-echo "=== 卸載完成，檢查剩餘相關套件 ==="
+echo "=== 檢查剩餘相關套件 ==="
 adb shell pm list packages | grep -E "facebook|amazon|booking|agoda|linkedin|netflix|spotify|skydrive|wps|globalbrowser|global.bbs|global.shop|minusscreen|fashiongallery|miui.player|mipicks|msa|analytics|securityadd|guardprovider|yellowpage|glgm|smarthome|scanner|youtube.music|videos" || true
 
 echo ""
-echo "完成。上面如果還有列出套件，代表尚未成功移除。"
+echo "完成。"
