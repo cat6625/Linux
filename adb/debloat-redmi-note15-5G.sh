@@ -45,7 +45,6 @@ adb shell pm uninstall --user 0 com.xiaomi.mipicks           # 小米應用推�
 adb shell pm uninstall --user 0 com.miui.msa.global          # 小米廣告服務（MSA）
 adb shell pm uninstall --user 0 com.miui.analytics           # 小米數據分析
 adb shell pm uninstall --user 0 com.miui.securityadd         # 安全附加元件
-adb shell pm uninstall --user 0 com.miui.guardprovider       # 系統安全元件（爭議較大）
 adb shell pm uninstall --user 0 com.miui.yellowpage          # 黃頁
 adb shell pm uninstall --user 0 com.xiaomi.glgm              # 遊戲中心
 adb shell pm uninstall --user 0 com.xiaomi.smarthome         # 米家（Mi Home）
