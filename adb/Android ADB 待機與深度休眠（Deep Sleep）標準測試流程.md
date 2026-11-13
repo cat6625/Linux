@@ -188,3 +188,172 @@ case "$CHOICE" in
         ;;
 esac
 ```
+
+這支升級版的 Shell Script（adb_sleep_test.sh）新增了無線 ADB 智慧連線管理。
+執行時若沒有偵測到已連線的裝置，它會自動讀取上次紀錄的 IP，讓你直接按 Enter 一鍵連線，或是輸入新的 IP:Port 並自動幫你記憶下來，完全省去手動敲打 adb connect 的麻煩。
+
+>> 升級版腳本程式碼（儲存為adb_sleep_test.sh）
+   
+
+```js
+
+#!/bin/bash
+
+# 設定顏色輸出
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m' # 無顏色
+
+BASE_DIR="./adb_sleep_logs"
+mkdir -p "$BASE_DIR"
+IP_CONFIG_FILE="$BASE_DIR/.last_adb_ip"
+
+echo -e "${CYAN}=================================================${NC}"
+echo -e "${CYAN}   Android ADB 待機與深度休眠測試工具 (無線支援版)  ${NC}"
+echo -e "${CYAN}=================================================${NC}"
+
+# 1. 檢查 ADB 是否已安裝
+if ! command -v adb &> /dev/null; then
+    echo -e "${RED}[錯誤] 找不到 adb 指令！請確認已安裝 Android Platform Tools 並加入環境變數。${NC}"
+    exit 1
+fi
+
+# 2. 檢查裝置連線狀態（若無連線則啟動無線 ADB 輔助連線）
+DEVICE_COUNT=$(adb devices | grep -w "device" | wc -l)
+
+if [ "$DEVICE_COUNT" -eq 0 ]; then
+    echo -e "${YELLOW}[提示] 目前沒有已連線的 Android 裝置。${NC}"
+    
+    LAST_IP=""
+    if [ -f "$IP_CONFIG_FILE" ]; then
+        LAST_IP=$(cat "$IP_CONFIG_FILE")
+    fi
+
+    echo ""
+    if [ -n "$LAST_IP" ]; then
+        echo -e "偵測到上次使用的無線 ADB 位址：${GREEN}$LAST_IP${NC}"
+        read -p "請直接按 [Enter] 連線此位址，或輸入新的 IP:Port (直接輸入 q 離開): " INPUT_IP
+        TARGET_IP=${INPUT_IP:-$LAST_IP}
+    else
+        read -p "請輸入手機「無線偵錯」顯示的 IP:Port (例如 192.168.1.100:38451，輸入 q 離開): " TARGET_IP
+    fi
+
+    if [[ "$TARGET_IP" == "q" || "$TARGET_IP" == "Q" || -z "$TARGET_IP" ]]; then
+        echo "已取消連線並離開。"
+        exit 0
+    fi
+
+    echo -e "${YELLOW}>>> 正在嘗試連線至 $TARGET_IP ...${NC}"
+    CONNECT_OUT=$(adb connect "$TARGET_IP")
+    echo "$CONNECT_OUT"
+
+    # 再次確認連線是否成功
+    DEVICE_COUNT=$(adb devices | grep -w "device" | wc -l)
+    if [ "$DEVICE_COUNT" -eq 0 ]; then
+        echo -e "${RED}[錯誤] 無線連線失敗！${NC}"
+        echo "請檢查：1. 手機與電腦是否在同一個 Wi-Fi 下  2. 手機的無線偵錯 Port 是否已變更（重開無線偵錯會換 Port）。"
+        exit 1
+    else
+        # 連線成功，將位址寫入設定檔記憶
+        echo "$TARGET_IP" > "$IP_CONFIG_FILE"
+        echo -e "${GREEN}[✓] 無線 ADB 連線成功！已自動記憶此位址。${NC}"
+    fi
+elif [ "$DEVICE_COUNT" -gt 1 ]; then
+    echo -e "${YELLOW}[警告] 偵測到多台裝置，請確保只連接一台測試手機，否則指令可能會失敗。${NC}"
+else
+    echo -e "${GREEN}[✓] 已偵測到連線中的 Android 裝置。${NC}"
+fi
+
+# 3. 顯示功能選單
+echo ""
+echo "請選擇要執行的測試階段："
+echo -e "  ${GREEN}1)${NC} 階段一：測試前準備 (重置電池統計 + 匯出基準點)"
+echo -e "  ${GREEN}2)${NC} 階段二：測試結束   (匯出完整報告 + 自動產生關鍵摘要)"
+echo -e "  ${GREEN}d)${NC} 斷開所有無線 ADB 連線 (adb disconnect)"
+echo -e "  ${GREEN}q)${NC} 離開"
+echo ""
+read -p "請輸入選項 [1/2/d/q]: " CHOICE
+
+# 取得目前時間戳記 (格式：YYYYMMDD_HHMMSS)
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+case "$CHOICE" in
+    1)
+        echo ""
+        echo -e "${YELLOW}>>> 正在執行階段一：測試前準備...${NC}"
+        
+        # 重置 batterystats
+        adb shell dumpsys batterystats --reset > /dev/null
+        echo -e "${GREEN}[✓] 已重置電池統計數據 (batterystats --reset)${NC}"
+        
+        # 匯出測試前 deviceidle 基準點
+        BEFORE_FILE="$BASE_DIR/idle_before_${TIMESTAMP}.txt"
+        adb shell dumpsys deviceidle > "$BEFORE_FILE"
+        echo -e "${GREEN}[✓] 已匯出測試前 Doze 基準紀錄：$BEFORE_FILE${NC}"
+        
+        echo ""
+        echo -e "${CYAN}【下一步操作建議】${NC}"
+        echo "1. 請直接按下手機電源鍵關閉螢幕（無需拔線）。"
+        echo "2. 將手機平放在桌上不要移動，靜置至少 2～4 小時（或一整晚）。"
+        echo "3. 靜置結束後，點亮螢幕並立刻再次執行此腳本選擇「2」。"
+        ;;
+        
+    2)
+        echo ""
+        echo -e "${YELLOW}>>> 正在執行階段二：收集與分析測試數據...${NC}"
+        
+        # 為本次測試建立專屬時間戳記資料夾
+        REPORT_DIR="$BASE_DIR/Report_${TIMESTAMP}"
+        mkdir -p "$REPORT_DIR"
+        
+        BATTERY_FILE="$REPORT_DIR/battery_after.txt"
+        IDLE_FILE="$REPORT_DIR/idle_after.txt"
+        SUMMARY_FILE="$REPORT_DIR/SUMMARY_重點摘要.txt"
+        
+        # 匯出完整日誌
+        adb shell dumpsys batterystats > "$BATTERY_FILE"
+        echo -e "${GREEN}[✓] 已匯出完整電池統計：$BATTERY_FILE${NC}"
+        
+        adb shell dumpsys deviceidle > "$IDLE_FILE"
+        echo -e "${GREEN}[✓] 已匯出完整 Doze 紀錄：$IDLE_FILE${NC}"
+        
+        # 自動萃取關鍵指標到 SUMMARY_FILE
+        echo "==========================================" > "$SUMMARY_FILE"
+        echo "  Android 待機休眠測試 - 自動重點摘要" >> "$SUMMARY_FILE"
+        echo "  匯出時間：$(date '+%Y-%m-%d %H:%M:%S')" >> "$SUMMARY_FILE"
+        echo "==========================================" >> "$SUMMARY_FILE"
+        
+        echo -e "\n【1. Deep Sleep 總時間與螢幕關閉掉電率】" >> "$SUMMARY_FILE"
+        grep -iE "Deep sleep time|Screen off discharge rate" "$BATTERY_FILE" >> "$SUMMARY_FILE"
+        
+        echo -e "\n【2. 前 15 名部分喚醒鎖 (All partial wake locks)】" >> "$SUMMARY_FILE"
+        grep -A 15 "All partial wake locks:" "$BATTERY_FILE" >> "$SUMMARY_FILE"
+        
+        echo -e "\n【3. 最近 25 筆 Doze 狀態變化 (Idling history)】" >> "$SUMMARY_FILE"
+        grep -A 25 "Idling history:" "$IDLE_FILE" | tail -n 25 >> "$SUMMARY_FILE"
+        
+        echo -e "${GREEN}[✓] 已自動產生重點摘要檔：$SUMMARY_FILE${NC}"
+        echo ""
+        echo -e "${CYAN}--- 摘要預覽 ---${NC}"
+        cat "$SUMMARY_FILE"
+        echo -e "${CYAN}----------------${NC}"
+        ;;
+
+    d|D)
+        adb disconnect
+        echo -e "${GREEN}[✓] 已斷開所有無線 ADB 連線。${NC}"
+        ;;
+        
+    q|Q)
+        echo "已取消並離開。"
+        exit 0
+        ;;
+        
+    *)
+        echo -e "${RED}[錯誤] 無效的選項，請重新執行腳本。${NC}"
+        exit 1
+        ;;
+esac
+```
