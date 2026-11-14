@@ -18,6 +18,8 @@
 > 10. [耗電量怎麼算](#10-耗電量怎麼算)
 > 11. [記錄表](#11-記錄表)
 > 12. [附錄:向 AI 提問的範本與常見誤讀](#12-附錄向-ai-提問的範本與常見誤讀)
+> 13. [這套方法能回答什麼、不能回答什麼](#13-這套方法能回答什麼不能回答什麼)
+> 14. [給 AI 分析:先過濾,不要丟完整檔](#14-給-ai-分析先過濾不要丟完整檔)
 
 ---
 
@@ -232,7 +234,7 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 - C 重置時手機**已經在 deep idle**,所以不能比較「進入時間」;但它顯示 deep idle 的維護窗口正常指數放大:1h → 2h → 4h(`deviceidle` 紀錄),沒有 `active=1000:"alarm"` 的中止。
 - **還沒分離的部分:** 是 adb 連線本身(host 的連線活動),還是電腦醒著時的區網流量(桌面 / mDNS 等),目前資料分不出來。
 - **6h 那次不能用同一個理由解釋。** 那次電腦 99% 在睡眠,但仍有每約 16 秒的 netd 喚醒與較高的 WiFi 估算耗電,原因還沒找到(那次 FMM 是開的,可能相關,但未驗證)。
-- **D(6h07m)的結構**:重置時手機已在第 4 段 deep idle;0h38m01 維護窗口後 3 分鐘進入下一段 deep idle,持續 3h44m36s,在 4h25m41 被 `active=1000:"alarm"` 中止(沒有撐到 6 小時的上限),接著約 1 小時 light idle,再回到 deep idle。電腦全程睡眠時,deep idle 占比是各次測試最高(82.2%)。
+- **D(6h07m)的結構**:重置時手機已在第 4 段 deep idle;0h38m01 維護窗口後 3 分鐘進入下一段 deep idle,持續 3h44m36s,在 4h25m41 被 `active=1000:"alarm"` 中止(沒有撐到 6 小時的上限)。**3 分鐘後(4h28m42)就有一次 FMM 的 `defaultScanStartTimer` 鬧鐘**:即使尋找手機已「關閉」,這次 6 小時仍觸發了 1 次。接著重新計時,4h28m42 + 31 分 + 31 分 = 5h30m43,deep idle 於 5h30m53 恢復,和先前的規律完全一致。電腦全程睡眠時,deep idle 占比是各次測試最高(82.2%)。
 - **D 的耗電分布**(用電池 `cc` 拆):0h38–0h41 的維護窗口約 18 mAh(約 3 分鐘內,伴隨 `cellular_high_tx_power`);deep idle 約 9.8 mAh/h(`Device deep doze discharge` 49.5 mAh / 5h02m);light idle 約 25 mAh/h(27.0 mAh / 1h04m)。所以**長時間 deep idle 之後的維護窗口會有一次突發耗電,light idle 比 deep idle 貴**;light idle 比例低是好事,不是壞事。
 - **D 與 One UI 6h(FMM 開,00:10–06:13)是同一段夜間、電腦也都在睡眠**,可以直接比:`Discharge` 94.5 對 63.0 mAh,但 deep idle 占比是 82.2% 對 19.3%。**不能因此說「FMM 關比較省電」或「比較耗電」**:One UI 6h 的模型估算加總(約 116 mAh)與它的 `Discharge` 不一致,兩邊還差了預設桌面與 FMM 兩個變因。FMM 關閉確定的好處是**大幅縮短進入 deep idle 的時間**。
 
@@ -341,6 +343,8 @@ Samsung 的 `min_time_to_alarm=1h`。據 AOSP 的行為,Doze 推進下一階段�
 | `Discharge` | 63.0 mAh | 18.0 mAh(誤差 ±4.5) |
 
 > 「放棄進入」的機制是依 AOSP 行為推論,日誌沒有直接記錄,但時間吻合得很完整。
+>
+> **注意:「整個關閉」不等於 FMM 鬧鐘完全消失。** FMM 關閉後的累計約 13 小時測試中,仍觀察到 1 次 `defaultScanStartTimer`(第 5 組 6h07m 的 4h28m42),並造成同樣的「中止 → 約 62 分鐘後才回到 deep idle」。頻率比開啟時低很多(開啟時約每 3 小時 1 次),所以要用摘要腳本(第 14 節)檢查每次測試有沒有出現。
 
 ### 處理方式
 
@@ -390,7 +394,10 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 
   例如 `cc:2493000` → `cc:2430000`,差 63000 = 63.0 mAh。
 - `Estimated power use` 各項加總是**模型估算**,可能與實際差很多(6h 那次加總約 116 mAh,實際 63.0 mAh),只看占比。
-- 電量百分比解析度更粗(1% 約 60 mAh),短時間測試不要用。
+- **電量百分比不是線性、也不是固定的 mAh。** 本機實測:`level` 每掉 1% 的兩次跳變之間,電池 `cc` 只差約 **45–47 mAh**(例如 02:49:43 → 06:13:50 為 45 mAh;42% → 40% 共 94.5 mAh;47 → 44% 共約 3 級,每級約 45 mAh),而標示容量 6000 mAh 的 1% 應是 60 mAh。可能是電池老化、容量估計值(`Estimated battery capacity` 5830)不準,或百分比對電壓曲線的對應並非線性,這裡無法判斷原因。重點是:
+  - 不要用「百分比 / 小時」算耗電,短時間測試(< 2 小時)百分比通常只變 0–1 級,毫無意義。
+  - 同一個 `mAh/h` 在不同狀態差很大:deep idle 約 5–10、light idle 約 20–25、維護窗口突發可達數百(例如 3 分鐘內 18 mAh),所以平均值會隨測試長度與狀態比例改變。
+  - 請用 `Discharge` / `cc` 的 mAh,並看分段曲線(摘要腳本會輸出)。
 - 每個條件至少測 2 小時並重複 2 次。
 
 ---
@@ -439,3 +446,94 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「UID 1000 sensors 5h25m 代表感測器一直開著」 | 那是多種感測器使用時間的加總 |
 | 「限制 Google Play 服務背景可減少干擾」 | GMS 只占約 6%,而 LINE、Telegram、Gmail 的推播都靠它,不建議 |
 | 「`findmydevice.spot` 是 Samsung FMM」 | 那是 Google 的「尋找我的裝置」(在 GMS 內),與 Samsung FMM 是不同服務 |
+
+---
+
+## 13. 這套方法能回答什麼、不能回答什麼
+
+### 原本的問題與演變
+
+最初的問題是「換桌面後,會不會省記憶體、省電?」,實驗設計是 One UI Home 對 Lawnchair 各測 2 小時。實際做下來發現變因太多(尋找我的手機的鬧鐘、adb 與電腦狀態、亮屏秒數、Play 商店下載、網路環境),**無法準確比較兩個 launcher**。於是問題改成:**換桌面後系統是否正常?如果不正常,能不能找出原因?**
+
+### 能回答
+
+| 問題 | 能否 | 依據 |
+|---|---|---|
+| 能不能進入 deep idle、何時進入、占比多少 | ✓ | `device_idle=full`、`Device full idling` |
+| 為什麼延遲或被打斷 | ✓ | `deep.progression`、`active=1000:"alarm"`、會喚醒手機的鬧鐘擁有者(例如 FMM) |
+| 待機時哪些 App / 服務在喚醒手機 | ✓(相對排名) | `wakeupap`、`Wakeup reason`;注意 `wlan_mbox_irq` 多數無法歸屬 |
+| 某個 App(含 launcher)待機時有沒有異常 | ✓ | UID 耗電、wakelock、alarm、job、CPU、網路 |
+| 待機耗電是否異常、異常出現在哪一段 | ✓ | 用 `cc` 分段看 mAh/h,再和外部事件對時間(例如電腦醒著時約 52 mAh/h) |
+| 測試方法本身有沒有影響結果 | ✓ | 電腦睡眠 / 喚醒紀錄對時間 |
+
+### 不能回答
+
+| 問題 | 原因 |
+|---|---|
+| One UI Home 與 Lawnchair **哪個比較省電** | 待機時兩者的 UID 耗電都只有 0.01–0.09 mAh(2–6 小時),不到電池計數器解析度(4.5 mAh)的 1/50;測試之間的雜訊可達數十 mAh。launcher 的耗電主要發生在**亮屏使用**,這套方法沒有測 |
+| **記憶體**有沒有省 | 完全沒測 |
+| **日常使用**(亮屏)是否正常 | 只測了螢幕關閉的待機 |
+| 精確的 mAh/h | 解析度 ±4.5 mAh,短時間測試不夠 |
+| 長期趨勢 | 每個條件只測 1–2 次 |
+| 因果(而不只是相關) | 例如「電腦醒著 + adb 連線」只是高度相關,還沒分離 |
+
+### 這支手機的待機是否正常?
+
+在「FMM 關、電腦睡眠、Lawnchair 預設」的測試下:
+
+- deep idle 進得去,約 1 小時內(FMM 關)或維持 82%(6h07m);Lawnchair 本身沒有任何喚醒紀錄。
+- 沒有看到 App 長時間持有 wakelock(最長是 Galaxy Store 的 `PollJobService`,2 分 7 秒);沒有 kernel wakelock 風暴(除了「電腦醒著並連線」的測試干擾)。
+- 待機耗電約 5–15 mAh/h(含維護窗口突發),以實測每 1% 約 45 mAh 換算約 0.1–0.35%/小時。這是單一樣本,我沒有其他手機的基準可以比,所以只能說**沒有看到明顯異常**。
+- 唯一的大異常(約 52 mAh/h)是測試方法造成的(電腦醒著並連線),不是手機日常。
+
+### 要回答原本的問題,需要另外做什麼
+
+**記憶體(省不省):**
+
+```bash
+# 啟動的 launcher 進程 PSS / RSS(請在相同使用情境下量,重複 3 次)
+adb shell dumpsys meminfo ch.deletescape.lawnchair.plah | head -40
+adb shell dumpsys meminfo com.sec.android.app.launcher | head -40
+# 系統整體(Free RAM 不重要,Android 會把空閒記憶體拿來當快取)
+adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
+```
+
+比較的是**launcher 進程自己的 PSS**,不是系統的可用記憶體。三個 launcher 同時常駐時各自都會佔用記憶體,要一起列出。
+
+**日常耗電(亮屏使用):**
+
+1. 早上 `batterystats --reset`,晚上匯出一整天;用 `Screen on discharge ÷ 亮屏時數` 與 launcher UID 的耗電、`Top for` 時間比較。
+2. 兩個 launcher 輪流用 ABAB 各 2–3 天,盡量讓使用習慣相同,可降低「某一天特別忙」的影響。
+3. 尋找我的手機狀態、adb 狀態每天都要一致,並且全程斷開 adb。
+
+---
+
+## 14. 給 AI 分析:先過濾,不要丟完整檔
+
+完整的 `dumpsys batterystats` 約 600 KB–1 MB,絕大部分是與問題無關的清單(白名單、每個 UID 的細節等)。實務上直接丟整份給 AI 常得到離題或錯誤的回答;**先過濾出關鍵欄位,回答品質明顯較好**(使用者的經驗:Gemini 需要過濾後的關鍵字檔才能回答得比較好)。
+
+### 方法 1:用摘要腳本(推薦)
+
+`doze_summary.py`(與本文件放在一起)會把完整檔濃縮成約 100 行,包含:時長、放電、light / deep idle、第一次進入 deep idle、`deep.progression` 與被鬧鐘中止的時間、FMM 鬧鐘、**分段放電曲線**、CPU 清醒區段、喚醒來源、kernel wakelock、耗電前幾名 UID、指定 UID(例如 launcher)的細節。
+
+```bash
+python3 doze_summary.py run_full.txt
+python3 doze_summary.py run_full.txt --uids u0a1361,u0a125                 # 指定 launcher UID
+python3 doze_summary.py run_full.txt --suspend suspend.txt                 # 對照電腦睡眠比例
+python3 doze_summary.py run_full.txt --deviceidle run_deviceidle.txt       # 附上 Doze 設定與最後狀態
+```
+
+### 方法 2:手動 grep 關鍵字
+
+```bash
+grep -E "Time on battery|Discharge|doze discharge|Device (light|full) idling|Idle mode|Screen on|Wifi kernel active|Total partial wakelock" run_full.txt
+grep -E "Wakeup reason|Kernel Wake lock" run_full.txt | head -20
+grep -E "device_idle=|DeviceIdleController\.(deep|light)|active=1000:\"alarm\"|defaultScanStartTimer|charge=" run_history.txt
+```
+
+### 提問時一併附上
+
+- 機型 / 系統版本、**測試條件**(預設桌面、尋找我的手機狀態、adb 與電腦狀態、有沒有亮屏、測試時長)。
+- 摘要(或過濾後的檔案),**不要附原始大檔**,除非 AI 要求。
+- 你要回答的問題,以及「請區分資料證據與推測」。
+- 提醒 AI 避開常見誤讀(見第 12 節):電量百分比不是線性、light idle 比例要和 deep idle 合起來看、`Discharge` 以電池計數器為準。
