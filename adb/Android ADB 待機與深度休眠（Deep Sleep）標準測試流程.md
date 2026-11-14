@@ -47,6 +47,7 @@
 | 3 | 1h37m(One UI 預設) | 關閉無線偵錯、FMM 開 | 重置前已在 deep idle,無法比較 | 99.0% | 22.5 mAh |
 | 3 | 3h10m(Lawnchair 預設)| 關閉無線偵錯、FMM 開;期間 Play 商店下載 20 MB | 3h01m01 | 4.6% | 63.0 mAh(約 19.9 mAh/h) |
 | 4 | 2h17m(Lawnchair 預設)| 關閉無線偵錯、**FMM 整個關閉** | **0h58m13** | **43.7%** | 18.0 mAh(約 7.9 mAh/h) |
+| 5 | 6h07m(Lawnchair 預設)| FMM 關、無線偵錯**開**、Ubuntu 全程睡眠 | 重置時已在 deep idle | **82.2%**(最長一段 3h44m) | 94.5 mAh(約 15.4 mAh/h) |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -213,6 +214,7 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 | A. 2h17m | 已斷開 | — | 第一次 deep idle 0h58m13;uptime 約 10%;約 7.9 mAh/h |
 | B. 約 2h21m 區段(統計未重置,與 A 相減得出) | **開** | **約 18:22 起持續使用**(15 分鐘無操作才自動睡眠) | 前 36 分鐘正常(約 8 mAh/h);3h29m(約 18:22:47)起 CPU 清醒約 98%、WiFi 驅動 wakelock 持續、suspend 被中止、**約 52 mAh/h**,持續至少 1h09m;deep idle 仍在 |
 | C. 2h38m | **開** | **重置後立刻 `systemctl suspend`** | deep idle 100%、uptime 6.3%、無異常;31.5 mAh(約 11.9 mAh/h,±4.5 mAh);`wlan_mbox_irq` 562 次(約 212 次/h) |
+| D. 6h07m | **開** | **重置後立刻睡眠,整段約 100% 睡眠**(`journalctl`:00:36:55 → 06:43:12) | deep idle **82.2%**、light 17.5%、uptime 4.6%;無持續異常;94.5 mAh(約 15.4 mAh/h);`wlan_mbox_irq` 772 次(約 126 次/h);WiFi kernel active 60.2% |
 
 - **用 Ubuntu 的睡眠紀錄(`journalctl`)對時間,相關性很強。** 電腦 17:26:20 睡眠、**18:22:40 喚醒**,而手機的異常從 **18:22:47** 開始,只差 7 秒;電腦睡眠的時段手機都很安靜。同樣的規律在兩段獨立的時間窗各出現一次:
 
@@ -230,6 +232,9 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 - C 重置時手機**已經在 deep idle**,所以不能比較「進入時間」;但它顯示 deep idle 的維護窗口正常指數放大:1h → 2h → 4h(`deviceidle` 紀錄),沒有 `active=1000:"alarm"` 的中止。
 - **還沒分離的部分:** 是 adb 連線本身(host 的連線活動),還是電腦醒著時的區網流量(桌面 / mDNS 等),目前資料分不出來。
 - **6h 那次不能用同一個理由解釋。** 那次電腦 99% 在睡眠,但仍有每約 16 秒的 netd 喚醒與較高的 WiFi 估算耗電,原因還沒找到(那次 FMM 是開的,可能相關,但未驗證)。
+- **D(6h07m)的結構**:重置時手機已在第 4 段 deep idle;0h38m01 維護窗口後 3 分鐘進入下一段 deep idle,持續 3h44m36s,在 4h25m41 被 `active=1000:"alarm"` 中止(沒有撐到 6 小時的上限),接著約 1 小時 light idle,再回到 deep idle。電腦全程睡眠時,deep idle 占比是各次測試最高(82.2%)。
+- **D 的耗電分布**(用電池 `cc` 拆):0h38–0h41 的維護窗口約 18 mAh(約 3 分鐘內,伴隨 `cellular_high_tx_power`);deep idle 約 9.8 mAh/h(`Device deep doze discharge` 49.5 mAh / 5h02m);light idle 約 25 mAh/h(27.0 mAh / 1h04m)。所以**長時間 deep idle 之後的維護窗口會有一次突發耗電,light idle 比 deep idle 貴**;light idle 比例低是好事,不是壞事。
+- **D 與 One UI 6h(FMM 開,00:10–06:13)是同一段夜間、電腦也都在睡眠**,可以直接比:`Discharge` 94.5 對 63.0 mAh,但 deep idle 占比是 82.2% 對 19.3%。**不能因此說「FMM 關比較省電」或「比較耗電」**:One UI 6h 的模型估算加總(約 116 mAh)與它的 `Discharge` 不一致,兩邊還差了預設桌面與 FMM 兩個變因。FMM 關閉確定的好處是**大幅縮短進入 deep idle 的時間**。
 
 ### 可能的影響(理論)
 
