@@ -87,7 +87,7 @@ adb shell dumpsys deviceidle get deep        # 查詢目前 deep 狀態
 ## 六、常見陷阱(我們實際踩過的)
 
 - **預設桌面和以為的不同。** 一定要用 `role get-role-holders` 在測前和測後各驗一次;`history` 裡的 `top=` 事件(開頭和結尾拿起手機時)也能佐證。
-- **`Discharge` 欄位解析度很粗**(約 1% 一階,6000 mAh 約 60 mAh),短時間測試不要拿它算每小時耗電,改看 `Estimated power use` 的各項加總,並且重複測。
+- **「Discharge 以 cc 為準,精度約 ±4.5 mAh;Estimated power use 加總是模型估算,只用來看各項占比」**(約 1% 一階,6000 mAh 約 60 mAh),短時間測試不要拿它算每小時耗電,改看 `Estimated power use` 的各項加總,並且重複測。
 - **重置時手機已在 deep idle。** 這樣量不到「進入時間」。要先亮屏一次再鎖屏開始。
 - **忘記 `unforce`。** 強制狀態會一直保留到還原或重開機。
 - **亮屏時間要一致。** 過程中只要亮屏,Doze 狀態機就會重來。
