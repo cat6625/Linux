@@ -12,7 +12,7 @@
 ## 二、測試前檢查
 
 ```
-adb shell dumpsys battery | grep -E "AC powered|USB powered|Wireless powered|level"   # 確認沒在充電
+adb shell dumpsys battery | grep -E "^  (AC|USB|Wireless) powered|^  level"   # 確認沒在充電
 adb shell dumpsys deviceidle | grep -E "mLightEnabled|mDeepEnabled|mForceIdle"       # 兩者應為 true,ForceIdle 應為 false
 adb shell cmd role get-role-holders android.app.role.HOME                             # 確認預設桌面(測前、測後都記錄)
 adb shell dumpsys alarm | grep -i -A2 "next alarm clock"                              # 空白=沒有鬧鐘,不會被 min_time_to_alarm 擋住
