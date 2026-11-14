@@ -39,7 +39,7 @@
    ```
 3. **快速查看核心 Deep Sleep 總時間（可選）**：
    ```bash
-   adb shell dumpsys batterystats | grep -i "Deep sleep time"
+   adb shell dumpsys batterystats | grep -iE "deep sleep|uptime|realtime"
    ```
 
 ---
