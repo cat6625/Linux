@@ -41,10 +41,10 @@ adb shell dumpsys battery >  m14_battery-$(date +%Y%m%d_%H%M%S).txt
 
 # 摘要處理
 ```js
-python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt  |  tee summary-lawnchair.txt
-python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --uids u0a1361,u0a125 |  tee -a summary-lawnchair.txt
-python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --suspend suspend.txt  |  tee -a summary-lawnchair.txt   # 對照電腦的睡眠時間  
-python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --deviceidle fmm_off_adb_on_deviceidle-lawnchair.txt |  tee -a summary-lawnchair.txt
+python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt  |  tee summary-lawnchair.txt > /dev/null
+python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --uids u0a1361,u0a125 |  tee -a summary-lawnchair.txt > /dev/null
+python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --suspend suspend.txt  |  tee -a summary-lawnchair.txt > /dev/null   # 對照電腦的睡眠時間  
+python3 doze_summary.py fmm_off_adb_on_full-lawnchair.txt --deviceidle fmm_off_adb_on_deviceidle-lawnchair.txt |  tee -a summary-lawnchair.txt > /dev/null
 ```
 
 
@@ -88,10 +88,10 @@ adb shell dumpsys battery >  m14_battery-$(date +%Y%m%d_%H%M%S).txt
 
 # 摘要處理
 ```js
-python3 doze_summary.py fmm_off_adb_on_full-oneui.txt  |  tee summary-oneui.txt
-python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --uids u0a1361,u0a125 |  tee -a summary-oneui.txt
-python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --suspend suspend.txt  |  tee -a summary-oneui.txt   # 對照電腦的睡眠時間  
-python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --deviceidle fmm_off_adb_on_deviceidle-oneui.txt |  tee -a summary-oneui.txt
+python3 doze_summary.py fmm_off_adb_on_full-oneui.txt  |  tee summary-oneui.txt > /dev/null
+python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --uids u0a1361,u0a125 |  tee -a summary-oneui.txt > /dev/null
+python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --suspend suspend.txt  |  tee -a summary-oneui.txt > /dev/null   # 對照電腦的睡眠時間  
+python3 doze_summary.py fmm_off_adb_on_full-oneui.txt --deviceidle fmm_off_adb_on_deviceidle-oneui.txt |  tee -a summary-oneui.txt > /dev/null
 ```
 
 ---
