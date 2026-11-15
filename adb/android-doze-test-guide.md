@@ -116,6 +116,10 @@ adb shell dumpsys alarm | grep -i -A2 "next alarm clock"
 adb shell dumpsys alarm | grep -A8 "Next wake from idle"
 #   預期:Next alarm clock 底下為空白
 
+# 4b. Samsung:FMM 的 defaultScanStartTimer 排在什麼時候(即使「尋找我的手機」已關閉,仍可能已排定)
+adb shell dumpsys alarm | grep -B2 -A6 "defaultScanStartTimer"
+#   輸出格式依系統版本不同;找 when / expectedWhenElapsed 之類的欄位。若它在開始後 1 小時內會響,Doze 會放棄進入 deep idle
+
 # 5. 沒有 App 長期持有 wakelock
 adb shell dumpsys power | grep -i -A8 "Wake Locks"
 
@@ -369,6 +373,9 @@ Samsung 的 `min_time_to_alarm=1h`。據 AOSP 的行為,Doze 推進下一階段�
    ```
    底下應為空白(只顯示 `NNN pending alarms`)。
 3. **測完請恢復。** 這是防盜與找回手機的功能,關閉期間手機遺失將無法被找到。
+   - **開始測試前確認下一次 FMM 鬧鐘的時間**(第 3 節的 4b),最好在它剛響完之後才開始。FMM 關閉後的兩次鬧鐘(11-15 05:05:31 與 21:12:29)相隔約 16 小時,所以剛響完後開始,最有機會一路順利進入 deep idle;這只是兩次觀察,不是保證。
+   - **不要用 `pm disable-user` 停用 `com.samsung.android.fmm`,也不要碰 Knox「裝置服務」。** 網路上有人說停用後系統會在一分鐘內自動重新啟用、或停用「裝置服務」會觸發 Knox 鎖定,這些我沒有驗證,但風險不值得;本專案只驗證過「在設定裡關閉」。
+   - **飛航模式 / 關 WiFi 不會取消 FMM 鬧鐘。** 擋住 deep idle 的是「鬧鐘幾點響」,鬧鐘是本機計時器,與網路無關;而且飛航 + 關 WiFi 就無法使用無線 adb。
 4. 進階(只在測試期間):`adb shell am force-stop com.samsung.android.fmm`(可能被系統重啟),或 `pm disable-user --user 0 com.samsung.android.fmm`(用 `pm enable com.samsung.android.fmm` 還原)。
 
 ### 還沒解決:deep idle 只有 1 小時
@@ -473,6 +480,12 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「Ubuntu 15 分鐘自動 suspend 會讓 adb 連線斷開、保活、重連,影響這組數據」 | 這次是重置後立刻手動 suspend(整段 6h06m 睡眠),15 分鐘自動睡眠與這組數據無關 |
 | 「0h39–0h41 的突發是行動網路同步 / 訊號交遞」 | 同時段是 deep.maintenance 與大量 job(Gmail、Play 商店、Google App),`cellular_high_tx_power` 只是同時出現的旗標;是不是行動網路造成,需要飛航模式(僅開 Wi-Fi)的對照才能確認 |
 | 「只要被解鎖或有鬧鐘,重新進入 deep idle 並不快」 | 放下手機後約 1 小時回到 deep idle 正是 Samsung 設定(`inactive_to` 30 分 + `idle_after_inactive_to` 30 分)的預期值 |
+| 「device_idle 轉換頻繁在 light ↔ off 之間切換,多次被鬧鐘中斷」 | `off` 多半是 light idle 的維護窗口(約每 15–30 分鐘一次);整段 2h25m 只有 1 次因鬧鐘中止(0h39m24)。要看 `active=1000:"alarm"` 才是被鬧鐘拉回 |
+| 「`deep.progression` 只出現一次」 | One UI 那次有三次:0h08m24、0h39m24(這兩個相隔 31 分,是完整的兩步,但下一個鬧鐘在 57.5 分鐘後,被放棄)、2h07m54(FMM 鬧鐘後重新計時的第一步,第二步預計 2h38m,但測試在 2h10m 結束) |
+| 「最後 10 分鐘耗電異常升高」 | 那是測試操作造成:為了讓 adb 重新連線而亮屏手機(亮屏 31 秒),電腦同時醒著;它不是手機待機的異常,要排除在有效區間之外 |
+| 「FMM 的離線搜尋 BLE 掃描陷入高頻率無限迴圈」 | 資料顯示 FMM 鬧鐘頻率並不高:FMM 開約每 3 小時 1 次;關閉後約 15 小時內 2 次。它的影響是「事先排定的鬧鐘」造成 Doze 放棄進入 deep idle,不是高頻喚醒 |
+| 「飛航模式可以阻斷 FMM 的影響」 | 見第 8 節:鬧鐘是本機計時器,飛航模式取消不了;且無法使用無線 adb |
+| 「netstats 的 GMS 3906 次 openSession、vending 幾十 MB,是這次待機的網路活動」 | `netstats detail` 是**開機至今的累計**,不是測試區間;測試區間的 WiFi 流量以 batterystats 為準(這次收 1.71 MB)。netstats 的 `Recent poll events`(PERIODIC)時間與 Doze 事件吻合(20:14:58 就是中止點、21:43:29 就是 progression),它們是結果,不是原因 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
 | 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 
