@@ -62,6 +62,7 @@
 | 3 | 3h10m(Lawnchair 預設)| 關閉無線偵錯、FMM 開;期間 Play 商店下載 20 MB | 3h01m01 | 4.6% | 63.0 mAh(約 19.9 mAh/h) |
 | 4 | 2h17m(Lawnchair 預設)| 關閉無線偵錯、**FMM 整個關閉** | **0h58m13** | **43.7%** | 18.0 mAh(約 7.9 mAh/h) |
 | 5 | 6h07m(Lawnchair 預設)| FMM 關、無線偵錯**開**、Ubuntu 全程睡眠 | 重置時已在 deep idle | **82.2%**(最長一段 3h44m) | 94.5 mAh(約 15.4 mAh/h) |
+| 6 | 2h25m(**One UI Home** 預設)| FMM 關、無線偵錯開、Ubuntu 睡眠 98%、user 10 的 Google App 已停用、電量 84% | **未進入**(有效區間 2h10m) | 0%(light idle 96.9%) | 13.5 mAh;其中 21:45 起為了讓 adb 重連而亮屏的 9 分鐘占 9.0 mAh,有效區間約 4.0–4.5 mAh |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -70,6 +71,7 @@
 2. **adb 不是延遲進入的主因。** 6h(adb 全程連線)與 3h10m(關閉無線偵錯)都約 3 小時才進入。無線偵錯開著、電腦睡眠時,也沒有看到額外耗電;約 52 mAh/h 的持續高耗電只出現在「電腦醒著並連線」的期間(用 `journalctl` 對時間,見[第 5 節](#5-要不要斷開無線偵錯))。
 3. **主因是 Samsung「尋找我的手機」(FMM)的週期鬧鐘**,加上 Samsung 的 `min_time_to_alarm=1h`。整個關閉後,第一次進入 deep idle 縮短到 58 分鐘(理論值:30 + 30 分 + 感測)。見[第 8 節](#8-案例samsung尋找我的手機擋住-deep-idle)。
 4. **初測(1)** 的 Termux 影響很小,但**亮屏會重設 Doze 計時**,而且兩邊亮屏時間不同(54 秒對 19 秒),加上 ssidwidget 在背景、WiFi 活動不同,94.5 對 13.5 mAh 的差距不能歸因到 launcher。
+6. **One UI Home 預設(第 6 組)沒有發現異常。** deep idle 沒進入,原因和之前一樣:0h39m24(20:14:58)被 `active=1000:"alarm"` 中止,57.5 分鐘後(1h36m55)出現 FMM 鬧鐘;鬧鐘後 31 分的第一個 `deep.progression` 在 2h07m54,第二個預計在 2h38m,但測試在 2h10m 因亮屏結束。launcher 本身:One UI Home `u0a125` CPU 約 2.7 秒、Lawnchair(背景)約 1.3 秒,都不在耗電前列。
 5. **WiFi kernel active 約 53–63% 與 adb 無關。** 有 adb(59.2%)、無 adb(53.1%、54.2%)、無 adb 且 FMM 關(63.2%)都高。
 
 ---
@@ -356,7 +358,7 @@ Samsung 的 `min_time_to_alarm=1h`。據 AOSP 的行為,Doze 推進下一階段�
 
 > 「放棄進入」的機制是依 AOSP 行為推論,日誌沒有直接記錄,但時間吻合得很完整。
 >
-> **注意:「整個關閉」不等於 FMM 鬧鐘完全消失。** FMM 關閉後的累計約 13 小時測試中,仍觀察到 1 次 `defaultScanStartTimer`(第 5 組 6h07m 的 4h28m42),並造成同樣的「中止 → 約 62 分鐘後才回到 deep idle」。頻率比開啟時低很多(開啟時約每 3 小時 1 次),所以要用摘要腳本(第 14 節)檢查每次測試有沒有出現。
+> **注意:「整個關閉」不等於 FMM 鬧鐘完全消失。** FMM 關閉後的累計約 15 小時測試中,觀察到 2 次 `defaultScanStartTimer`(第 5 組 6h07m 的 4h28m42、第 6 組 One UI 的 1h36m55),並造成同樣的「中止 → 約 62 分鐘後才回到 deep idle」。另外,鬧鐘是**事先排定**的:One UI 那次在 0h39m24 就因為「57.5 分鐘後有 FMM 鬧鐘」而中止,不是等鬧鐘響了才發生。頻率比開啟時低很多(開啟時約每 3 小時 1 次),所以要用摘要腳本(第 14 節)檢查每次測試有沒有出現。
 
 ### 處理方式
 
@@ -391,6 +393,9 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
 - **Termux 影響很小。** 實測前景服務 2 小時耗電不到 0.03 mAh、無 wakelock;adb 走 localhost 不用 WiFi 硬體。
+- **為了讓 adb 重新連線而亮屏手機,要排除在有效區間之外。** 電腦睡眠醒來後 adb 可能 `offline` / `No route to host`,需要亮屏手機才連得上。這幾分鐘(含電腦同時醒著)耗電很高(第 6 組:9 分鐘 9.0 mAh,約 58 mAh/h),摘要腳本會標出「⚠ 測試期間有亮屏」與第一次亮屏時間,請把有效待機區間算到那裡為止。
+- **剛充飽、高電量(例如 84–85%)時的 `cc` 不可靠。** 電池保護模式(上限 80%)讓手機常停在 85%,電池變化 log 的 `cc` 可以連續數小時不變;fuel gauge 在高電量區的變化也很遲鈍(第 6 組 2h10m 只掉 0.1% ≈ 4.5 mAh)。**要比較的測試請在相近的電量區間進行(例如 40–60%)。**
+- **任何條件的改動都會讓前後測試不可比。** 例如第 6 組先執行了 `pm disable-user --user 10 com.google.android.googlequicksearchbox`(停用第二使用者的 Google App),而之前的測試沒有。
 - **無線偵錯重開後埠號會變。** 要看手機畫面;匯出要趕快。
 
 ---
@@ -524,6 +529,20 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 
 比較的是**launcher 進程自己的 PSS**,不是系統的可用記憶體。三個 launcher 同時常駐時各自都會佔用記憶體,要一起列出。
 
+**這次實測的記憶體對照(單一時間點,`dumpsys meminfo`):**
+
+| 項目 | Lawnchair(`ch.deletescape.lawnchair.plah`) | One UI Home(`com.sec.android.app.launcher`) |
+|---|---|---|
+| PSS | 96.2 MB | 162.3 MB(19:35)→ 148.7 MB(22:01) |
+| 私有記憶體(Private Dirty + Clean) | 35.6 MB | 54.1 MB → 65.3 MB |
+| RSS | 84.2 MB | 104.5 MB → 123.8 MB |
+| Swap PSS | 58.7 MB | 105.3 MB → 75.9 MB |
+| Views | 686 | 373 |
+
+- 看起來 Lawnchair 的**私有記憶體約少 20–30 MB**,PSS 約少 50–65 MB(PSS 含按比例分攤的共用記憶體,不同 App 比較請優先看私有記憶體)。
+- 但這只是單一時間點:One UI Home 自己在 2.4 小時內私有記憶體就變了 +11 MB、PSS −14 MB、Swap −29 MB;20–30 MB 的差距只比自然波動大一點,而且只占 3.62 GB RAM 的不到 1%。
+- 要得到可靠的答案:在相同情境(例如重開機後 10 分鐘、開同一組 App 之後)各量 **3 次**再比,三個 launcher 同時常駐時也要一起列出。
+
 **日常耗電(亮屏使用):**
 
 1. 早上 `batterystats --reset`,晚上匯出一整天;用 `Screen on discharge ÷ 亮屏時數` 與 launcher UID 的耗電、`Top for` 時間比較。
@@ -546,6 +565,18 @@ python3 doze_summary.py run_full.txt --uids u0a1361,u0a125                 # 指
 python3 doze_summary.py run_full.txt --suspend suspend.txt                 # 對照電腦睡眠比例
 python3 doze_summary.py run_full.txt --deviceidle run_deviceidle.txt       # 附上 Doze 設定與最後狀態
 ```
+
+一次執行所有選項(不要分四次執行,每次都會重複印整份摘要):
+
+```bash
+python3 doze_summary.py full.txt \
+  --checkin checkin.txt \
+  --pkg ch.deletescape.lawnchair.plah,com.sec.android.app.launcher \
+  --suspend suspend.txt --deviceidle deviceidle.txt \
+  --mem mem_start.txt mem_end.txt --battery battery_start.txt battery_end.txt | tee summary.txt
+```
+
+`--mem` 與 `--battery` 可給多個檔案(測試前、後);檔名含 `YYYYMMDD_HHMMSS`(例如 `adb shell dumpsys battery > battery-$(date +%Y%m%d_%H%M%S).txt`)時,會算區間放電。沒給 `--checkin` 時 UID 不會換成套件名稱。
 
 v2 的額外選項:`--checkin run_checkin.txt`(把 UID 換成套件名稱)、`--pkg 套件1,套件2`(列出 launcher 等指定 App 的耗電與 CPU)、`--mem meminfo.txt`(記憶體摘要,換算成 MB)、`--battery battery.txt`(每 1% 約幾 mAh)。摘要也會列出時鐘時間、**突發耗電**(6 分鐘內掉 ≥ 9 mAh,並附上同時間的 Doze 事件與 job 前幾名),以及「CPU 深度睡眠比例」(DevCheck 的概念)。
 
