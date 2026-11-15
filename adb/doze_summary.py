@@ -166,51 +166,89 @@ def mb(kb):
 
 
 # ---------------------------------------------------------------- optional sections
-def summarize_meminfo(path):
+def _stamp(path):
+    m = re.search(r"(\d{8})_(\d{6})", path)
+    if not m:
+        return None
+    try:
+        return dt.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
+
+
+def _mem_one(path):
     txt = open(path, encoding="utf-8", errors="ignore").read()
-    print("\n## 記憶體(dumpsys meminfo,單位換成 MB;1024 KB = 1 MB)")
+    d = {"path": path, "stamp": _stamp(path)}
     m = re.search(r"\*\* MEMINFO in pid (\d+) \[(.+?)\]", txt)
-    if m:
-        print(f"- 進程:{m.group(2)}(pid {m.group(1)})")
-    rows = {}
-    for l in txt.split("\n"):
-        mm = re.match(r"^\s+(Native Heap|Dalvik Heap|TOTAL)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+)\s+(\d+)\s+(\d+))?", l)
-        if mm:
-            rows[mm.group(1)] = [int(x) if x else 0 for x in mm.groups()[1:]]
-    for k in ("TOTAL", "Native Heap", "Dalvik Heap"):
-        if k in rows:
-            r = rows[k]
-            print(f"- {k}: PSS {mb(r[0])}, Private Dirty {mb(r[1])}, SwapPss {mb(r[3])}, RSS {mb(r[4])}"
-                  + (f", Heap Alloc {mb(r[6])}" + ("(native+dalvik 合計)" if k == "TOTAL" else "") if len(r) > 6 and r[6] else ""))
-    for k in ("Java Heap", "Native Heap", "Code", "Stack", "Graphics", "Private Other", "System"):
-        mm = re.search(r"^\s+" + re.escape(k) + r":\s+(\d+)", txt, re.M)
-        if mm:
-            print(f"- App Summary {k}: PSS {mb(mm.group(1))}")
-    mm = re.search(r"TOTAL PSS:\s+(\d+)\s+TOTAL RSS:\s+(\d+)\s+TOTAL SWAP PSS:\s+(\d+)", txt)
+    d["proc"] = m.group(2) if m else "?"
+    mm = re.search(r"^\s+TOTAL\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", txt, re.M)
     if mm:
-        print(f"- 合計:PSS {mb(mm.group(1))} / RSS {mb(mm.group(2))} / Swap PSS {mb(mm.group(3))}"
-              "(PSS 不含已換出的部分;Swap PSS 是被壓縮換出的頁面)")
-    mm = re.search(r"Views:\s+(\d+).*?Activities:\s+(\d+)", txt, re.S)
-    if mm:
-        print(f"- 物件:Views {mm.group(1)}, Activities {mm.group(2)}")
-    mm = re.search(r"Uptime: (\d+) Realtime: (\d+)", txt)
-    if mm:
-        up, rt = int(mm.group(1)), int(mm.group(2))
-        print(f"- 開機至今 Realtime {fmt(rt)},Uptime {fmt(up)} → CPU 深度睡眠(suspend)約 {100 - up / rt * 100:.0f}%"
-              "(= DevCheck 顯示的「深度睡眠」)")
-    print("- 註:meminfo 只是單一時間點;比較不同 launcher 請在相同情境下各量 3 次。"
-          "Heap Alloc 是 native + dalvik 的合計,不要當成 Java Heap。")
+        v = [int(x) for x in mm.groups()]
+        d.update(pss=v[0], pdirty=v[1], pclean=v[2], swap=v[3], rss=v[4], heap_alloc=v[6])
+    for k, key in (("Java Heap", "java"), ("Native Heap", "native"), ("Graphics", "gfx"), ("System", "system")):
+        m2 = re.search(r"^\s+" + re.escape(k) + r":\s+(\d+)", txt, re.M)
+        if m2:
+            d[key] = int(m2.group(1))
+    m2 = re.search(r"Views:\s+(\d+).*?Activities:\s+(\d+)", txt, re.S)
+    if m2:
+        d["views"], d["acts"] = int(m2.group(1)), int(m2.group(2))
+    m2 = re.search(r"Uptime: (\d+) Realtime: (\d+)", txt)
+    if m2:
+        d["up"], d["rt"] = int(m2.group(1)), int(m2.group(2))
+    return d
 
 
-def summarize_battery(path):
-    txt = open(path, encoding="utf-8", errors="ignore").read()
+def summarize_meminfo(paths):
+    print("\n## 記憶體(dumpsys meminfo,單位 MB;1024 KB = 1 MB;單一時間點,請多量幾次)")
+    rows = [_mem_one(p) for p in paths]
+    for d in rows:
+        if "pss" not in d:
+            print(f"- {d['path']}: 解析失敗")
+            continue
+        priv = d["pdirty"] + d["pclean"]
+        when = d["stamp"].strftime("%m-%d %H:%M") if d["stamp"] else d["path"]
+        print(f"- [{when}] {d['proc']}: PSS {mb(d['pss'])} | 私有記憶體(Private Dirty+Clean){mb(priv)} | RSS {mb(d['rss'])} | "
+              f"Swap PSS {mb(d['swap'])} | Java {mb(d.get('java', 0))} Native {mb(d.get('native', 0))} 圖形 {mb(d.get('gfx', 0))} 系統共用 {mb(d.get('system', 0))}"
+              f" | Views {d.get('views')} Activities {d.get('acts')}")
+        if "up" in d and d["rt"]:
+            print(f"    開機至今 Realtime {fmt(d['rt'])},Uptime {fmt(d['up'])} → CPU 深度睡眠(suspend)累計約 {100 - d['up'] / d['rt'] * 100:.0f}%(= DevCheck 的「深度睡眠」)")
+    groups = collections.defaultdict(list)
+    for d in rows:
+        if "pss" in d:
+            groups[d["proc"]].append(d)
+    for proc, g in groups.items():
+        if len(g) >= 2:
+            a, b = g[0], g[-1]
+            print(f"- {proc} 第一次 → 最後一次:PSS {(b['pss'] - a['pss']) / 1024:+.1f} MB,"
+                  f"私有記憶體 {((b['pdirty'] + b['pclean']) - (a['pdirty'] + a['pclean'])) / 1024:+.1f} MB,"
+                  f"Swap PSS {(b['swap'] - a['swap']) / 1024:+.1f} MB(同一進程在數小時內的自然波動)")
+    print("- 註:PSS 含按比例分攤的共用記憶體(「系統」那一欄),不同 App 之間比較請優先看「私有記憶體」;"
+          "Heap Alloc 是 native + dalvik 合計,不要當成 Java Heap。")
+
+
+def summarize_battery(paths):
     print("\n## 電池(dumpsys battery)")
-    lv = grab(txt, r"^\s+level: (\d+)")
-    cc = grab(txt, r"^\s+Charge counter: (\d+)")
-    if lv and cc:
+    pts = []
+    for p in paths:
+        txt = open(p, encoding="utf-8", errors="ignore").read()
+        lv = grab(txt, r"^\s+level: (\d+)")
+        cc = grab(txt, r"^\s+Charge counter: (\d+)")
+        if not (lv and cc):
+            print(f"- {p}: 解析失敗")
+            continue
+        st = _stamp(p)
+        pts.append((st, int(lv), int(cc) / 1000))
         per = int(cc) / 1000 / int(lv)
-        print(f"- level {lv}%、Charge counter {int(cc) / 1000:.0f} mAh → 每 1% 約 {per:.1f} mAh,"
-              f"推算滿電約 {per * 100:.0f} mAh(標示容量 6000 mAh 的 1% 應為 60 mAh)")
+        when = st.strftime("%m-%d %H:%M:%S") if st else p
+        print(f"- [{when}] level {lv}%、Charge counter {int(cc) / 1000:.1f} mAh → 每 1% 約 {per:.1f} mAh,推算滿電約 {per * 100:.0f} mAh"
+              f"(標示 6000 mAh 的 1% 應為 60 mAh);電池保護 mProtectBatteryMode={grab(txt, r'mProtectBatteryMode: (\d+)')}"
+              f"({grab(txt, r'mProtectionThreshold: (\d+)')}%)")
+    if len(pts) >= 2 and pts[0][0] and pts[-1][0]:
+        hrs = (pts[-1][0] - pts[0][0]).total_seconds() / 3600
+        d = pts[0][2] - pts[-1][2]
+        if hrs > 0:
+            print(f"- 區間放電:{d:.1f} mAh / {hrs:.2f} 小時 = {d / hrs:.1f} mAh/h(解析度 4.5 mAh;含這段時間內任何亮屏與 adb 重連)")
+    txt = open(paths[-1], encoding="utf-8", errors="ignore").read()
     pairs = []
     for l in txt.split("\n"):
         m = re.search(r"level:(\d+),.*? cc:(\d+),", l)
@@ -219,10 +257,8 @@ def summarize_battery(path):
     if pairs:
         ratios = [c / lv_ for lv_, c in pairs if lv_]
         print(f"- 電池變化 log:{len(pairs)} 筆,cc ÷ level = {min(ratios):.1f}–{max(ratios):.1f} mAh/%"
-              "(幾乎固定 → cc 近似由電量百分比換算,解析度約 0.1%)")
-    print(f"- 健康/保護:mProtectBatteryMode={grab(txt, r'mProtectBatteryMode: (\d+)')}, "
-          f"mProtectionThreshold={grab(txt, r'mProtectionThreshold: (\d+)')}, "
-          f"BSOH={grab(txt, r'mSavedBatteryBsoh: (\S+)')}")
+              "(cc 近似由 SOC 換算:高電量時 log 的 cc 可連續數小時不變,請以 dumpsys 的 Charge counter 與 batterystats 為準)")
+    print(f"- 健康:BSOH={grab(txt, r'mSavedBatteryBsoh: (\S+)')}")
 
 
 # ---------------------------------------------------------------- main
@@ -234,8 +270,8 @@ def main():
     ap.add_argument("--checkin", help="adb shell dumpsys batterystats --checkin 的輸出,用來把 UID 換成套件名稱")
     ap.add_argument("--suspend", help="journalctl -b | grep -iE 'suspend|resume|sleep|PM: ' 的輸出")
     ap.add_argument("--deviceidle", help="adb shell dumpsys deviceidle 的輸出")
-    ap.add_argument("--mem", help="adb shell dumpsys meminfo <套件> 的輸出")
-    ap.add_argument("--battery", help="adb shell dumpsys battery 的輸出")
+    ap.add_argument("--mem", nargs="+", help="adb shell dumpsys meminfo <套件> 的輸出(可給多個檔案,例如測試前、後)")
+    ap.add_argument("--battery", nargs="+", help="adb shell dumpsys battery 的輸出(可給多個檔案,例如測試前、後;檔名含 YYYYMMDD_HHMMSS 時會算區間放電)")
     a = ap.parse_args()
 
     uidmap = load_uidmap(a.checkin)
@@ -268,6 +304,10 @@ def main():
               f" → **CPU 深度睡眠(suspend)約 {100 - up:.1f}%**(= DevCheck 的「深度睡眠」概念,"
               "和 Doze 的 deep idle 是不同的東西)")
     print(f"- 亮屏:{grab(text, r'^  Screen on: (.*)')}")
+    scr = [t for t, _, r in ev if re.search(r"(^|\s)\+screen", r) and t > 60000]
+    if scr:
+        print(f"- ⚠ 測試期間有亮屏:第一次在 {tw(scr[0])}。建議把「有效待機區間」當作 0 – {fmt(scr[0])},"
+              "之後(例如為了讓 adb 重新連線而喚醒手機)的耗電不要算進待機。")
     print(f"- 放電 Discharge:{grab(text, r'^  Discharge: (.*)')}"
           "(電池計數器 cc,解析度約 4.5 mAh;百分比不是線性,請以 mAh 為準)")
     print(f"- Light doze 放電:{grab(text, r'Device light doze discharge: (.*)')};"
