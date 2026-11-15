@@ -463,6 +463,11 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「維護窗口 `deep.maintenance` 時 deep idle 被中斷,之後進入較長的活躍期」 | 維護窗口是 Doze 的正常設計:長時間 deep idle 後讓 App 把延後的 job 一次做完,實測約 3 分鐘(0h38m01 → 0h41m05)就回到 deep idle,並不是「較長的活躍期」 |
 | 「測試矩陣:Wi-Fi 關 + ADB 開」 | 無線 adb 需要 WiFi,這個組合不可能成立 |
 | 「`pm disable-user com.google.android.gms/.findmydevice…`」 | `pm disable-user` 只能用在套件,不能用在元件;而且停用 GMS 元件可能影響推播與定位,不建議 |
+| 「電腦睡眠時,Wi-Fi 與 adbd 連線仍會產生定期封包與喚醒」「netd 110 次、wlan_ma 763 次是 ADB 保活造成」 | 電腦睡眠時 adbd 只有 14 次喚醒(約 2.3 次/小時);netd 每小時約 11–21 次喚醒,在 adb 開與關的測試都一樣(18 / 21 / 11 / 17 次每小時);WiFi kernel active 60% 在 adb 關閉的測試也是 53–63%。所以這些不能歸給 adb |
+| 「reset 後先等 5–10 分鐘再開始計時,避開首次 deep.maintenance 的 job 洪峰」 | 維護窗口的時間由 Doze 自己的計時決定(這次是上一段 4 小時 deep idle 結束的 01:14:50),和你何時 reset 無關,等 10 分鐘也避不開。它是長時間 deep idle 的成本,應該當作測試的一部分記錄 |
+| 「Ubuntu 15 分鐘自動 suspend 會讓 adb 連線斷開、保活、重連,影響這組數據」 | 這次是重置後立刻手動 suspend(整段 6h06m 睡眠),15 分鐘自動睡眠與這組數據無關 |
+| 「0h39–0h41 的突發是行動網路同步 / 訊號交遞」 | 同時段是 deep.maintenance 與大量 job(Gmail、Play 商店、Google App),`cellular_high_tx_power` 只是同時出現的旗標;是不是行動網路造成,需要飛航模式(僅開 Wi-Fi)的對照才能確認 |
+| 「只要被解鎖或有鬧鐘,重新進入 deep idle 並不快」 | 放下手機後約 1 小時回到 deep idle 正是 Samsung 設定(`inactive_to` 30 分 + `idle_after_inactive_to` 30 分)的預期值 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
 | 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 
@@ -550,6 +555,26 @@ v2 的額外選項:`--checkin run_checkin.txt`(把 UID 換成套件名稱)、`--
 grep -E "Time on battery|Discharge|doze discharge|Device (light|full) idling|Idle mode|Screen on|Wifi kernel active|Total partial wakelock" run_full.txt
 grep -E "Wakeup reason|Kernel Wake lock" run_full.txt | head -20
 grep -E "device_idle=|DeviceIdleController\.(deep|light)|active=1000:\"alarm\"|defaultScanStartTimer|charge=" run_history.txt
+```
+
+### 讓 AI 不要重複犯同樣的錯:附上「已驗證的事實」
+
+摘要只含單次測試的數字,AI 看不到你之前累積的結論,所以常常重新推測(例如把 WiFi 喚醒歸給 adb、建議限制 GMS)。實測第二版回答(Gemini / DeepSeek)雖然改善很多(UID 名稱正確、突發耗電對到維護窗口、FMM 與鬧鐘的關係也讀對),仍重複了這類推測。建議在摘要前面貼一段背景說明,範本:
+
+```
+【測試背景】
+- 手機:Samsung Galaxy M14 5G(Android 15),預設桌面 Lawnchair;電池每 1% 約 45.5 mAh(約 4550 mAh,不是標示的 6000)。
+- 條件:螢幕關閉、未充電;尋找我的手機已關閉(但 defaultScanStartTimer 仍可能出現);無線偵錯開;Ubuntu 在重置後立刻睡眠(全程)。
+
+【已驗證的事實(請勿推翻或重複建議,除非有新的資料證據)】
+1. Samsung min_time_to_alarm=1h:會喚醒手機的鬧鐘(例如 FMM 的 defaultScanStartTimer)在 1 小時內時,Doze 會放棄進入 deep idle;鬧鐘響後約 62 分鐘(31+31)才回到 deep idle。
+2. 電腦醒著並與手機無線 adb 連線時,手機約 52 mAh/h;電腦睡眠時約 8–12 mAh/h。電腦睡眠時 adbd 只有約 2 次/小時的喚醒,不是 WiFi 喚醒的主因。
+3. WiFi kernel active 53–63% 在 adb 開與關的測試都一樣;netd 每小時約 11–21 次喚醒,與 adb 狀態無關。
+4. deep.maintenance 是 Doze 的正常維護窗口(約 3 分鐘);長時間 deep idle 後會有一次 job 洪峰(約 14–18 mAh),不是故障。
+5. Lawnchair 本身的耗電與喚醒可忽略;不建議限制 GMS(推播與定位依賴它),也不要建議停用系統元件。
+6. 電量百分比不是線性;請用 Discharge / cc 的 mAh(解析度 4.5 mAh)。
+
+【請你】只依下面的摘要回答;區分「資料證據」與「推測」;我要問的是:……
 ```
 
 ### 提問時一併附上
