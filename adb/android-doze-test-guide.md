@@ -30,10 +30,22 @@
 | 說法 | 實際指的是 | 在哪裡看 |
 |---|---|---|
 | **Doze 的 deep idle**(本文討論的) | 螢幕關閉、靜止一段時間後,系統限制 App 網路、job、alarm 的深度休眠 | `dumpsys deviceidle` 的 `deep-idle`;`batterystats` 的 `Device full idling` |
-| **CPU deep sleep(suspend)** | CPU 進入 suspend 狀態(CPU Spy 之類 App 的 Deep Sleep) | `batterystats` 的 uptime 相對 realtime;例如 uptime 10.2% 約代表 CPU 有約 90% 時間在 suspend |
+| **CPU deep sleep(suspend)** | CPU 進入 suspend 狀態(DevCheck、CPU Spy 之類 App 顯示的「深度睡眠」) | `batterystats` 的 uptime 相對 realtime;例如 uptime 4.6% 代表 CPU 有約 95.4% 時間在 suspend |
 | **Samsung「深度休眠應用程式」** | One UI 電池設定中,對不常用 App 的背景限制(設定 → 電池 → 背景使用限制) | 設定畫面,和 Doze 是不同機制 |
 
 建議用「**Doze 的 deep idle(`DeviceIdleController`)**」描述本文的問題,並附上 `deviceidle` 與 `batterystats` 的數據。
+
+### DevCheck 的「深度睡眠」和 light-idle / deep-idle 有關係嗎?
+
+**有關聯,但不是同一件事。**
+
+- DevCheck 的「深度睡眠」= CPU 在 suspend 的時間 ÷ 開機至今的時間,也就是 `1 − uptime ÷ realtime`。實例(Galaxy M14 5G):`dumpsys meminfo` 顯示 Uptime 11h15m、Realtime 44h45m → 約 75%;同一時段 DevCheck 截圖顯示 73%(運作 1 天 21 小時 40 分,深度睡眠 1 天 9 小時 31 分),兩者吻合。
+- Doze 的 light idle / deep idle 是**軟體**狀態:限制 App 的網路、job、alarm。它讓 CPU 更容易進入 suspend,但兩者不能互換:
+  - 整夜測試(6h07m):Doze deep idle 82.2%,CPU 深度睡眠 95.4%。
+  - 電腦醒著並連線的異常時段:Doze 仍在 deep idle,但 CPU 清醒約 98%,DevCheck 的深度睡眠會明顯下降。
+  - 反過來,Doze 沒進 deep idle(只在 light idle)時,CPU 也可能睡得很多。
+- DevCheck 的數字是**開機至今**的累計,包含白天使用,所以只有 73%。要用它檢查待機:睡前與起床各截一張圖,用差值算 `Δ深度睡眠 ÷ Δ運作時間`,整夜靜置通常應該在 90% 以上(我們的測試是 95.4%)。
+- 沒有電腦的人要看 Doze 狀態:需要在手機上執行 `dumpsys deviceidle`(例如用 aShell / Termux 搭配無線偵錯);DevCheck 本身看不到 light / deep idle。
 
 ---
 
@@ -398,6 +410,7 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
   - 不要用「百分比 / 小時」算耗電,短時間測試(< 2 小時)百分比通常只變 0–1 級,毫無意義。
   - 同一個 `mAh/h` 在不同狀態差很大:deep idle 約 5–10、light idle 約 20–25、維護窗口突發可達數百(例如 3 分鐘內 18 mAh),所以平均值會隨測試長度與狀態比例改變。
   - 請用 `Discharge` / `cc` 的 mAh,並看分段曲線(摘要腳本會輸出)。
+  - 再加一個證據(`dumpsys battery`):`Charge counter` 1593 mAh、level 35% → 每 1% 約 45.5 mAh,推算滿電約 4550 mAh;電池變化 log 20 筆的 `cc ÷ level` 都落在 45.2–46.3 mAh/%。也就是說 `cc` 近似是以約 4.55 Ah 滿電換算的電量(解析度約 0.1%),**不要假設容量就是標示的 6000 mAh**(用 6000 算會把「%/小時」低估約 25%)。
 - 每個條件至少測 2 小時並重複 2 次。
 
 ---
@@ -446,6 +459,12 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「UID 1000 sensors 5h25m 代表感測器一直開著」 | 那是多種感測器使用時間的加總 |
 | 「限制 Google Play 服務背景可減少干擾」 | GMS 只占約 6%,而 LINE、Telegram、Gmail 的推播都靠它,不建議 |
 | 「`findmydevice.spot` 是 Samsung FMM」 | 那是 Google 的「尋找我的裝置」(在 GMS 內),與 Samsung FMM 是不同服務 |
+| 「UID 1051 是 `com.samsung.android.lool`」「`u0a1204` 可能是 Chrome」 | 1051 是 **netd**(系統網路服務),`u0a1204`(uid 11204)是 **LINE**。UID 一定要用 `--checkin` 換成套件名稱再判讀,不要憑印象猜 |
+| 「維護窗口 `deep.maintenance` 時 deep idle 被中斷,之後進入較長的活躍期」 | 維護窗口是 Doze 的正常設計:長時間 deep idle 後讓 App 把延後的 job 一次做完,實測約 3 分鐘(0h38m01 → 0h41m05)就回到 deep idle,並不是「較長的活躍期」 |
+| 「測試矩陣:Wi-Fi 關 + ADB 開」 | 無線 adb 需要 WiFi,這個組合不可能成立 |
+| 「`pm disable-user com.google.android.gms/.findmydevice…`」 | `pm disable-user` 只能用在套件,不能用在元件;而且停用 GMS 元件可能影響推播與定位,不建議 |
+| 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
+| 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 
 ---
 
@@ -522,6 +541,8 @@ python3 doze_summary.py run_full.txt --uids u0a1361,u0a125                 # 指
 python3 doze_summary.py run_full.txt --suspend suspend.txt                 # 對照電腦睡眠比例
 python3 doze_summary.py run_full.txt --deviceidle run_deviceidle.txt       # 附上 Doze 設定與最後狀態
 ```
+
+v2 的額外選項:`--checkin run_checkin.txt`(把 UID 換成套件名稱)、`--pkg 套件1,套件2`(列出 launcher 等指定 App 的耗電與 CPU)、`--mem meminfo.txt`(記憶體摘要,換算成 MB)、`--battery battery.txt`(每 1% 約幾 mAh)。摘要也會列出時鐘時間、**突發耗電**(6 分鐘內掉 ≥ 9 mAh,並附上同時間的 Doze 事件與 job 前幾名),以及「CPU 深度睡眠比例」(DevCheck 的概念)。
 
 ### 方法 2:手動 grep 關鍵字
 
