@@ -12,6 +12,8 @@ adb shell cmd role get-role-holders android.app.role.HOME
 adb shell dumpsys deviceidle unforce
 adb shell dumpsys batterystats --enable full-wake-history
 adb shell dumpsys batterystats --reset
+adb shell dumpsys meminfo ch.deletescape.lawnchair.plah > lawnchair_mem-$(date +%Y%m%d_%H%M%S).txt
+adb shell dumpsys battery >  m14_battery-$(date +%Y%m%d_%H%M%S).txt
 ```
 
 # ubuntu 立刻  suspend
@@ -56,6 +58,8 @@ adb shell cmd role get-role-holders android.app.role.HOME
 adb shell dumpsys deviceidle unforce
 adb shell dumpsys batterystats --enable full-wake-history
 adb shell dumpsys batterystats --reset
+adb shell dumpsys meminfo com.sec.android.app.launcher > oneui_mem-$(date +%Y%m%d_%H%M%S).txt
+adb shell dumpsys battery >  m14_battery-$(date +%Y%m%d_%H%M%S).txt
 ```
 
 # ubuntu 立刻  suspend
