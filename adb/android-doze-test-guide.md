@@ -64,6 +64,8 @@
 | 5 | 6h07m(Lawnchair 預設)| FMM 關、無線偵錯**開**、Ubuntu 全程睡眠 | 重置時已在 deep idle | **82.2%**(最長一段 3h44m) | 94.5 mAh(約 15.4 mAh/h) |
 | 6 | 2h25m(**One UI Home** 預設)| FMM 關、無線偵錯開、Ubuntu 睡眠 98%、user 10 的 Google App 已停用、電量 84% | **未進入**(有效區間 2h10m) | 0%(light idle 96.9%) | 13.5 mAh;其中 21:45 起為了讓 adb 重連而亮屏的 9 分鐘占 9.0 mAh,有效區間約 4.0–4.5 mAh |
 | 7 | 3h15m(One UI Home 預設,`doze-test.sh` 首次;資料夾名稱 `doze-test-oneui`)| FMM 關、無線偵錯開、Ubuntu 睡眠 100%、電量 79% | 重置時已在 deep idle(28m09 後被中止) | 14.4%(light idle 83.6%) | 40.5 mAh(約 12.4 mAh/h);`dumpsys battery` 的 Charge counter 3582.0 → 3541.5 mAh 也是 40.5,與 batterystats 一致 |
+| 8 | 4h17m(One UI Home 預設;**測試前手動停止 `OfflineFindingService`**)| 無線偵錯開、Ubuntu 睡眠 100%、電量 77%;2h11m20 家人拿起手機,亮屏 5 秒(未解鎖) | **1h02m03**(`deep.progression` 0h30m52、1h01m53) | 75.9%(三段:1h、2h、14 分,即 1h → 2h → 4h 的指數放大) | 58.5 mAh(約 13.6 mAh/h);**沒有任何 `active=1000:"alarm"` 中止,也沒有 FMM 鬧鐘** |
+| 9 | 2h27m(One UI Home 預設)| 無線偵錯開、Ubuntu 睡眠 100%、電量 74% | 重置時已在 deep idle | 100% | 31.5 mAh(約 12.8 mAh/h);同樣沒有中止、沒有 FMM 鬧鐘 |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -72,6 +74,7 @@
 2. **adb 不是延遲進入的主因。** 6h(adb 全程連線)與 3h10m(關閉無線偵錯)都約 3 小時才進入。無線偵錯開著、電腦睡眠時,也沒有看到額外耗電;約 52 mAh/h 的持續高耗電只出現在「電腦醒著並連線」的期間(用 `journalctl` 對時間,見[第 5 節](#5-要不要斷開無線偵錯))。
 3. **主因是 Samsung「尋找我的手機」(FMM)的週期鬧鐘**,加上 Samsung 的 `min_time_to_alarm=1h`。整個關閉後,第一次進入 deep idle 縮短到 58 分鐘(理論值:30 + 30 分 + 感測)。見[第 8 節](#8-案例samsung尋找我的手機擋住-deep-idle)。
 4. **初測(1)** 的 Termux 影響很小,但**亮屏會重設 Doze 計時**,而且兩邊亮屏時間不同(54 秒對 19 秒),加上 ssidwidget 在背景、WiFi 活動不同,94.5 對 13.5 mAh 的差距不能歸因到 launcher。
+7. **真正的元兇是還在背景執行的 `OfflineFindingService`,不是設定開關。** 06:43 的截圖顯示該服務「已由應用程式啟動」並已運作 **40 小時 04 分**(約從 11-14 14:39 起,正好是你在試各個開關的時候),而設定頁(11-15 22:19 截圖)的「允許搜尋此手機定位」「傳送最後位置」「離線搜尋」都是關閉的。手動「停止」之後,連續兩組測試共約 6 小時 45 分,**沒有任何 FMM 鬧鐘、沒有任何鬧鐘中止,第一次 deep idle 在 1h02m,並且完整出現 1h → 2h → 4h 的指數放大**,和紅米 10 的行為一致。所以先前「FMM 關閉後仍會出現鬧鐘」的原因,很可能是服務從未被停止,而不是「自己又起來」。
 6. **One UI Home 預設(第 6 組)沒有發現異常。** deep idle 沒進入,原因和之前一樣:0h39m24(20:14:58)被 `active=1000:"alarm"` 中止,57.5 分鐘後(1h36m55)出現 FMM 鬧鐘;鬧鐘後 31 分的第一個 `deep.progression` 在 2h07m54,第二個預計在 2h38m,但測試在 2h10m 因亮屏結束。launcher 本身:One UI Home `u0a125` CPU 約 2.7 秒、Lawnchair(背景)約 1.3 秒,都不在耗電前列。
 5. **WiFi kernel active 約 53–63% 與 adb 無關。** 有 adb(59.2%)、無 adb(53.1%、54.2%)、無 adb 且 FMM 關(63.2%)都高。
 
@@ -132,6 +135,7 @@ adb shell getprop ro.build.version.release
 
 - [ ] 未充電,WiFi 環境固定
 - [ ] 預設桌面與預期相同
+- [ ] **Samsung:確認「尋找我的手機」的 `OfflineFindingService` 沒有在執行**(開發人員選項 → 正在運作的服務 / 使用中的應用程式 → 尋找我的手機;若列出 `OfflineFindingService`,按「停止」)。只關設定開關不夠
 - [ ] `Next alarm clock` 空白(鬧鐘、計時器、睡眠計時器都已關閉)
 - [ ] 沒有 1 小時內會響的「會喚醒手機」的鬧鐘(Samsung 請先確認 FMM,見第 8 節)
 - [ ] Wake Locks 沒有 `dream:doze`(有的話關閉 Always On Display 再測;`batterystats` 的 `Screen doze` 為 0 ms 才算沒影響)
@@ -170,7 +174,7 @@ USB 連線通常會變成充電狀態,不適合做這個測試。
 
 - 記下開始時間,**不再碰手機**。
 - 時長至少抓「預期進入 deep idle 時間的 2 倍」(FMM 關閉後的 Samsung 約 2 小時)。
-- 測試中只要亮屏,Doze 狀態機就會重來。
+- **解鎖**才會讓 Doze 退出;亮屏但沒有解鎖(Samsung 的 `wait_for_unlock=true`)不會。實測(11-16 的 4h17m 那組):2h11m20 家人拿起手機,亮屏 5 秒、沒有解鎖,Doze 維持 deep idle,`device_idle` 沒有任何變化。要避免的是**解鎖與長時間亮屏**。
 
 ### 步驟 4:重新連線(僅方案 A)
 
@@ -383,6 +387,13 @@ Next wake from idle: Alarm{… com.samsung.android.fmm}
 - 初步推論(尚未證實):FMM 的計時是「**每次重新排定就是 +2 小時**」。若重新排定發生在 Doze 計時開始前後,第二個 `deep.progression`(約 62 分)時,鬧鐘只剩約 58 分鐘,低於 `min_time_to_alarm=1h`,就會被放棄。這和 One UI 那組完全吻合:鬧鐘在 21:12:29,往前推 2 小時是 19:12:29,第二個 progression 在 20:14:58(62m29s 後),當時距離鬧鐘 57.5 分鐘。
 - 要成功進入 deep idle,需要鬧鐘在「開始計時後約 62 分鐘」時仍距離至少 60 分鐘,也就是下一個 FMM 鬧鐘距離計時起點至少約 2 小時 2 分(`doze-test.sh` 的預設門檻是 125 分鐘)。
 
+### 實證:停止 `OfflineFindingService` 有效
+
+- 11-16 06:43 截圖(「使用中的應用程式 → 尋找我的手機」):`OfflineFindingService` 顯示「已由應用程式啟動」,運作時間 **40:04:11**,按「停止」可以停掉。
+- 停止後的兩組 One UI 測試(06:44–10:57 的 4h17m、12:42–15:10 的 2h27m):**0 次** `active=1000:"alarm"`、**0 次** `defaultScanStartTimer`;第一組在 1h02m03 進入 deep idle(`deep.progression` 0h30m52、1h01m53,相隔 31 分),之後 1h、2h、再下一段的維護窗口間隔正好是指數放大。
+- 運作 40 小時,代表它**很可能不是「自己又起來」,而是從 11-14 14:39 左右(你測試各開關時)被啟動後就一直沒停**。這是推論,我沒有它被重新啟動的紀錄;如果之後它又出現,請記下時間與運作時長。
+- 每次測試前請檢查一次(第 3 節),這比任何 adb 指令都簡單。
+
 ### 處理方式
 
 1. 在「尋找我的手機」設定中**整個關閉**。實測只留「搜尋此手機定位」仍會出現該鬧鐘(甚至幾秒後就響);完全關閉後 `Next alarm clock` 才變空白。選項名稱依 One UI 版本略有不同。
@@ -414,7 +425,7 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **忘記 `unforce`。** 強制狀態會一直保留到還原或重開機。
 - **有鬧鐘、計時器或不認得的「下一個鬧鐘」。** 太近會讓 Doze 放棄進入 deep idle;鬧鐘響也會讓 Doze 退出(`normal (alarm)`)。
 - **Always On Display。** Wake Locks 出現 `dream:doze`;`batterystats` 的 `Screen doze` 大於 0 也是同一件事。
-- **亮屏。** 任何亮屏都會重設 Doze 計時,兩邊比較時亮屏秒數要一致。
+- **亮屏與解鎖。** 解鎖會讓 Doze 退出、計時重來;只亮屏不解鎖(例如家人拿起手機看一眼)不會。兩邊比較時,解鎖次數與亮屏秒數要一致。
 - **手機被碰到或震動。** deep idle 需要「靜止」(significant motion 感測器)。
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
@@ -563,19 +574,20 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 
 比較的是**launcher 進程自己的 PSS**,不是系統的可用記憶體。三個 launcher 同時常駐時各自都會佔用記憶體,要一起列出。
 
-**這次實測的記憶體對照(單一時間點,`dumpsys meminfo`):**
+**這次實測的記憶體對照(`dumpsys meminfo`,單一時間點,PSS 等單位為 MB):**
 
-| 項目 | Lawnchair(`ch.deletescape.lawnchair.plah`) | One UI Home(`com.sec.android.app.launcher`) |
+| 項目 | Lawnchair(3 次量測) | One UI Home(8 次量測) |
 |---|---|---|
-| PSS | 96.2 MB | 162.3 MB(19:35)→ 148.7 MB(22:01) |
-| 私有記憶體(Private Dirty + Clean) | 35.6 MB | 54.1 MB → 65.3 MB |
-| RSS | 84.2 MB | 104.5 MB → 123.8 MB |
-| Swap PSS | 58.7 MB | 105.3 MB → 75.9 MB |
-| Views | 686 | 373 |
+| PSS | 96.2、124.1、127.3 | 132.1–180.4 |
+| 私有記憶體(Private Dirty + Clean) | 35.6、27.1、29.3 | **14.6–78.1**(隨換出狀態大幅跳動) |
+| Swap PSS | 58.7、95.8、96.8 | 75.9–128.1 |
+| PSS + Swap PSS(總足跡) | 155、220、224 | 225–285 |
+| Views / Activities | 686 / 2 → **1253 / 6**(較晚的量測) | 364–373 / 2 |
 
-- **私有記憶體(Private Dirty + Clean)受換出(swap)狀態影響很大,不能直接比。** One UI Home 在四次量測中是 54.1、65.3、64.6、**27.0 MB**(最後一次已被大量換出:Swap PSS 128.1 MB、Java 只剩 1.8 MB),Lawnchair 的 35.6 MB 落在這個範圍內,所以**「Lawnchair 私有記憶體少 20–30 MB」這個說法不成立**。
-- 比較穩定的是 **PSS + Swap PSS(總足跡)**:One UI Home 約 225–285 MB(225 / 268 / 256 / 285),Lawnchair 這次量到約 155 MB(96.2 + 58.7)。方向仍是 Lawnchair 較小,但 Lawnchair 只有一次量測(DeepSeek 引用的另一次 PSS 約 122 MB,我沒有原始檔),而且 PSS 含按比例分攤的共用記憶體,不是 launcher 自己的。
-- One UI Home 自己在數小時內私有記憶體就能在 27–65 MB 之間跳動,這比任何 launcher 之間的差距都大;在 3.62 GB RAM 的手機上,幾十 MB 約不到 2%。
+另外,11-16 11:10 的「正在運作的服務」畫面(系統 1.2 GB、Apps 1.1 GB、可用 1.3 GB):**One UI 首頁 243 MB(3 個程序)、Lawnchair 139 MB(2 個程序)、Gboard 159 MB、Google Play 服務 167 MB**。
+
+- 方向上 Lawnchair 的總足跡比 One UI Home 小約 25–100 MB(因量法而異),但**兩者在重疊的邊緣**(Lawnchair 最大 224、One UI 最小 225),而且 One UI Home 的私有記憶體自己就在 14.6–78.1 MB 之間跳動。
+- **更重要的是:換預設桌面並不會讓 One UI Home 消失。** Lawnchair 為預設的那次 6h07m 測試中,One UI Home(`u0a125`)與 Pear Launcher(`u0a1330`)都以前景服務常駐了整段 6h07m11s;「正在運作的服務」畫面也同時列出 One UI 首頁與 Lawnchair。所以實際情況是**多了一個 Lawnchair 常駐(約 140 MB),而不是取代 One UI Home**。如果原本的目標是「省記憶體」,在這支手機上換桌面大概達不到;要省的話,應該是停用多餘的 launcher(例如已下架的 Pear Launcher),並且接受 One UI Home 要留著(最近使用的應用程式等系統功能會用到)。這是依資料的推論,沒有實際移除其他 launcher 後再量測。
 - 要得到可靠的答案:在相同情境(例如重開機後 10 分鐘、開同一組 App 之後)各量 **3 次**再比,三個 launcher 同時常駐時也要一起列出。
 
 **日常耗電(亮屏使用):**

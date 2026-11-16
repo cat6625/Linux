@@ -335,10 +335,20 @@ def main():
               f" → **CPU 深度睡眠(suspend)約 {100 - up:.1f}%**(= DevCheck 的「深度睡眠」概念,"
               "和 Doze 的 deep idle 是不同的東西)")
     print(f"- 亮屏:{grab(text, r'^  Screen on: (.*)')}")
-    scr = [t for t, _, r in ev if re.search(r"(^|\s)\+screen", r) and t > 60000]
-    if scr:
-        print(f"- ⚠ 測試期間有亮屏:第一次在 {tw(scr[0])}。建議把「有效待機區間」當作 0 – {fmt(scr[0])},"
-              "之後(例如為了讓 adb 重新連線而喚醒手機)的耗電不要算進待機。")
+    scr_on = [t for t, _, r in ev if re.search(r"(^|\s)\+screen", r) and t > 60000]
+    scr_off = [t for t, _, r in ev if re.search(r"(^|\s)-screen", r)]
+    idle_changes = [(t, r.split("device_idle=")[1].split()[0]) for t, _, r in ev if "device_idle=" in r]
+    for t_on in scr_on:
+        t_off = next((x for x in scr_off if x > t_on), None)
+        dur = (t_off - t_on) / 1000 if t_off else None
+        left_doze = any(s in ("off",) and t_on - 1000 <= tt <= t_on + 60000 for tt, s in idle_changes)
+        if dur is not None and dur < 60 and not left_doze:
+            print(f"- ℹ 測試期間有短暫亮屏:{tw(t_on)},約 {dur:.1f} 秒,Doze 沒有因此退出(螢幕未解鎖;`wait_for_unlock=true` 時只有解鎖才會讓 Doze 退出),影響很小,不需要排除。")
+        else:
+            print(f"- ⚠ 測試期間有亮屏:{tw(t_on)}" + (f",約 {dur:.0f} 秒" if dur is not None else "")
+                  + (",且 Doze 在亮屏後 1 分鐘內退出" if left_doze else "")
+                  + f"。建議把「有效待機區間」當作 0 – {fmt(t_on)},之後(例如為了讓 adb 重新連線而喚醒手機)的耗電不要算進待機。")
+            break
     print(f"- 放電 Discharge:{grab(text, r'^  Discharge: (.*)')}"
           "(電池計數器 cc,解析度約 4.5 mAh;百分比不是線性,請以 mAh 為準)")
     print(f"- Light doze 放電:{grab(text, r'Device light doze discharge: (.*)')};"
