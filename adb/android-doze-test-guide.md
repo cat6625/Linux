@@ -200,6 +200,32 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 
 ---
 
+### 4.1 一鍵腳本(兩種)
+
+| 腳本 | 連線方式 | 需要你做的事 |
+|---|---|---|
+| `doze-test.sh` | 無線 adb(電腦重置後立刻睡眠,醒來後自動重連) | 只要執行;adb 連不上時依提示亮屏手機 |
+| `doze-test-usb.sh` | USB(重置後提示「請拔除 USB」,接回後自動繼續) | 依畫面提示拔線、接線,不需要輸入任何 adb 指令 |
+
+**USB 版的重點**
+
+- USB 連著時手機在**充電**:Doze 的 deep idle 不會進入,`batterystats` 的放電統計也無效。所以耗電與 Doze 的測試**一定要真的拔掉 USB**(`MODE="unplug"`,預設)。腳本在重置後會偵測到 USB 拔掉才開始計時,接回 USB 後用 `adb wait-for-device` 偵測並自動擷取,不需要按任何鍵。
+- `MODE="sim"` 是 USB 一直連著、用 `dumpsys battery unplug` 模擬拔電:只能看「Doze 能不能進去、何時進去」,手機其實仍在充電,**mAh 數據無效**;腳本結束時會自動 `dumpsys battery reset`。這個模式我沒有在你的手機上實測。
+- 接回 USB 後手機立刻開始充電,所以**接回之後才抓的 `battery_end` 與 `deviceidle` 的目前狀態(會是 ACTIVE)不能用**;實際放電請看 `batterystats` 的 `Discharge`(只計「在電池上」的時間),Doze 過程請看 `Idling history` 與摘要。腳本摘要因此只傳 `battery_start`。
+- 腳本會比對 `batterystats` 的 `Time on battery` 與實際拔線時間;不相符(例如電量 ≥ 90% 拔線時系統自動重置統計)會標 ⚠。
+
+**解決 `adb: more than one device/emulator`**
+
+關掉手機的無線偵錯後,電腦的 adb 還留著舊的 `192.168.x.x:埠號 offline` 項目;再插上 USB 就有兩個裝置,所以出現這個錯誤。手動處理:`adb disconnect`(不加參數,清掉全部無線項目),或用 `adb -s <序號> ...` / `export ANDROID_SERIAL=<序號>` 指定裝置。`doze-test-usb.sh` 一開始會自動 `adb disconnect`,並只選用 USB 裝置(排除含 `:`、以 `adb-` 開頭或含 `_tcp` 的項目)。
+
+**為什麼不用 Termux + MacroDroid(手機自己量自己)**
+
+1. Termux 要執行 `dumpsys` 需要 shell 權限,必須先開**無線偵錯**並 `adb connect` 本機;
+2. 要在數小時後自動執行,得靠 `termux-wake-lock`(會讓手機一直清醒,污染 Doze 數據)或 MacroDroid / Tasker 的系統鬧鐘(設定複雜,Android 10+ 對背景啟動有限制,可能不會自動執行);
+3. 手機端的任何背景程式與鬧鐘本身就是變因。由電腦驅動(無線 adb 或 USB)才能把手機放著不動,數據最乾淨。
+
+**越自動化越能減少錯誤。** 腳本已自動處理:裝置選擇與殘留項目清理、FMM 服務與鬧鐘事前檢查、快照順序(最後才重置)、拔線偵測、接線偵測、空檔檢查、`Time on battery` 驗證、摘要。仍必須由人完成的只有:實際拔線 / 接線,以及(若腳本偵測到)停止 FMM 服務。
+
 ## 5. 要不要斷開無線偵錯?
 
 不斷開比較方便。**實測結果:無線偵錯開著、但電腦端安靜(例如電腦睡眠)時,看不出明顯影響;出現過一次持續高耗電,發生在電腦持續使用的期間(見下方「實測更新」)。**
@@ -518,6 +544,13 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「FMM 的離線搜尋 BLE 掃描陷入高頻率無限迴圈」 | 資料顯示 FMM 鬧鐘頻率並不高:FMM 開約每 3 小時 1 次;關閉後約 15 小時內 2 次。它的影響是「事先排定的鬧鐘」造成 Doze 放棄進入 deep idle,不是高頻喚醒 |
 | 「飛航模式可以阻斷 FMM 的影響」 | 見第 8 節:鬧鐘是本機計時器,飛航模式取消不了;且無法使用無線 adb |
 | 「netstats 的 GMS 3906 次 openSession、vending 幾十 MB,是這次待機的網路活動」 | `netstats detail` 是**開機至今的累計**,不是測試區間;測試區間的 WiFi 流量以 batterystats 為準(這次收 1.71 MB)。netstats 的 `Recent poll events`(PERIODIC)時間與 Doze 事件吻合(20:14:58 就是中止點、21:43:29 就是 progression),它們是結果,不是原因 |
+| 「WiFi kernel active 50–60% 就是 WiFi 驅動 wakelock 阻止 suspend」「Kernel active 代表 CPU 大部分時間沒有進入深度休眠」 | 我們的資料同時是 WiFi kernel active 51–66% 與 CPU 深度睡眠(suspend)92–96%;kernel wakelock 的時間是分鐘等級(例如 `wlan_ma` 4 分、`hip4_wake_lock_tx` 3 分),不是小時。這個百分比是 WiFi 驅動回報的活動時間,**不等於 CPU 被擋住,也不是耗電比例**(ChatGPT 與 Duck.ai→chatgpt 的說法是對的) |
+| 「`dumpsys battery unplug` 之後就可以用 USB 量耗電」 | `unplug` 只是讓系統「以為」沒有充電,手機實際上還在從 USB 充電,`Discharge` 與 `cc` 都無效;只適合看 Doze 狀態 |
+| 「USB 仍連接,但請確認 USB 沒有讓手機持續充電」(ChatGPT 第一段) | 做不到,而且與它後面「測試期間拔掉 USB」的修正互相矛盾。要測耗電就必須真的拔掉 |
+| 「讀 `/sys/kernel/debug/wakeup_sources`、`suspend_stats`、`cpuidle` 判斷 deep idle」 | 在未 root 的 Samsung 上通常是 `Permission denied`;改用 `batterystats` 的 kernel wakelock / wakeup reasons(不需要 root)更實際 |
+| 「待機耗電用 %/h」(ChatGPT 的表) | 百分比是 1% 一階(本機約 45 mAh)而且不是線性;請用 `Discharge` 的 mAh |
+| 「調高路由器 DTIM、開 IGMP snooping」 | 你的全屋通不能調整參數;可行的是用另一個網路(手機熱點)做對照 |
+| 「飛航模式 / 關 WiFi 的對照(A/B/C)」 | 搭配 USB 版就做得到(無線 adb 需要 WiFi);但要先決定問題是什麼:本專案的目標是確認 Doze 正常,不是消除 WiFi 活動 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
 | 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 
@@ -613,7 +646,9 @@ python3 doze_summary.py run_full.txt --suspend suspend.txt                 # 對
 python3 doze_summary.py run_full.txt --deviceidle run_deviceidle.txt       # 附上 Doze 設定與最後狀態
 ```
 
-**一鍵腳本:** `doze-test.sh`(與 `doze_summary.py` 放在同一個資料夾)把「重置 → 電腦睡眠 → 醒來後重連 adb → 擷取 → 產生摘要」串起來,擷取順序、重試與空檔檢查都已處理。需要手動改的只有 `ADB_ADDR`(IP:埠號)與要量記憶體的 `PKGS`。
+**一鍵腳本:** `doze-test.sh`(無線 adb)與 `doze-test-usb.sh`(USB,見第 4.1 節),同樣把「重置 → 待機 → 擷取 → 產生摘要」串起來:
+
+`doze-test.sh`(與 `doze_summary.py` 放在同一個資料夾)把「重置 → 電腦睡眠 → 醒來後重連 adb → 擷取 → 產生摘要」串起來,擷取順序、重試與空檔檢查都已處理。需要手動改的只有 `ADB_ADDR`(IP:埠號)與要量記憶體的 `PKGS`。
 
 手動執行(不要分四次執行,每次都會重複印整份摘要):
 
