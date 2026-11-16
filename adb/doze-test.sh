@@ -79,7 +79,8 @@ connect_adb || { echo "無法連線 $ADB_ADDR,請確認 IP:埠號(無線偵錯�
 { stamp; grep -B2 -A8 "defaultScanStartTimer" "$OUT_DIR/alarm_start_full.txt"; } > "$OUT_DIR/alarm_start.txt"
 NEXT="$(grep -A8 "Next wake from idle" "$OUT_DIR/alarm_start_full.txt" | grep -m1 -oE "triggerTime=[0-9-]+ [0-9:]+" | cut -d= -f2)"
 if [ -n "$NEXT" ]; then
-  NEXT_MIN=$(( ( $(date -d "$NEXT" +%s) - $(date +%s) ) / 60 ))
+  PHONE_NOW="$("${A[@]}" shell date +"%Y-%m-%d %H:%M:%S" | tr -d '\r')"   # 用手機的「現在」,避免電腦與手機時鐘差
+  NEXT_MIN=$(( ( $(date -d "$NEXT" +%s) - $(date -d "$PHONE_NOW" +%s) ) / 60 ))
   log "下一個會喚醒手機的鬧鐘:$NEXT(約 ${NEXT_MIN} 分鐘後)"
   if [ "$NEXT_MIN" -lt "$MIN_ALARM_MIN" ]; then
     echo "⚠ 這個鬧鐘距離現在不到 ${MIN_ALARM_MIN} 分鐘;Doze 很可能放棄進入 deep idle(min_time_to_alarm=1h)。"

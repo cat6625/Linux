@@ -167,6 +167,15 @@ def mb(kb):
 
 # ---------------------------------------------------------------- optional sections
 def _stamp(path):
+    """時間來源:檔案開頭的 `# captured: YYYY-MM-DD HH:MM:SS`(doze-test.sh 會寫入),否則用檔名裡的 YYYYMMDD_HHMMSS"""
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            head = "".join(f.readline() for _ in range(5))
+        m = re.search(r"# captured: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", head)
+        if m:
+            return dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+    except OSError:
+        pass
     m = re.search(r"(\d{8})_(\d{6})", path)
     if not m:
         return None
@@ -176,9 +185,8 @@ def _stamp(path):
         return None
 
 
-def _mem_one(path):
-    txt = open(path, encoding="utf-8", errors="ignore").read()
-    d = {"path": path, "stamp": _stamp(path)}
+def _mem_parse(txt):
+    d = {}
     m = re.search(r"\*\* MEMINFO in pid (\d+) \[(.+?)\]", txt)
     d["proc"] = m.group(2) if m else "?"
     mm = re.search(r"^\s+TOTAL\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", txt, re.M)
@@ -192,24 +200,47 @@ def _mem_one(path):
     m2 = re.search(r"Views:\s+(\d+).*?Activities:\s+(\d+)", txt, re.S)
     if m2:
         d["views"], d["acts"] = int(m2.group(1)), int(m2.group(2))
-    m2 = re.search(r"Uptime: (\d+) Realtime: (\d+)", txt)
-    if m2:
-        d["up"], d["rt"] = int(m2.group(1)), int(m2.group(2))
     return d
+
+
+def _mem_blocks(path):
+    """一個檔案可以含多個進程(例如把 One UI Home 與 Lawnchair 的 meminfo 寫在同一個檔);全部解析"""
+    txt = open(path, encoding="utf-8", errors="ignore").read()
+    up = re.search(r"Uptime: (\d+) Realtime: (\d+)", txt)
+    out = []
+    for part in re.split(r"(?=\*\* MEMINFO in pid)", txt):
+        if not part.startswith("** MEMINFO in pid"):
+            continue
+        d = _mem_parse(part)
+        d["path"], d["stamp"] = path, _stamp(path)
+        if up:
+            d["up"], d["rt"] = int(up.group(1)), int(up.group(2))
+        out.append(d)
+    if not out:
+        first = txt.strip().split("\n")[0][:80] if txt.strip() else "(空檔)"
+        out.append({"path": path, "error": f"沒有 meminfo 資料(檔案第一行:{first}) — 請確認指令是 `dumpsys meminfo <套件名稱>`"})
+    elif "Can't find service" in txt or "No process found" in txt:
+        out[-1]["warn"] = "檔案裡另有錯誤訊息(Can't find service / No process found),可能有某個指令寫錯或進程沒在執行"
+    return out
 
 
 def summarize_meminfo(paths):
     print("\n## 記憶體(dumpsys meminfo,單位 MB;1024 KB = 1 MB;單一時間點,請多量幾次)")
-    rows = [_mem_one(p) for p in paths]
+    rows = [d for p in paths for d in _mem_blocks(p)]
     for d in rows:
+        if "error" in d:
+            print(f"- ⚠ {d['path']}: {d['error']}")
+            continue
         if "pss" not in d:
-            print(f"- {d['path']}: 解析失敗")
+            print(f"- ⚠ {d['path']}({d.get('proc')}): 解析失敗")
             continue
         priv = d["pdirty"] + d["pclean"]
         when = d["stamp"].strftime("%m-%d %H:%M") if d["stamp"] else d["path"]
         print(f"- [{when}] {d['proc']}: PSS {mb(d['pss'])} | 私有記憶體(Private Dirty+Clean){mb(priv)} | RSS {mb(d['rss'])} | "
               f"Swap PSS {mb(d['swap'])} | Java {mb(d.get('java', 0))} Native {mb(d.get('native', 0))} 圖形 {mb(d.get('gfx', 0))} 系統共用 {mb(d.get('system', 0))}"
               f" | Views {d.get('views')} Activities {d.get('acts')}")
+        if d.get("warn"):
+            print(f"    ⚠ {d['warn']}")
         if "up" in d and d["rt"]:
             print(f"    開機至今 Realtime {fmt(d['rt'])},Uptime {fmt(d['up'])} → CPU 深度睡眠(suspend)累計約 {100 - d['up'] / d['rt'] * 100:.0f}%(= DevCheck 的「深度睡眠」)")
     groups = collections.defaultdict(list)

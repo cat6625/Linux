@@ -63,6 +63,7 @@
 | 4 | 2h17m(Lawnchair 預設)| 關閉無線偵錯、**FMM 整個關閉** | **0h58m13** | **43.7%** | 18.0 mAh(約 7.9 mAh/h) |
 | 5 | 6h07m(Lawnchair 預設)| FMM 關、無線偵錯**開**、Ubuntu 全程睡眠 | 重置時已在 deep idle | **82.2%**(最長一段 3h44m) | 94.5 mAh(約 15.4 mAh/h) |
 | 6 | 2h25m(**One UI Home** 預設)| FMM 關、無線偵錯開、Ubuntu 睡眠 98%、user 10 的 Google App 已停用、電量 84% | **未進入**(有效區間 2h10m) | 0%(light idle 96.9%) | 13.5 mAh;其中 21:45 起為了讓 adb 重連而亮屏的 9 分鐘占 9.0 mAh,有效區間約 4.0–4.5 mAh |
+| 7 | 3h15m(One UI Home 預設,`doze-test.sh` 首次;資料夾名稱 `doze-test-oneui`)| FMM 關、無線偵錯開、Ubuntu 睡眠 100%、電量 79% | 重置時已在 deep idle(28m09 後被中止) | 14.4%(light idle 83.6%) | 40.5 mAh(約 12.4 mAh/h);`dumpsys battery` 的 Charge counter 3582.0 → 3541.5 mAh 也是 40.5,與 batterystats 一致 |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -364,6 +365,24 @@ Samsung 的 `min_time_to_alarm=1h`。據 AOSP 的行為,Doze 推進下一階段�
 >
 > **注意:「整個關閉」不等於 FMM 鬧鐘完全消失。** FMM 關閉後的累計約 15 小時測試中,觀察到 2 次 `defaultScanStartTimer`(第 5 組 6h07m 的 4h28m42、第 6 組 One UI 的 1h36m55),並造成同樣的「中止 → 約 62 分鐘後才回到 deep idle」。另外,鬧鐘是**事先排定**的:One UI 那次在 0h39m24 就因為「57.5 分鐘後有 FMM 鬧鐘」而中止,不是等鬧鐘響了才發生。頻率比開啟時低很多(開啟時約每 3 小時 1 次),所以要用摘要腳本(第 14 節)檢查每次測試有沒有出現。
 
+### FMM 鬧鐘的實際長相(`dumpsys alarm`)
+
+`adb shell dumpsys alarm | grep -B2 -A6 "defaultScanStartTimer"` 的輸出(2026-11-16 實測):
+
+```
+Next wake from idle: Alarm{… com.samsung.android.fmm}
+  tag=*walarm*:defaultScanStartTimer
+  type=RTC_WAKEUP … window=0 … flags=0x3
+  whenElapsed=+1h43m23s968ms
+  Alarm clock:
+    triggerTime=2026-11-16 08:04:40.969
+```
+
+- `flags=0x3` 含 `FLAG_WAKE_FROM_IDLE`,而且是 **Alarm clock**(`setAlarmClock`),所以 Doze 的 `min_time_to_alarm` 規則會把它當成「下一個會喚醒手機的鬧鐘」。同一份輸出裡其他鬧鐘(TIME_TICK、`*job.deadline*`、`ScheduleConditionProvider.EVALUATE` 等)的 flags 都是 0 或 9,不屬於這一類。
+- 它的下一次不是固定的:輸出裡的「已取消」紀錄顯示它被反覆取消並重新排定(22:47:56、22:50:04、01:28:45、03:02:14 都有 `Reason=alarm_cancelled`)。**03:02:14 取消後,下一次在 05:02:14.828 觸發,正好 2 小時**;06:04:40 重新排定後,下一次是 08:04:40.969,也是 +2 小時。每次響完約 2 分鐘後還有一個 `scanStopTimer`(05:02:14 → 05:04:15),像是 2 分鐘的掃描。
+- 初步推論(尚未證實):FMM 的計時是「**每次重新排定就是 +2 小時**」。若重新排定發生在 Doze 計時開始前後,第二個 `deep.progression`(約 62 分)時,鬧鐘只剩約 58 分鐘,低於 `min_time_to_alarm=1h`,就會被放棄。這和 One UI 那組完全吻合:鬧鐘在 21:12:29,往前推 2 小時是 19:12:29,第二個 progression 在 20:14:58(62m29s 後),當時距離鬧鐘 57.5 分鐘。
+- 要成功進入 deep idle,需要鬧鐘在「開始計時後約 62 分鐘」時仍距離至少 60 分鐘,也就是下一個 FMM 鬧鐘距離計時起點至少約 2 小時 2 分(`doze-test.sh` 的預設門檻是 125 分鐘)。
+
 ### 處理方式
 
 1. 在「尋找我的手機」設定中**整個關閉**。實測只留「搜尋此手機定位」仍會出現該鬧鐘(甚至幾秒後就響);完全關閉後 `Next alarm clock` 才變空白。選項名稱依 One UI 版本略有不同。
@@ -400,6 +419,8 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
 - **Termux 影響很小。** 實測前景服務 2 小時耗電不到 0.03 mAh、無 wakelock;adb 走 localhost 不用 WiFi 硬體。
+- **meminfo 指令要寫 `dumpsys meminfo <套件名稱>`。** 實際發生過把第二個 launcher 的指令寫成 `dumpsys ch.deletescape.lawnchair.plah`(漏了 `meminfo`),輸出只是 `Can't find service`,記憶體資料就缺了一半;而且摘要腳本 v2 初版只解析檔案裡的第一個進程。現在 `doze_summary.py` 可以解析一個檔案裡的多個進程,遇到錯誤訊息會標 ⚠。
+- **電腦醒來後 adb 連不上,後面就會抓到一堆空檔案。** `doze-test.sh` v2 改成重試迴圈(每 5 秒、共約 2 分鐘),仍失敗就提示亮屏手機再重試,且每個擷取檔都檢查是否為空。
 - **為了讓 adb 重新連線而亮屏手機,要排除在有效區間之外。** 電腦睡眠醒來後 adb 可能 `offline` / `No route to host`,需要亮屏手機才連得上。這幾分鐘(含電腦同時醒著)耗電很高(第 6 組:9 分鐘 9.0 mAh,約 58 mAh/h),摘要腳本會標出「⚠ 測試期間有亮屏」與第一次亮屏時間,請把有效待機區間算到那裡為止。
 - **剛充飽、高電量(例如 84–85%)時的 `cc` 不可靠。** 電池保護模式(上限 80%)讓手機常停在 85%,電池變化 log 的 `cc` 可以連續數小時不變;fuel gauge 在高電量區的變化也很遲鈍(第 6 組 2h10m 只掉 0.1% ≈ 4.5 mAh)。**要比較的測試請在相近的電量區間進行(例如 40–60%)。**
 - **任何條件的改動都會讓前後測試不可比。** 例如第 6 組先執行了 `pm disable-user --user 10 com.google.android.googlequicksearchbox`(停用第二使用者的 Google App),而之前的測試沒有。
@@ -552,8 +573,9 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 | Swap PSS | 58.7 MB | 105.3 MB → 75.9 MB |
 | Views | 686 | 373 |
 
-- 看起來 Lawnchair 的**私有記憶體約少 20–30 MB**,PSS 約少 50–65 MB(PSS 含按比例分攤的共用記憶體,不同 App 比較請優先看私有記憶體)。
-- 但這只是單一時間點:One UI Home 自己在 2.4 小時內私有記憶體就變了 +11 MB、PSS −14 MB、Swap −29 MB;20–30 MB 的差距只比自然波動大一點,而且只占 3.62 GB RAM 的不到 1%。
+- **私有記憶體(Private Dirty + Clean)受換出(swap)狀態影響很大,不能直接比。** One UI Home 在四次量測中是 54.1、65.3、64.6、**27.0 MB**(最後一次已被大量換出:Swap PSS 128.1 MB、Java 只剩 1.8 MB),Lawnchair 的 35.6 MB 落在這個範圍內,所以**「Lawnchair 私有記憶體少 20–30 MB」這個說法不成立**。
+- 比較穩定的是 **PSS + Swap PSS(總足跡)**:One UI Home 約 225–285 MB(225 / 268 / 256 / 285),Lawnchair 這次量到約 155 MB(96.2 + 58.7)。方向仍是 Lawnchair 較小,但 Lawnchair 只有一次量測(DeepSeek 引用的另一次 PSS 約 122 MB,我沒有原始檔),而且 PSS 含按比例分攤的共用記憶體,不是 launcher 自己的。
+- One UI Home 自己在數小時內私有記憶體就能在 27–65 MB 之間跳動,這比任何 launcher 之間的差距都大;在 3.62 GB RAM 的手機上,幾十 MB 約不到 2%。
 - 要得到可靠的答案:在相同情境(例如重開機後 10 分鐘、開同一組 App 之後)各量 **3 次**再比,三個 launcher 同時常駐時也要一起列出。
 
 **日常耗電(亮屏使用):**
@@ -579,7 +601,9 @@ python3 doze_summary.py run_full.txt --suspend suspend.txt                 # 對
 python3 doze_summary.py run_full.txt --deviceidle run_deviceidle.txt       # 附上 Doze 設定與最後狀態
 ```
 
-一次執行所有選項(不要分四次執行,每次都會重複印整份摘要):
+**一鍵腳本:** `doze-test.sh`(與 `doze_summary.py` 放在同一個資料夾)把「重置 → 電腦睡眠 → 醒來後重連 adb → 擷取 → 產生摘要」串起來,擷取順序、重試與空檔檢查都已處理。需要手動改的只有 `ADB_ADDR`(IP:埠號)與要量記憶體的 `PKGS`。
+
+手動執行(不要分四次執行,每次都會重複印整份摘要):
 
 ```bash
 python3 doze_summary.py full.txt \
