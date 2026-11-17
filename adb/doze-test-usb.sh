@@ -192,7 +192,7 @@ capture history.txt adb shell dumpsys batterystats --history
 TOB="$(python3 - "$OUT_DIR/full.txt" <<'PY'
 import re, sys
 t = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
-m = re.search(r"Time on battery: (.*?) \(100\.0%\) realtime", t)
+m = re.search(r"Time on battery: (.*?) \(([\d.]+)%\) realtime", t)
 def ms(s):
     return sum(int(v) * {"d": 86400000, "h": 3600000, "ms": 1, "m": 60000, "s": 1000}[u]
                for v, u in re.findall(r"(\d+)\s*(d|h|ms|m|s)", s))

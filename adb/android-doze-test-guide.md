@@ -20,6 +20,7 @@
 > 12. [附錄:向 AI 提問的範本與常見誤讀](#12-附錄向-ai-提問的範本與常見誤讀)
 > 13. [這套方法能回答什麼、不能回答什麼](#13-這套方法能回答什麼不能回答什麼)
 > 14. [給 AI 分析:先過濾,不要丟完整檔](#14-給-ai-分析先過濾不要丟完整檔)
+> 15. [使用 AI 建議指令的守則與還原對照表](#15-使用-ai-建議指令的守則與還原對照表)
 
 ---
 
@@ -66,6 +67,8 @@
 | 7 | 3h15m(One UI Home 預設,`doze-test.sh` 首次;資料夾名稱 `doze-test-oneui`)| FMM 關、無線偵錯開、Ubuntu 睡眠 100%、電量 79% | 重置時已在 deep idle(28m09 後被中止) | 14.4%(light idle 83.6%) | 40.5 mAh(約 12.4 mAh/h);`dumpsys battery` 的 Charge counter 3582.0 → 3541.5 mAh 也是 40.5,與 batterystats 一致 |
 | 8 | 4h17m(One UI Home 預設;**測試前手動停止 `OfflineFindingService`**)| 無線偵錯開、Ubuntu 睡眠 100%、電量 77%;2h11m20 家人拿起手機,亮屏 5 秒(未解鎖) | **1h02m03**(`deep.progression` 0h30m52、1h01m53) | 75.9%(三段:1h、2h、14 分,即 1h → 2h → 4h 的指數放大) | 58.5 mAh(約 13.6 mAh/h);**沒有任何 `active=1000:"alarm"` 中止,也沒有 FMM 鬧鐘** |
 | 9 | 2h27m(One UI Home 預設)| 無線偵錯開、Ubuntu 睡眠 100%、電量 74% | 重置時已在 deep idle | 100% | 31.5 mAh(約 12.8 mAh/h);同樣沒有中止、沒有 FMM 鬧鐘 |
+| 10 | 1h09m(Lawnchair 預設,**USB 拔線**,`doze-test-usb.sh`)| 實際拔掉 USB(無任何 adb 連線)、FMM 服務已停止、電量 69% | 1h02m17 | 9.4%(6m28s;在 1h08m45 被**接回 USB(`normal (charging)`)**結束) | 13.5 mAh;你在 69 分鐘就接回,不是測試失敗 |
+| 11 | 7h45m(Lawnchair 預設,USB 拔線)| 同上、電量 72%;接回 USB 後需解鎖授權,腳本等到解鎖才繼續 | 1h02m58(`deep.progression` 0h31m00、1h02m01) | **86.4%**(6h41m;三段:1h → 2h → 3h40m,最後一段在接回 USB 時結束) | **85.5 mAh(約 11.0 mAh/h)**;無任何中止、無 FMM 鬧鐘 |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -456,6 +459,8 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
 - **Termux 影響很小。** 實測前景服務 2 小時耗電不到 0.03 mAh、無 wakelock;adb 走 localhost 不用 WiFi 硬體。
+- **USB 版:接回 USB 後要解鎖並授權,腳本會等到授權完成才繼續。** 這是正常的(`adb wait-for-device` 在手機未授權前不會回傳)。接回 USB 的當下手機立刻進入「充電」,Doze 會在那一刻退出(history 的 `normal (charging)`),這是接線造成的,不是 deep idle 不穩。解鎖後量的 `mem_end` 也會比待機中大(例如 Lawnchair 私有記憶體 18.7 → 58.5 MB、圖形 17.2 → 38.1 MB,因為解鎖要把桌面畫出來),只能當趨勢,不要拿來和待機中的量測比。
+- **`Time on battery` 的百分比在 USB 版不是 100%。** 接回 USB 之後整段統計包含「接著電源」的時間,舊版摘要只認 `(100.0%) realtime`,所以時長與 CPU 睡眠比例那一行消失、`Time on battery` 驗證也被略過;已修正為接受任何百分比。
 - **meminfo 指令要寫 `dumpsys meminfo <套件名稱>`。** 實際發生過把第二個 launcher 的指令寫成 `dumpsys ch.deletescape.lawnchair.plah`(漏了 `meminfo`),輸出只是 `Can't find service`,記憶體資料就缺了一半;而且摘要腳本 v2 初版只解析檔案裡的第一個進程。現在 `doze_summary.py` 可以解析一個檔案裡的多個進程,遇到錯誤訊息會標 ⚠。
 - **電腦醒來後 adb 連不上,後面就會抓到一堆空檔案。** `doze-test.sh` v2 改成重試迴圈(每 5 秒、共約 2 分鐘),仍失敗就提示亮屏手機再重試,且每個擷取檔都檢查是否為空。
 - **為了讓 adb 重新連線而亮屏手機,要排除在有效區間之外。** 電腦睡眠醒來後 adb 可能 `offline` / `No route to host`,需要亮屏手機才連得上。這幾分鐘(含電腦同時醒著)耗電很高(第 6 組:9 分鐘 9.0 mAh,約 58 mAh/h),摘要腳本會標出「⚠ 測試期間有亮屏」與第一次亮屏時間,請把有效待機區間算到那裡為止。
@@ -551,6 +556,15 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「待機耗電用 %/h」(ChatGPT 的表) | 百分比是 1% 一階(本機約 45 mAh)而且不是線性;請用 `Discharge` 的 mAh |
 | 「調高路由器 DTIM、開 IGMP snooping」 | 你的全屋通不能調整參數;可行的是用另一個網路(手機熱點)做對照 |
 | 「飛航模式 / 關 WiFi 的對照(A/B/C)」 | 搭配 USB 版就做得到(無線 adb 需要 WiFi);但要先決定問題是什麼:本專案的目標是確認 Doze 正常,不是消除 WiFi 活動 |
+| 「用 `adb shell input keyevent 26` 關螢幕」 | 26 是 `KEYCODE_POWER`,是**切換**:螢幕已經關閉時按它反而會亮屏。要確保關閉請用 `KEYCODE_SLEEP`(223),本專案的腳本就是用這個 |
+| 「3 小時的測試提早結束,是因為插著線 ADB 沒互動、手機把 USB 斷開」 | 那是你在 69 分鐘就把 USB 接回去(腳本也印了「待機約 69 分鐘」);同一個腳本接著跑了 7h45m 沒有任何問題 |
+| 「`battery unplug` 在三星上 4–6 小時容易因 USB 不穩而破功」 | 沒有證據:你沒有跑過 `MODE="sim"`,而實際拔線的 7h45m 成功。`battery unplug` 的真正限制是 mAh 數據無效,不是穩定性 |
+| 「方案 A:`battery unplug`(最推薦)」 | 只適合看 Doze 狀態;手機仍在充電,`Discharge` 無效。要量耗電就要真的拔掉 |
+| 「Doze 在 1h08m45 因為螢幕亮起而退出」 | 退出原因是**接回 USB 開始充電**(history `normal (charging)`);前面幾次短暫亮屏(未解鎖)沒有讓 Doze 退出 |
+| 「Wi-Fi 的持續活動讓系統難以長時間維持 deep idle」 | 下一組在 WiFi kernel active 59.2% 的情況下 deep idle 達 86.4%、最長 3h40m,反證 |
+| 「WiFi 是目前最大的底噪」 | 7h45m 的模型估算 WiFi 只有 0.85 mAh(約 1% 的 85 mAh);`wlan_ma` + `hip4_wake_lock_tx` 的 kernel wakelock 共 7.7 分鐘,只占 1.7% 的時間。真正占比大的是 idle(基礎耗電)、CPU(系統)與感測器 |
+| 「3h33–4h04 的 27.6 mAh/h 是異常」(Grok)/「那就是例行維護」(Gemini) | 兩者都過度解讀:這段 14 mAh,一般區段 9 mAh,只差一個 4.5 mAh 的計數階距;維護窗口(4h02m59 → 4h04m31)在區段最尾端,無法判斷占了多少 |
+| 「把 Wi-Fi 連到訪客網路,預期 kernel active 從 60% 降到 30% 以下」 | 沒有依據:這個數字在所有測試(51–66%,有線、無線、深夜、白天)都差不多,而且它的耗電占比很小 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
 | 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 
@@ -631,6 +645,23 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 
 ---
 
+### WiFi kernel active 的實測比較
+
+| 測試 | 連線方式 | 時段 | 長度 | WiFi kernel active | 收 | 封包 收/送 | `wlan_mbox_irq` 每小時 |
+|---|---|---|---|---|---|---|---|
+| One UI 2h25m | 無線 adb(電腦睡眠) | 晚上 | 2h25m | 1h14m26 / 51.2% | 1.71 MB | 6257 / 6329 | — |
+| One UI 3h15m | 無線 adb | 深夜 01:00–04:16 | 3h15m | 2h09m32 / 66.2% | 14.03 MB | 15090 / 10736 | 約 79 |
+| Lawnchair 6h07m | 無線 adb | 深夜 00:36–06:43 | 6h07m | 3h40m53 / 60.2% | 27.72 MB | 30215 / 15012 | 約 126 |
+| **Lawnchair 7h45m** | **USB 拔線(完全沒有 adb 連線)** | **深夜 22:54–06:38** | 7h45m | 4h35m23 / **59.2%** | **6.35 MB** | 11514 / 9836 | 約 149 |
+| One UI 4h17m | 無線 adb | 早晨 06:44–11:01 | 4h17m | 2h40m41 / 62.4% | 3.59 MB | 8459 / 7615 | 約 233 |
+| One UI 2h27m | 無線 adb | 下午 12:42–15:10 | 2h27m | 1h21m04 / 54.9% | 5.23 MB | 7412 / 5226 | 約 243 |
+| Lawnchair 1h09m | USB 拔線 | 晚上 21:18–22:27 | 1h09m | 36m31 / 53.2% | 0.92 MB | 2772 / 2409 | 約 209 |
+
+- **WiFi kernel active 在所有條件下都是 51–66%**:有線或無線、哪個 launcher、深夜或白天、deep idle 占 9% 或 100% 都一樣。**完全不連 adb 的 USB 拔線(53.2%、59.2%)與無線 adb(51–66%)沒有差別**,所以它與 adb、launcher 都無關。
+- 唯一看得出差別的是**時段**:深夜的 `wlan_mbox_irq` 每小時約 79–149 次,白天與傍晚約 209–243 次,符合夜間背景同步與通知較少;USB 7h45m 的封包量約 2750 個/小時,是各組最低(其他約 3700–7400)。
+- 它不是耗電比例:7h45m 的模型估算 WiFi 只有 0.85 mAh(約 1%),kernel wakelock `wlan_ma` 4m22 + `hip4_wake_lock_tx` 3m18 共 7.7 分鐘(1.7% 的時間),CPU 深度睡眠仍有約 95%。它也不會擋住 deep idle(59.2% 的組別 deep idle 達 86.4%)。
+- 全屋通不能調整,所以能做的只有「接受它」;若真想知道網路環境的影響,可用手機熱點做一組對照,但這不會改變「手機正常」的結論。
+
 ## 14. 給 AI 分析:先過濾,不要丟完整檔
 
 完整的 `dumpsys batterystats` 約 600 KB–1 MB,絕大部分是與問題無關的清單(白名單、每個 UID 的細節等)。實務上直接丟整份給 AI 常得到離題或錯誤的回答;**先過濾出關鍵欄位,回答品質明顯較好**(使用者的經驗:Gemini 需要過濾後的關鍵字檔才能回答得比較好)。
@@ -698,3 +729,38 @@ grep -E "device_idle=|DeviceIdleController\.(deep|light)|active=1000:\"alarm\"|d
 - 摘要(或過濾後的檔案),**不要附原始大檔**,除非 AI 要求。
 - 你要回答的問題,以及「請區分資料證據與推測」。
 - 提醒 AI 避開常見誤讀(見第 12 節):電量百分比不是線性、light idle 比例要和 deep idle 合起來看、`Discharge` 以電池計數器為準。
+
+---
+
+## 15. 使用 AI 建議指令的守則與還原對照表
+
+這個專案的做法是:**先自動化量測(無線 adb → USB),得到可重複的基準,再決定要不要改任何設定**。原因是 AI 常給一串通用的「優化指令」,但這支手機的待機表現主要由 Samsung 自己的機制決定(Doze 設定 `inactive_to` 30 分 + `idle_after_inactive_to` 30 分、`min_time_to_alarm=1h`,以及尋找我的手機的服務)。盲目照做的風險是:(1) 沒有改善,卻改變了系統狀態;(2) 出問題時不知道怎麼還原。實測的基準(深夜 7h45m:deep idle 86.4%、約 11.0 mAh/h)已顯示這支手機待機正常,不需要做那些調整。
+
+### 守則
+
+1. **先量測,再調整。** 沒有基準就無法知道改了有沒有用。
+2. **一次只改一個變因,並用同一個腳本重測。**
+3. **改之前先記下原值,改完立刻寫下還原指令。** 腳本的 `timeline.txt` 已記錄 `unforce`、`reset`、`force-stop` 等動作。
+4. **分級:** 唯讀指令(`dumpsys`、`cmd role get-role-holders`、`grep`)可以隨便跑;可還原的設定要先備份原值;會影響安全功能或系統元件的(`pm disable-user` 系統套件、Knox「裝置服務」、清除資料)不要做。
+5. **不確定時,先用「前後比對」看清楚到底改了什麼:**
+
+   ```bash
+   for ns in global secure system; do adb shell settings list $ns > before_$ns.txt; done
+   # 在手機的設定畫面改一個選項(例如 Wi-Fi 掃描)
+   for ns in global secure system; do adb shell settings list $ns > after_$ns.txt; done
+   diff before_global.txt after_global.txt    # 另外兩個同理;差異就是被改的 key 與值
+   ```
+
+### 還原對照表
+
+| 動作 | 還原 |
+|---|---|
+| `dumpsys deviceidle force-idle` | `dumpsys deviceidle unforce` |
+| `dumpsys battery unplug`(或 `set level`、`set ac`) | `dumpsys battery reset`(`doze-test-usb.sh` 的 `MODE="sim"` 會自動執行) |
+| `settings put <global/secure/system> <key> <值>` | 先 `settings get <ns> <key>` 記下原值,再 `settings put` 回原值;原值是 `null` 就 `settings delete <ns> <key>` |
+| `pm disable-user --user <N> <套件>` | `pm enable --user <N> <套件>`(第 6 組測試前停用了 user 10 的 `com.google.android.googlequicksearchbox`,若不想維持請 `adb shell pm enable --user 10 com.google.android.googlequicksearchbox`) |
+| `cmd appops set <套件> <操作> <模式>` | 先 `cmd appops get <套件> <操作>` 記下原值,再改回 |
+| `dumpsys deviceidle whitelist +<套件>` | `dumpsys deviceidle whitelist -<套件>` |
+| `am force-stop <套件>` | 不需要還原(只是結束進程,服務之後可能再啟動;不會改設定) |
+| 在設定裡停止 `OfflineFindingService` | 不需要還原;若要恢復尋找我的手機,重新開啟該功能(關閉期間手機遺失將無法被找到) |
+| 預設桌面改成 Lawnchair | 設定 → 應用程式 → 預設應用程式 → 主畫面 App,選回 One UI 主畫面 |

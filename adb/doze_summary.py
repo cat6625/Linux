@@ -328,12 +328,16 @@ def main():
         return f"{fmt(t)}({w})" if w else fmt(t)
 
     print(f"- 統計起點:{start}(以下括號內為時鐘時間)")
-    m = re.search(r"Time on battery: (.*?) \(100\.0%\) realtime, (.*?) \(([\d.]+)%\) uptime", text)
+    m = re.search(r"Time on battery: (.*?) \(([\d.]+)%\) realtime, (.*?) \(([\d.]+)%\) uptime", text)
     if m:
-        up = float(m.group(3))
-        print(f"- 時長:{m.group(1)};CPU 清醒(uptime):{m.group(2)}({up}%)"
+        up = float(m.group(4))
+        print(f"- 時長:{m.group(1)};CPU 清醒(uptime):{m.group(3)}({up}%)"
               f" → **CPU 深度睡眠(suspend)約 {100 - up:.1f}%**(= DevCheck 的「深度睡眠」概念,"
               "和 Doze 的 deep idle 是不同的東西)")
+        if float(m.group(2)) < 99.5:
+            print(f"  (「Time on battery」只占整段統計的 {m.group(2)}%:其餘是接著電源的時間,例如 USB 版測試結束時接回 USB 之後)")
+    else:
+        print("- ⚠ 找不到「Time on battery」這一行,時長與 CPU 睡眠比例無法計算")
     print(f"- 亮屏:{grab(text, r'^  Screen on: (.*)')}")
     scr_on = [t for t, _, r in ev if re.search(r"(^|\s)\+screen", r) and t > 60000]
     scr_off = [t for t, _, r in ev if re.search(r"(^|\s)-screen", r)]
@@ -341,7 +345,7 @@ def main():
     for t_on in scr_on:
         t_off = next((x for x in scr_off if x > t_on), None)
         dur = (t_off - t_on) / 1000 if t_off else None
-        left_doze = any(s in ("off",) and t_on - 1000 <= tt <= t_on + 60000 for tt, s in idle_changes)
+        left_doze = any(s in ("off",) and t_on - 10000 <= tt <= t_on + 60000 for tt, s in idle_changes)
         if dur is not None and dur < 60 and not left_doze:
             print(f"- ℹ 測試期間有短暫亮屏:{tw(t_on)},約 {dur:.1f} 秒,Doze 沒有因此退出(螢幕未解鎖;`wait_for_unlock=true` 時只有解鎖才會讓 Doze 退出),影響很小,不需要排除。")
         else:
