@@ -474,6 +474,18 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
 - **Termux 影響很小。** 實測前景服務 2 小時耗電不到 0.03 mAh、無 wakelock;adb 走 localhost 不用 WiFi 硬體。
+- **電腦睡眠被擋:`Operation inhibited by "tdd" (PID … "gnome-session-b") … user session inhibited`。** `systemctl suspend` 失敗,代表有一個**阻擋型(block)inhibitor**。用 `systemd-inhibit --list` 看:`delay` 類(NetworkManager、UPower、gsd-power、gsd-media-keys 的 sleep)只會讓睡眠延後幾秒,不是原因;`gsd-media-keys` 的 `handle-power-key…`(block)只管實體電源鍵;**真正擋住的是 `gnome-session-b`(`shutdown:sleep`、原因「user session inhibited」,block)**,它是 GNOME 替某個要求「不要登出 / 睡眠」的應用程式持有的(例如播放影音的瀏覽器、遠端桌面、Caffeine 之類延伸)。想知道是誰:
+
+  ```bash
+  for p in $(gdbus call --session --dest org.gnome.SessionManager --object-path /org/gnome/SessionManager \
+             --method org.gnome.SessionManager.GetInhibitors | grep -o '/org/gnome/SessionManager/Inhibitor[0-9]*'); do
+    gdbus call --session --dest org.gnome.SessionManager --object-path "$p" --method org.gnome.SessionManager.Inhibitor.GetAppId
+    gdbus call --session --dest org.gnome.SessionManager --object-path "$p" --method org.gnome.SessionManager.Inhibitor.GetReason
+  done
+  ```
+
+  (指令與介面名稱依 GNOME 版本可能略有不同。)關掉那個應用程式,或讓腳本改用 `systemctl --ignore-inhibitors suspend`。`doze-test.sh` 現在會先試 `systemctl suspend`,被擋就自動改用 `--ignore-inhibitors`,兩者都失敗才提示你手動睡眠。**關於短選項:** 在 systemd 255(與你同版本)的 `--help` 裡,`-i` 是 `--check-inhibitors=no` 的簡寫,而二進位裡仍有 `ignore-inhibitors` 這個長選項;理論上相關,但我無法重現你說的「`-i` 仍被擋」,你實測長選項可行,所以腳本用長選項。
+- **不要在無線版用 `systemd-inhibit` 包住腳本。** 有些 AI 建議用 `systemd-inhibit ./run_idle_test.sh` 防止電腦睡眠;無線版需要電腦**睡眠**,這樣做會直接擋住睡眠。USB 版是拔線後電腦醒著等待,用它沒問題(但也不需要)。
 - **USB 版:接回 USB 後要解鎖並授權,腳本會等到授權完成才繼續。** 這是正常的(`adb wait-for-device` 在手機未授權前不會回傳)。接回 USB 的當下手機立刻進入「充電」,Doze 會在那一刻退出(history 的 `normal (charging)`),這是接線造成的,不是 deep idle 不穩。解鎖後量的 `mem_end` 也會比待機中大(例如 Lawnchair 私有記憶體 18.7 → 58.5 MB、圖形 17.2 → 38.1 MB,因為解鎖要把桌面畫出來),只能當趨勢,不要拿來和待機中的量測比。
 - **`Time on battery` 的百分比在 USB 版不是 100%。** 接回 USB 之後整段統計包含「接著電源」的時間,舊版摘要只認 `(100.0%) realtime`,所以時長與 CPU 睡眠比例那一行消失、`Time on battery` 驗證也被略過;已修正為接受任何百分比。
 - **meminfo 指令要寫 `dumpsys meminfo <套件名稱>`。** 實際發生過把第二個 launcher 的指令寫成 `dumpsys ch.deletescape.lawnchair.plah`(漏了 `meminfo`),輸出只是 `Can't find service`,記憶體資料就缺了一半;而且摘要腳本 v2 初版只解析檔案裡的第一個進程。現在 `doze_summary.py` 可以解析一個檔案裡的多個進程,遇到錯誤訊息會標 ⚠。
