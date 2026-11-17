@@ -217,6 +217,19 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 - 接回 USB 後手機立刻開始充電,所以**接回之後才抓的 `battery_end` 與 `deviceidle` 的目前狀態(會是 ACTIVE)不能用**;實際放電請看 `batterystats` 的 `Discharge`(只計「在電池上」的時間),Doze 過程請看 `Idling history` 與摘要。腳本摘要因此只傳 `battery_start`。
 - 腳本會比對 `batterystats` 的 `Time on battery` 與實際拔線時間;不相符(例如電量 ≥ 90% 拔線時系統自動重置統計)會標 ⚠。
 
+**接回 USB 後要解鎖:官方流程也一樣,而且資料不會丟**
+
+- Android Developers 的 Batterystats / Battery Historian 官方流程是:重置統計 → **拔掉裝置**(只用電池供電)→ 做測試 → **接回** → 確認手機被辨識(`adb devices`)→ 匯出 `dumpsys batterystats`。文件沒有規定螢幕狀態,但前提是 adb 在接回後能用。所以官方步驟同樣是「接回後才抓資料」,不是你的做法特別麻煩。
+- 接回後需不需要解鎖,取決於手機的 USB 政策。這支 M14 兩次 USB 測試都是**接回後必須解鎖並授權**才能繼續。原因我沒有證實;可能是 Samsung 的 USB 保護(One UI 的 Auto Blocker 裡有「鎖定時阻擋 USB 傳輸線指令」類的選項,請到設定的安全性與隱私檢查;關掉會降低安全性,請自行評估)或 adb 授權機制。
+- **解鎖不會讓資料消失**:`batterystats` 存在手機裡,接回與解鎖只會在歷史的最尾端多出「充電、亮屏、解鎖」的事件。腳本與摘要已把有效待機區間算到接回的那一刻;要注意 `deviceidle` 的目前狀態(ACTIVE、`mCharging=true`)、接回後的電池快照,以及解鎖後量的 `meminfo` 都是接回之後的狀態,不能代表待機期間。
+- `doze-test-usb.sh` 在等待時會每 30 秒提示目前狀態(尚未接上 / 尚未授權 / offline),不會無聲地卡住。
+
+| 想不亮屏抓資料的做法 | 能不能 | 代價 |
+|---|---|---|
+| USB 拔線 → 接回 | 這支 M14 **不行**(需解鎖授權) | 接回即充電、Doze 退出,但資料不丟 |
+| 無線 adb(電腦睡眠,醒來後重連) | **多半可以**:我的紀錄中 6h07m、3h15m、2h27m 的亮屏都是 0 ms;偶爾 `No route to host`/`offline` 需要喚醒手機(2h25m 那次) | 需要 WiFi 開著,不能用在飛航模式 / 關 WiFi 的對照;連接埠重開後會變 |
+| `MODE="sim"`(USB 不拔,模擬拔電) | 可以,不需要接線動作 | 手機仍在充電,mAh 無效,只看 Doze 狀態 |
+
 **解決 `adb: more than one device/emulator`**
 
 關掉手機的無線偵錯後,電腦的 adb 還留著舊的 `192.168.x.x:埠號 offline` 項目;再插上 USB 就有兩個裝置,所以出現這個錯誤。手動處理:`adb disconnect`(不加參數,清掉全部無線項目),或用 `adb -s <序號> ...` / `export ANDROID_SERIAL=<序號>` 指定裝置。`doze-test-usb.sh` 一開始會自動 `adb disconnect`,並只選用 USB 裝置(排除含 `:`、以 `adb-` 開頭或含 `_tcp` 的項目)。
@@ -565,6 +578,8 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「WiFi 是目前最大的底噪」 | 7h45m 的模型估算 WiFi 只有 0.85 mAh(約 1% 的 85 mAh);`wlan_ma` + `hip4_wake_lock_tx` 的 kernel wakelock 共 7.7 分鐘,只占 1.7% 的時間。真正占比大的是 idle(基礎耗電)、CPU(系統)與感測器 |
 | 「3h33–4h04 的 27.6 mAh/h 是異常」(Grok)/「那就是例行維護」(Gemini) | 兩者都過度解讀:這段 14 mAh,一般區段 9 mAh,只差一個 4.5 mAh 的計數階距;維護窗口(4h02m59 → 4h04m31)在區段最尾端,無法判斷占了多少 |
 | 「把 Wi-Fi 連到訪客網路,預期 kernel active 從 60% 降到 30% 以下」 | 沒有依據:這個數字在所有測試(51–66%,有線、無線、深夜、白天)都差不多,而且它的耗電占比很小 |
+| 「`wlan_mbox_irq` 458 次遠高於 App 的喚醒次數,Wi-Fi 是最明顯的耗電與喚醒來源,應優先排查」 | `wlan_mbox_irq` 是 WiFi 硬體中斷的計數,`wakeupap` 是被歸屬到某個 UID 的喚醒,兩者不是同一種東西,數字不能互相比較;耗電占比看 `Estimated power use`:WiFi 約 1% |
+| 「鎖定狀態下 Android 會限制 USB 資料與 ADB,所以抓不到資料」(一般化的說法) | 是否擋住取決於機型與設定(例如 Samsung 的 USB 保護);不少手機在已授權後鎖定也能用 adb。不要當成所有 Android 的通則 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
 | 「Java Heap Alloc 約 80.2 MB」 | 80.2 MB 是 native heap(70.4 MB)與 Dalvik heap(9.9 MB)的**合計**,Java heap 配置只有約 9.9 MB |
 

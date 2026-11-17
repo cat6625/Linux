@@ -157,7 +157,23 @@ if [ "$MODE" = "unplug" ]; then
   echo "時間到後,請把 USB 接回手機;偵測到後腳本會自動繼續,不需要按任何鍵。"
   ( sleep $((TEST_HOURS * 3600)); beep "待機時間到,可以接回 USB 了" ) &
   REM_PID=$!
-  adb wait-for-device
+  # 等到「USB 已接回、手機已解鎖並授權」。接回後有些手機(例如這支 M14)必須先解鎖並允許 USB 偵錯,
+  # 才能執行 adb 指令;這裡每 30 秒提醒一次目前狀態,而不是無聲地卡住。
+  LAST_MSG=0
+  until adb shell true >/dev/null 2>&1; do
+    NOW="$(date +%s)"
+    if [ $(( NOW - LAST_MSG )) -ge 30 ]; then
+      ST="$(adb devices 2>/dev/null | awk -v s="$ANDROID_SERIAL" '$1==s {print $2}')"
+      case "$ST" in
+        "")           echo "$(date +%H:%M:%S) 尚未偵測到 USB:請把 USB 接回手機…" ;;
+        unauthorized) echo "$(date +%H:%M:%S) 手機已接上但尚未授權:請解鎖手機並按「允許 USB 偵錯」…"; beep "請解鎖手機並允許 USB 偵錯" ;;
+        offline)      echo "$(date +%H:%M:%S) 裝置 offline:請解鎖手機,或把 USB 重新插拔一次…" ;;
+        *)            echo "$(date +%H:%M:%S) 裝置狀態:$ST(請解鎖手機,必要時重新插拔)…" ;;
+      esac
+      LAST_MSG="$NOW"
+    fi
+    sleep 3
+  done
   kill "$REM_PID" 2>/dev/null; REM_PID=""
   T1="$(date +%s)"
   sleep 3
