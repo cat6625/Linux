@@ -39,7 +39,7 @@
 |---|---|---|---|
 | 手機版 Termux + 鬧鐘 | 不用電腦 | 要開無線偵錯才能在手機上跑 `dumpsys`;設鬧鐘、結尾亮屏、Termux 本身都是變因;Termux 的長 `sleep` 在 Doze 下不可靠;MacroDroid 我也不會用 | 放棄 |
 | 電腦 + 無線 adb | 手機不用接線,可以長時間放著 | 電腦要睡眠(否則手機約多耗 52 mAh/h);睡眠醒來後 adb 常是 `offline` / `No route to host`,需要重試甚至亮屏手機 | 可用,需自動重連 |
-| 電腦 + USB(真的拔線、接回) | 不依賴 WiFi,拔線期間手機完全不被打擾 | 接回 USB 要解鎖授權;接回的瞬間手機開始充電,Doze 會退出,接回後的 `Charge counter` 會被充電污染 | **最乾淨** |
+| 電腦 + USB(真的拔線、接回) | 不依賴 WiFi,拔線期間手機完全不被打擾 | 接回 USB 要解鎖授權(原因是 One UI 7 的「鎖定時封鎖 USB 連線」,鎖定超過 1 小時才會擋,所以接回 3 分鐘不用解鎖、69 分鐘以上都要);接回的瞬間手機開始充電,Doze 會退出,接回後的 `Charge counter` 會被充電污染 | **最乾淨** |
 
 **越自動化,越不會犯錯,數據也越不失真。** 最後我做了兩支腳本(重置 → 待機 → 擷取 → 產生摘要),以及一支把完整檔濃縮成約 100–150 行的摘要腳本:
 
@@ -205,7 +205,7 @@
 - **重置時手機已經在 deep idle**:這樣量不到「進入時間」。
 - **有一個你不知道的鬧鐘**:`Next alarm clock` 空白不代表沒有;要看 `dumpsys alarm` 的 `Next wake from idle`。
 - **解鎖才會讓 Doze 退出;只亮屏不解鎖不會**(Samsung 的 `wait_for_unlock=true`)。
-- **USB 版**:接回 USB 就開始充電,Doze 在那一刻退出,不是 deep idle 不穩;`battery_end` 與 `deviceidle` 的目前狀態不能用,實際放電看 `batterystats` 的 `Discharge`。
+- **USB 版**:Samsung One UI 7 預設開啟「鎖定時封鎖 USB 連線」(設定 → 安全性與隱私 → 其他安全性設定),鎖定超過 1 小時後接上的 USB 要解鎖才能傳資料;官方的 Batterystats 流程同樣是「接回後才 dump」,並不是方法的問題;無線 adb 不受影響,但需要 WiFi。接回 USB 就開始充電,Doze 在那一刻退出,不是 deep idle 不穩;`battery_end` 與 `deviceidle` 的目前狀態不能用,實際放電看 `batterystats` 的 `Discharge`。
 - **`meminfo` 指令要寫 `dumpsys meminfo <套件>`**:我有一次漏了 `meminfo`,第二個 launcher 的資料就缺了一半。
 - **netstats 是開機至今的累計**,不是測試區間。
 - **電腦睡眠醒來後 adb 會 `offline`**:要重試,不要讓後面的指令抓到一堆空檔。
@@ -240,6 +240,7 @@
 | 9 | 11-16 12:42 | One UI | 同上 | 2h27m | 重置時已在 deep | 100% | 31.5 mAh(12.8/h) |
 | 10 | 11-16 21:18 | Lawnchair | USB 拔線(第 69 分鐘就接回) | 1h09m | 1h02m17 | 9.4% | 13.5 mAh |
 | 11 | 11-16 22:54 | Lawnchair | USB 拔線 | 7h45m | **1h02m58** | **86.4%** | **85.5 mAh(11.0/h)** |
+| 12 | 11-17 09:59 | Lawnchair | USB 拔線(日間) | 2h24m | 1h02m15 | 57.0% | 18.0 mAh(7.5/h) |
 
 ## 附錄 B:工具
 

@@ -69,6 +69,7 @@
 | 9 | 2h27m(One UI Home 預設)| 無線偵錯開、Ubuntu 睡眠 100%、電量 74% | 重置時已在 deep idle | 100% | 31.5 mAh(約 12.8 mAh/h);同樣沒有中止、沒有 FMM 鬧鐘 |
 | 10 | 1h09m(Lawnchair 預設,**USB 拔線**,`doze-test-usb.sh`)| 實際拔掉 USB(無任何 adb 連線)、FMM 服務已停止、電量 69% | 1h02m17 | 9.4%(6m28s;在 1h08m45 被**接回 USB(`normal (charging)`)**結束) | 13.5 mAh;你在 69 分鐘就接回,不是測試失敗 |
 | 11 | 7h45m(Lawnchair 預設,USB 拔線)| 同上、電量 72%;接回 USB 後需解鎖授權,腳本等到解鎖才繼續 | 1h02m58(`deep.progression` 0h31m00、1h02m01) | **86.4%**(6h41m;三段:1h → 2h → 3h40m,最後一段在接回 USB 時結束) | **85.5 mAh(約 11.0 mAh/h)**;無任何中止、無 FMM 鬧鐘 |
+| 12 | 2h24m(Lawnchair 預設,USB 拔線;11-17 09:59)| 同上、電量 67%;日間 | 1h02m15 | 57.0%(1h + 21 分,後者在接回 USB 時結束) | 18.0 mAh(約 7.5 mAh/h);WiFi kernel active 63.4%、`wlan_mbox_irq` 約 190 次/h(日間範圍);無中止、無 FMM 鬧鐘 |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -220,7 +221,8 @@ adb shell dumpsys netstats detail         > run_netstats.txt
 **接回 USB 後要解鎖:官方流程也一樣,而且資料不會丟**
 
 - Android Developers 的 Batterystats / Battery Historian 官方流程是:重置統計 → **拔掉裝置**(只用電池供電)→ 做測試 → **接回** → 確認手機被辨識(`adb devices`)→ 匯出 `dumpsys batterystats`。文件沒有規定螢幕狀態,但前提是 adb 在接回後能用。所以官方步驟同樣是「接回後才抓資料」,不是你的做法特別麻煩。
-- 接回後需不需要解鎖,取決於手機的 USB 政策。這支 M14 兩次 USB 測試都是**接回後必須解鎖並授權**才能繼續。原因我沒有證實;可能是 Samsung 的 USB 保護(One UI 的 Auto Blocker 裡有「鎖定時阻擋 USB 傳輸線指令」類的選項,請到設定的安全性與隱私檢查;關掉會降低安全性,請自行評估)或 adb 授權機制。
+- **接回後需不需要解鎖,是 Samsung One UI 7 的「鎖定時封鎖 USB 連線」(Block USB connections while locked,預設開啟)。** Samsung 的說明:One UI 7.0 起,螢幕鎖定超過 1 小時,USB 連線就被限制;鎖定 1 小時後才接上的 USB 要解鎖才能用,充電不受影響、資料傳輸被擋,並會顯示「請解鎖手機並重新連接 USB 裝置」的通知。位置是設定 → 安全性與隱私 → 其他安全性設定 → 封鎖鎖定時的 USB 連線(名稱依語言與版本略有不同)。這正好符合你的觀察:**接回 3 分鐘不用解鎖,69 分鐘以上都要解鎖**。(我先前猜是 Auto Blocker,猜錯了,這是獨立的設定。)
+- **三種處理方式**:(1) 每次接回後解鎖並授權(最安全,現在的做法);(2) 測試期間把這項設定暫時關掉,測完再開回來(降低鎖定時的 USB 防護,自行評估);(3) 改用無線 adb(不受這項設定影響,但需要 WiFi)。測試時間不到 1 小時的話,這項限制不會發作。
 - **解鎖不會讓資料消失**:`batterystats` 存在手機裡,接回與解鎖只會在歷史的最尾端多出「充電、亮屏、解鎖」的事件。腳本與摘要已把有效待機區間算到接回的那一刻;要注意 `deviceidle` 的目前狀態(ACTIVE、`mCharging=true`)、接回後的電池快照,以及解鎖後量的 `meminfo` 都是接回之後的狀態,不能代表待機期間。
 - `doze-test-usb.sh` 在等待時會每 30 秒提示目前狀態(尚未接上 / 尚未授權 / offline),不會無聲地卡住。
 
@@ -636,19 +638,19 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 
 比較的是**launcher 進程自己的 PSS**,不是系統的可用記憶體。三個 launcher 同時常駐時各自都會佔用記憶體,要一起列出。
 
-**這次實測的記憶體對照(`dumpsys meminfo`,單一時間點,PSS 等單位為 MB):**
+**這次實測的記憶體對照(`dumpsys meminfo`,單一時間點,單位 MB):**
 
-| 項目 | Lawnchair(3 次量測) | One UI Home(8 次量測) |
+| 項目 | Lawnchair(9 次量測) | One UI Home(14 次量測) |
 |---|---|---|
-| PSS | 96.2、124.1、127.3 | 132.1–180.4 |
-| 私有記憶體(Private Dirty + Clean) | 35.6、27.1、29.3 | **14.6–78.1**(隨換出狀態大幅跳動) |
-| Swap PSS | 58.7、95.8、96.8 | 75.9–128.1 |
-| PSS + Swap PSS(總足跡) | 155、220、224 | 225–285 |
-| Views / Activities | 686 / 2 → **1253 / 6**(較晚的量測) | 364–373 / 2 |
+| PSS | 96.2–163.2 | 132.1–180.4 |
+| 私有記憶體(Private Dirty + Clean) | 14.8–58.5(平均約 34.5) | **14.6–78.1**(平均約 37.8) |
+| Swap PSS | 58.7–109.2 | 75.9–129.6 |
+| PSS + Swap PSS(總足跡) | 155–266(平均約 217) | 225–295(平均約 262) |
+| Views / Activities | 686 → **1253–1265 / 2 → 6** | 355–373 / 2 |
 
 另外,11-16 11:10 的「正在運作的服務」畫面(系統 1.2 GB、Apps 1.1 GB、可用 1.3 GB):**One UI 首頁 243 MB(3 個程序)、Lawnchair 139 MB(2 個程序)、Gboard 159 MB、Google Play 服務 167 MB**。
 
-- 方向上 Lawnchair 的總足跡比 One UI Home 小約 25–100 MB(因量法而異),但**兩者在重疊的邊緣**(Lawnchair 最大 224、One UI 最小 225),而且 One UI Home 的私有記憶體自己就在 14.6–78.1 MB 之間跳動。
+- **私有記憶體兩者幾乎一樣**(平均 34.5 對 37.8 MB),而且兩者都隨換出狀態大幅跳動;PSS 也相近(11-17 同一時間:Lawnchair 163.2 / 136.1,One UI Home 165.0 / 138.9)。**總足跡**(PSS + Swap PSS)平均 Lawnchair 約少 45 MB(217 對 262 MB),但範圍重疊(Lawnchair 最大 266、One UI Home 最小 225),而且 PSS 含按比例分攤的共用記憶體,不是 launcher 自己的。結論:**沒有可靠的差異**。
 - **更重要的是:換預設桌面並不會讓 One UI Home 消失。** Lawnchair 為預設的那次 6h07m 測試中,One UI Home(`u0a125`)與 Pear Launcher(`u0a1330`)都以前景服務常駐了整段 6h07m11s;「正在運作的服務」畫面也同時列出 One UI 首頁與 Lawnchair。所以實際情況是**多了一個 Lawnchair 常駐(約 140 MB),而不是取代 One UI Home**。如果原本的目標是「省記憶體」,在這支手機上換桌面大概達不到;要省的話,應該是停用多餘的 launcher(例如已下架的 Pear Launcher),並且接受 One UI Home 要留著(最近使用的應用程式等系統功能會用到)。這是依資料的推論,沒有實際移除其他 launcher 後再量測。
 - 要得到可靠的答案:在相同情境(例如重開機後 10 分鐘、開同一組 App 之後)各量 **3 次**再比,三個 launcher 同時常駐時也要一起列出。
 
