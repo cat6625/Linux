@@ -17,7 +17,7 @@
 set -u
 
 # ===================== 設定 =====================
-ADB_ADDR="192.168.1.142:44055"   # 無線偵錯的 IP:埠號(重開無線偵錯後埠號會變,要修正)
+ADB_ADDR="192.168.1.142:41077"   # 無線偵錯的 IP:埠號(重開無線偵錯後埠號會變,要修正)
 PKGS=("com.sec.android.app.launcher" "ch.deletescape.lawnchair.plah")   # 要量記憶體的 launcher 套件
 RECONNECT_TRIES=24               # 每次間隔 5 秒,共約 2 分鐘
 MIN_ALARM_MIN=125                # 下一個 wake-from-idle 鬧鐘至少要在幾分鐘之後
@@ -66,6 +66,21 @@ connect_adb() {
   return 1
 }
 
+# 讓電腦睡眠。GNOME 桌面常有「user session inhibited」的阻擋型 inhibitor(例如播放影音的瀏覽器、遠端桌面、Caffeine 類延伸),
+# 這時單純的 `systemctl suspend` 會失敗:Operation inhibited by "tdd" (PID … "gnome-session-b")。
+# 所以先試一般的 suspend,被擋就改用 --ignore-inhibitors(這個選項需要 polkit 授權,本機實測可用)。
+suspend_host() {
+  if systemctl suspend 2>"$OUT_DIR/suspend_err.txt"; then
+    return 0
+  fi
+  log "systemctl suspend 失敗($(head -n1 "$OUT_DIR/suspend_err.txt")),改用 --ignore-inhibitors"
+  if systemctl --ignore-inhibitors suspend 2>>"$OUT_DIR/suspend_err.txt"; then
+    return 0
+  fi
+  log "⚠ 仍無法讓電腦睡眠(詳見 suspend_err.txt)。請先確認誰擋住了睡眠:systemd-inhibit --list"
+  return 1
+}
+
 # ---------------------------------------------------------------- 開始前
 log "開始前:連線 adb"
 connect_adb || { echo "無法連線 $ADB_ADDR,請確認 IP:埠號(無線偵錯畫面上顯示的)"; exit 1; }
@@ -106,7 +121,10 @@ fi
 # ---------------------------------------------------------------- 電腦睡眠
 log "電腦即將睡眠(醒來後會自動繼續)"
 sleep 2
-systemctl suspend
+if ! suspend_host; then
+  echo "電腦無法睡眠。測試仍在進行,但電腦醒著會讓手機多耗電(實測約 +40 mAh/h),請手動讓電腦睡眠,或按 Ctrl+C 結束。"
+  read -r -p "已手動睡眠並醒來後,按 Enter 繼續擷取:" _
+fi
 log "電腦已醒來"
 
 # ---------------------------------------------------------------- 醒來後
