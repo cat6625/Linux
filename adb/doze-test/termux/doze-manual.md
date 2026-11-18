@@ -51,7 +51,31 @@ ln -sf ~/doze/adb.sh "$PREFIX/bin/adb-auto"
 
 ---
 
-## 二、 透過 NMM File Manager 掛載內部目錄（選用）
+## 二、 疑難排解：若不小心將 `adb.sh` 軟連結命名為 `adb` 的復原方法
+
+若先前執行過 `ln -sf ~/doze/adb.sh "$PREFIX/bin/adb"` 導致原生 `adb` 指令被覆蓋並出現遞迴報錯，請在 Termux 依序執行以下指令復原：
+
+1. **移除蓋掉原生指令的軟連結**：
+   ```bash
+   rm -f "$PREFIX/bin/adb"
+   ```
+2. **重新安裝 `android-tools` 還原原生 `adb` 執行檔**：
+   ```bash
+   pkg reinstall -y android-tools
+   ```
+3. **驗證 `adb` 是否已恢復正常**：
+   ```bash
+   adb version
+   ```
+   *(若正常顯示 `Android Debug Bridge version ...` 即代表還原成功)*
+4. **改用不衝突的名稱建立快捷指令**：
+   ```bash
+   ln -sf "$HOME/doze/adb.sh" "$PREFIX/bin/adb-auto"
+   ```
+
+---
+
+## 三、 透過 NMM File Manager 掛載內部目錄（選用）
 
 若習慣使用圖形化介面編輯 `~/doze/` 內的腳本，可透過 Android SAF 機制掛載：
 
@@ -62,7 +86,7 @@ ln -sf ~/doze/adb.sh "$PREFIX/bin/adb-auto"
 
 ---
 
-## 三、 日常測試執行流程
+## 四、 日常測試執行流程
 
 ### 1. 初次配對（每台裝置僅需執行一次）
 1. 進入手機 **設定 → 開發人員選項 → 無線除錯**，開啟開關。
@@ -95,7 +119,7 @@ adb-auto
 
 ---
 
-## 四、 核心腳本原始碼
+## 五、 核心腳本原始碼
 
 ### 1. `doze.sh`（整合強化版全高埠掃描與逐一驗證）
 
