@@ -81,6 +81,34 @@ suspend_host() {
   return 1
 }
 
+# `systemctl suspend` 有時會「在電腦真的睡著之前就先返回」(2026-11-17 實測:14:12:04 就返回,實際醒來是數小時後),
+# 這會讓「電腦已醒來」的時間記錯,而且 adb 連線嘗試會卡在睡眠中途。所以這裡用「牆上時鐘跳躍」判斷是否真的睡過:
+# 睡眠期間 `sleep` 不會前進、但 `date` 會;醒來後 `date` 一次跳過數小時。
+host_sleep() {
+  local t0 t1 last now
+  t0="$(date +%s)"
+  suspend_host || return 1
+  t1="$(date +%s)"
+  if [ $(( t1 - t0 )) -gt 30 ]; then return 0; fi    # systemctl 一直等到醒來才返回
+  last="$t1"
+  while [ $(( $(date +%s) - t0 )) -lt 120 ]; do
+    sleep 2
+    now="$(date +%s)"
+    if [ $(( now - last )) -gt 30 ]; then return 0; fi   # 時鐘跳過 30 秒以上 = 剛醒來
+    last="$now"
+  done
+  return 1                                               # 120 秒內沒有睡 = 電腦沒睡著
+}
+
+# 醒來後網路(WiFi)需要一點時間才會恢復;先等網路,再去連 adb,避免 No route to host
+wait_network() {
+  if command -v nm-online >/dev/null 2>&1; then
+    nm-online -q -t 120 || log "⚠ 等了 120 秒仍沒有網路連線"
+  else
+    sleep 15
+  fi
+}
+
 # ---------------------------------------------------------------- 開始前
 log "開始前:連線 adb"
 connect_adb || { echo "無法連線 $ADB_ADDR,請確認 IP:埠號(無線偵錯畫面上顯示的)"; exit 1; }
@@ -121,11 +149,13 @@ fi
 # ---------------------------------------------------------------- 電腦睡眠
 log "電腦即將睡眠(醒來後會自動繼續)"
 sleep 2
-if ! suspend_host; then
-  echo "電腦無法睡眠。測試仍在進行,但電腦醒著會讓手機多耗電(實測約 +40 mAh/h),請手動讓電腦睡眠,或按 Ctrl+C 結束。"
+if ! host_sleep; then
+  echo "電腦沒有真的睡著。測試仍在進行,但電腦醒著會讓手機多耗電(實測約 +40 mAh/h),請手動讓電腦睡眠,或按 Ctrl+C 結束。"
   read -r -p "已手動睡眠並醒來後,按 Enter 繼續擷取:" _
 fi
 log "電腦已醒來"
+wait_network
+log "網路就緒,開始連線 adb"
 
 # ---------------------------------------------------------------- 醒來後
 if ! connect_adb; then

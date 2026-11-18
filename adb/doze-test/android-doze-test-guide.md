@@ -70,6 +70,7 @@
 | 10 | 1h09m(Lawnchair 預設,**USB 拔線**,`doze-test-usb.sh`)| 實際拔掉 USB(無任何 adb 連線)、FMM 服務已停止、電量 69% | 1h02m17 | 9.4%(6m28s;在 1h08m45 被**接回 USB(`normal (charging)`)**結束) | 13.5 mAh;你在 69 分鐘就接回,不是測試失敗 |
 | 11 | 7h45m(Lawnchair 預設,USB 拔線)| 同上、電量 72%;接回 USB 後需解鎖授權,腳本等到解鎖才繼續 | 1h02m58(`deep.progression` 0h31m00、1h02m01) | **86.4%**(6h41m;三段:1h → 2h → 3h40m,最後一段在接回 USB 時結束) | **85.5 mAh(約 11.0 mAh/h)**;無任何中止、無 FMM 鬧鐘 |
 | 12 | 2h24m(Lawnchair 預設,USB 拔線;11-17 09:59)| 同上、電量 67%;日間 | 1h02m15 | 57.0%(1h + 21 分,後者在接回 USB 時結束) | 18.0 mAh(約 7.5 mAh/h);WiFi kernel active 63.4%、`wlan_mbox_irq` 約 190 次/h(日間範圍);無中止、無 FMM 鬧鐘 |
+| 13 | 6h51m(Lawnchair 預設,**無線 adb、電腦睡眠**;11-17 14:12)| FMM 服務已停止、電量 70%;日間到晚上。重置時手機已在 Doze 計時中(`Light state: IDLE, deep state: INACTIVE`) | 0h31m58(**不是重置後 32 分**,是計時早已開始) | **92.2%**(1h → 2h → 3h16m;維護窗口 1h31m58、3h33m55) | 94.5 mAh(約 13.8 mAh/h);WiFi kernel active **47.9%**(目前最低)、`wlan_mbox_irq` 約 180 次/h;結束時 `deviceidle` 仍是 IDLE(無線版不會在擷取時退出 Doze) |
 | — | Redmi 10(MIUI)| 同樣裝 Lawnchair | 約 27–31 分 | — | — |
 
 **結論:**
@@ -474,6 +475,7 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
 - **背景下載、同步。** 例如 Play 商店 3 小時內下載 20 MB,會讓耗電明顯上升。
 - **WiFi 中斷與 Doze 無關。** `wlan_mbox_irq` 在 deep idle 期間仍會發生,來源多半是網路環境,換 launcher 無法改善。
 - **Termux 影響很小。** 實測前景服務 2 小時耗電不到 0.03 mAh、無 wakelock;adb 走 localhost 不用 WiFi 硬體。
+- **`systemctl suspend` 可能在電腦真的睡著之前就先返回。** 11-17 的 6h51m 測試,腳本在 14:12:04 就印出「電腦已醒來」,但電腦其實睡到晚上;adb 連線的第一次嘗試剛好卡在睡眠中途,醒來後才完成(所以「第 1 次嘗試」的時間是 21:03:25)。這會讓時間紀錄錯誤,也讓你感覺「醒來後等了一段時間才開始紀錄」。`doze-test.sh` 現在用「牆上時鐘跳躍」判斷真的睡過(睡眠期間 `sleep` 不前進、`date` 會),並在醒來後先 `nm-online` 等網路再連 adb。**真正的醒來時間看 `suspend.txt`(journalctl 的 `System returned from sleep operation`)。** 這組測試的 `deviceidle` 在擷取時仍是 IDLE、最後一個 cc 階距在 20:54:36 之後沒有再掉,所以醒來到擷取之間的幾分鐘看不出污染;但無線版仍應盡量讓醒來後立刻擷取。
 - **電腦睡眠被擋:`Operation inhibited by "tdd" (PID … "gnome-session-b") … user session inhibited`。** `systemctl suspend` 失敗,代表有一個**阻擋型(block)inhibitor**。用 `systemd-inhibit --list` 看:`delay` 類(NetworkManager、UPower、gsd-power、gsd-media-keys 的 sleep)只會讓睡眠延後幾秒,不是原因;`gsd-media-keys` 的 `handle-power-key…`(block)只管實體電源鍵;**真正擋住的是 `gnome-session-b`(`shutdown:sleep`、原因「user session inhibited」,block)**,它是 GNOME 替某個要求「不要登出 / 睡眠」的應用程式持有的(例如播放影音的瀏覽器、遠端桌面、Caffeine 之類延伸)。想知道是誰:
 
   ```bash
@@ -507,6 +509,7 @@ Lawnchair 預設與 One UI Home 預設進入 deep idle 的時間幾乎相同,延
   ```
 
   例如 `cc:2493000` → `cc:2430000`,差 63000 = 63.0 mAh。
+- **`Estimated power use` 的 `actual drain: 120-180` 這類區間不要拿來和 `Discharge` 比。** 它是用「每 1% = 60 mAh(標示 6000 mAh)」從電量百分比的變化推出來的;本機每 1% 約 45 mAh,所以會偏高。例:11-17 的 6h51m,電量從 70% 掉到 67%(3 級),`actual drain` 寫 120–180 mAh,但 `Discharge` 是 94.5 mAh,約 2.1%,與起點其實是 69.5% 左右相符。
 - `Estimated power use` 各項加總是**模型估算**,可能與實際差很多(6h 那次加總約 116 mAh,實際 63.0 mAh),只看占比。
 - **電量百分比不是線性、也不是固定的 mAh。** 本機實測:`level` 每掉 1% 的兩次跳變之間,電池 `cc` 只差約 **45–47 mAh**(例如 02:49:43 → 06:13:50 為 45 mAh;42% → 40% 共 94.5 mAh;47 → 44% 共約 3 級,每級約 45 mAh),而標示容量 6000 mAh 的 1% 應是 60 mAh。可能是電池老化、容量估計值(`Estimated battery capacity` 5830)不準,或百分比對電壓曲線的對應並非線性,這裡無法判斷原因。重點是:
   - 不要用「百分比 / 小時」算耗電,短時間測試(< 2 小時)百分比通常只變 0–1 級,毫無意義。
@@ -576,7 +579,7 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「FMM 的離線搜尋 BLE 掃描陷入高頻率無限迴圈」 | 資料顯示 FMM 鬧鐘頻率並不高:FMM 開約每 3 小時 1 次;關閉後約 15 小時內 2 次。它的影響是「事先排定的鬧鐘」造成 Doze 放棄進入 deep idle,不是高頻喚醒 |
 | 「飛航模式可以阻斷 FMM 的影響」 | 見第 8 節:鬧鐘是本機計時器,飛航模式取消不了;且無法使用無線 adb |
 | 「netstats 的 GMS 3906 次 openSession、vending 幾十 MB,是這次待機的網路活動」 | `netstats detail` 是**開機至今的累計**,不是測試區間;測試區間的 WiFi 流量以 batterystats 為準(這次收 1.71 MB)。netstats 的 `Recent poll events`(PERIODIC)時間與 Doze 事件吻合(20:14:58 就是中止點、21:43:29 就是 progression),它們是結果,不是原因 |
-| 「WiFi kernel active 50–60% 就是 WiFi 驅動 wakelock 阻止 suspend」「Kernel active 代表 CPU 大部分時間沒有進入深度休眠」 | 我們的資料同時是 WiFi kernel active 51–66% 與 CPU 深度睡眠(suspend)92–96%;kernel wakelock 的時間是分鐘等級(例如 `wlan_ma` 4 分、`hip4_wake_lock_tx` 3 分),不是小時。這個百分比是 WiFi 驅動回報的活動時間,**不等於 CPU 被擋住,也不是耗電比例**(ChatGPT 與 Duck.ai→chatgpt 的說法是對的) |
+| 「WiFi kernel active 50–60% 就是 WiFi 驅動 wakelock 阻止 suspend」「Kernel active 代表 CPU 大部分時間沒有進入深度休眠」 | 我們的資料同時是 WiFi kernel active 48–66% 與 CPU 深度睡眠(suspend)92–96%;kernel wakelock 的時間是分鐘等級(例如 `wlan_ma` 4 分、`hip4_wake_lock_tx` 3 分),不是小時。這個百分比是 WiFi 驅動回報的活動時間,**不等於 CPU 被擋住,也不是耗電比例**(ChatGPT 與 Duck.ai→chatgpt 的說法是對的) |
 | 「`dumpsys battery unplug` 之後就可以用 USB 量耗電」 | `unplug` 只是讓系統「以為」沒有充電,手機實際上還在從 USB 充電,`Discharge` 與 `cc` 都無效;只適合看 Doze 狀態 |
 | 「USB 仍連接,但請確認 USB 沒有讓手機持續充電」(ChatGPT 第一段) | 做不到,而且與它後面「測試期間拔掉 USB」的修正互相矛盾。要測耗電就必須真的拔掉 |
 | 「讀 `/sys/kernel/debug/wakeup_sources`、`suspend_stats`、`cpuidle` 判斷 deep idle」 | 在未 root 的 Samsung 上通常是 `Permission denied`;改用 `batterystats` 的 kernel wakelock / wakeup reasons(不需要 root)更實際 |
@@ -591,7 +594,7 @@ AI 的回答只會和你給的資料一樣好。建議這樣問:
 | 「Wi-Fi 的持續活動讓系統難以長時間維持 deep idle」 | 下一組在 WiFi kernel active 59.2% 的情況下 deep idle 達 86.4%、最長 3h40m,反證 |
 | 「WiFi 是目前最大的底噪」 | 7h45m 的模型估算 WiFi 只有 0.85 mAh(約 1% 的 85 mAh);`wlan_ma` + `hip4_wake_lock_tx` 的 kernel wakelock 共 7.7 分鐘,只占 1.7% 的時間。真正占比大的是 idle(基礎耗電)、CPU(系統)與感測器 |
 | 「3h33–4h04 的 27.6 mAh/h 是異常」(Grok)/「那就是例行維護」(Gemini) | 兩者都過度解讀:這段 14 mAh,一般區段 9 mAh,只差一個 4.5 mAh 的計數階距;維護窗口(4h02m59 → 4h04m31)在區段最尾端,無法判斷占了多少 |
-| 「把 Wi-Fi 連到訪客網路,預期 kernel active 從 60% 降到 30% 以下」 | 沒有依據:這個數字在所有測試(51–66%,有線、無線、深夜、白天)都差不多,而且它的耗電占比很小 |
+| 「把 Wi-Fi 連到訪客網路,預期 kernel active 從 60% 降到 30% 以下」 | 沒有依據:這個數字在所有測試(48–66%,有線、無線、深夜、白天)都差不多,而且它的耗電占比很小 |
 | 「`wlan_mbox_irq` 458 次遠高於 App 的喚醒次數,Wi-Fi 是最明顯的耗電與喚醒來源,應優先排查」 | `wlan_mbox_irq` 是 WiFi 硬體中斷的計數,`wakeupap` 是被歸屬到某個 UID 的喚醒,兩者不是同一種東西,數字不能互相比較;耗電占比看 `Estimated power use`:WiFi 約 1% |
 | 「鎖定狀態下 Android 會限制 USB 資料與 ADB,所以抓不到資料」(一般化的說法) | 是否擋住取決於機型與設定(例如 Samsung 的 USB 保護);不少手機在已授權後鎖定也能用 adb。不要當成所有 Android 的通則 |
 | 「以 6000 mAh 估算,約每小時 0.26%」 | 實測每 1% 約 45 mAh(約 4550 mAh),同樣 15.4 mAh/h 應是約 0.34%/小時 |
@@ -652,17 +655,17 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 
 **這次實測的記憶體對照(`dumpsys meminfo`,單一時間點,單位 MB):**
 
-| 項目 | Lawnchair(9 次量測) | One UI Home(14 次量測) |
+| 項目 | Lawnchair(11 次量測) | One UI Home(16 次量測) |
 |---|---|---|
 | PSS | 96.2–163.2 | 132.1–180.4 |
-| 私有記憶體(Private Dirty + Clean) | 14.8–58.5(平均約 34.5) | **14.6–78.1**(平均約 37.8) |
+| 私有記憶體(Private Dirty + Clean) | 14.8–58.5(平均約 32.5) | **14.6–78.1**(平均約 38.6) |
 | Swap PSS | 58.7–109.2 | 75.9–129.6 |
-| PSS + Swap PSS(總足跡) | 155–266(平均約 217) | 225–295(平均約 262) |
+| PSS + Swap PSS(總足跡) | 155–266(平均約 213) | 220–295(平均約 258) |
 | Views / Activities | 686 → **1253–1265 / 2 → 6** | 355–373 / 2 |
 
 另外,11-16 11:10 的「正在運作的服務」畫面(系統 1.2 GB、Apps 1.1 GB、可用 1.3 GB):**One UI 首頁 243 MB(3 個程序)、Lawnchair 139 MB(2 個程序)、Gboard 159 MB、Google Play 服務 167 MB**。
 
-- **私有記憶體兩者幾乎一樣**(平均 34.5 對 37.8 MB),而且兩者都隨換出狀態大幅跳動;PSS 也相近(11-17 同一時間:Lawnchair 163.2 / 136.1,One UI Home 165.0 / 138.9)。**總足跡**(PSS + Swap PSS)平均 Lawnchair 約少 45 MB(217 對 262 MB),但範圍重疊(Lawnchair 最大 266、One UI Home 最小 225),而且 PSS 含按比例分攤的共用記憶體,不是 launcher 自己的。結論:**沒有可靠的差異**。
+- **私有記憶體兩者幾乎一樣**(平均 32.5 對 38.6 MB),而且兩者都隨換出狀態大幅跳動;PSS 也相近(11-17 同一時間:Lawnchair 163.2 / 136.1,One UI Home 165.0 / 138.9)。**總足跡**(PSS + Swap PSS)平均 Lawnchair 約少 45 MB(213 對 258 MB),但範圍重疊(Lawnchair 最大 266、One UI Home 最小 220),而且 PSS 含按比例分攤的共用記憶體,不是 launcher 自己的。結論:**沒有可靠的差異**。
 - **更重要的是:換預設桌面並不會讓 One UI Home 消失。** Lawnchair 為預設的那次 6h07m 測試中,One UI Home(`u0a125`)與 Pear Launcher(`u0a1330`)都以前景服務常駐了整段 6h07m11s;「正在運作的服務」畫面也同時列出 One UI 首頁與 Lawnchair。所以實際情況是**多了一個 Lawnchair 常駐(約 140 MB),而不是取代 One UI Home**。如果原本的目標是「省記憶體」,在這支手機上換桌面大概達不到;要省的話,應該是停用多餘的 launcher(例如已下架的 Pear Launcher),並且接受 One UI Home 要留著(最近使用的應用程式等系統功能會用到)。這是依資料的推論,沒有實際移除其他 launcher 後再量測。
 - 要得到可靠的答案:在相同情境(例如重開機後 10 分鐘、開同一組 App 之後)各量 **3 次**再比,三個 launcher 同時常駐時也要一起列出。
 
@@ -685,8 +688,9 @@ adb shell dumpsys meminfo | grep -E "Total RAM|Free RAM|Used RAM|Lost RAM"
 | One UI 4h17m | 無線 adb | 早晨 06:44–11:01 | 4h17m | 2h40m41 / 62.4% | 3.59 MB | 8459 / 7615 | 約 233 |
 | One UI 2h27m | 無線 adb | 下午 12:42–15:10 | 2h27m | 1h21m04 / 54.9% | 5.23 MB | 7412 / 5226 | 約 243 |
 | Lawnchair 1h09m | USB 拔線 | 晚上 21:18–22:27 | 1h09m | 36m31 / 53.2% | 0.92 MB | 2772 / 2409 | 約 209 |
+| Lawnchair 6h51m | 無線 adb(電腦睡眠) | 日間到晚上 14:12–21:03 | 6h51m | 3h17m07 / **47.9%** | 4.13 MB | 9154 / 7774 | 約 180 |
 
-- **WiFi kernel active 在所有條件下都是 51–66%**:有線或無線、哪個 launcher、深夜或白天、deep idle 占 9% 或 100% 都一樣。**完全不連 adb 的 USB 拔線(53.2%、59.2%)與無線 adb(51–66%)沒有差別**,所以它與 adb、launcher 都無關。
+- **WiFi kernel active 在所有條件下都是 48–66%**:有線或無線、哪個 launcher、深夜或白天、deep idle 占 9% 或 100% 都一樣。**完全不連 adb 的 USB 拔線(53.2%、59.2%)與無線 adb(48–66%)沒有差別**,所以它與 adb、launcher 都無關。
 - 唯一看得出差別的是**時段**:深夜的 `wlan_mbox_irq` 每小時約 79–149 次,白天與傍晚約 209–243 次,符合夜間背景同步與通知較少;USB 7h45m 的封包量約 2750 個/小時,是各組最低(其他約 3700–7400)。
 - 它不是耗電比例:7h45m 的模型估算 WiFi 只有 0.85 mAh(約 1%),kernel wakelock `wlan_ma` 4m22 + `hip4_wake_lock_tx` 3m18 共 7.7 分鐘(1.7% 的時間),CPU 深度睡眠仍有約 95%。它也不會擋住 deep idle(59.2% 的組別 deep idle 達 86.4%)。
 - 全屋通不能調整,所以能做的只有「接受它」;若真想知道網路環境的影響,可用手機熱點做一組對照,但這不會改變「手機正常」的結論。
