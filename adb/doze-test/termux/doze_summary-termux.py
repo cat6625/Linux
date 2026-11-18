@@ -173,7 +173,7 @@ def per_uid_blocks(lines):
 
     for line in lines:
         match = re.match(
-            r"^  (u\d+[a-z]\d+|\d+):\s*$",
+            r"^\s*(u\d+[a-z]\d+|\d+):\s*$",
             line
         )
 
@@ -184,7 +184,7 @@ def per_uid_blocks(lines):
         if current and line.startswith("    "):
             result[current].append(line.strip())
 
-        elif current and line.startswith("  "):
+        elif current and not line.startswith("    ") and line.strip():
             current = None
 
     return result
@@ -208,7 +208,7 @@ def parse_history(lines):
 
     for line in lines:
         match = re.match(
-            r"^\s+(\+[\dhdms]+|0)\s+\((\d+)\)\s+(\d{3})\s?(.*)$",
+            r"^\s*(\+[\dhdms]+|0)\s+\((\d+)\)\s+(\d{1,3})\s?(.*)$",
             line
         )
 
@@ -355,8 +355,6 @@ def print_battery_stats(text, events):
         t for t, _, rest in events
         if re.search(r"(^|\s)-screen", rest)
     ]
-
-    idle = parse_idle(events)
 
     for timestamp in screen_on:
         off = next(
@@ -1042,10 +1040,6 @@ def parse_mem_block(text):
         result["error"] = "找不到 TOTAL 欄位。"
         return result
 
-    # Android meminfo 表格通常以表頭列描述欄位。
-    # 不同版本可能在表頭前有其他欄位，因此只在
-    # 可明確對應時採用；無法對應時不猜測欄位順序。
-
     header = lines[total_index - 1] if total_index > 0 else ""
 
     header_tokens = re.findall(
@@ -1254,8 +1248,6 @@ def print_battery(paths):
 
         timestamp = parse_stamp(path)
 
-        # Android 常見 Charge counter 單位為 μAh。
-        # 若 OEM 使用不同單位，需以實際裝置輸出確認。
         mah = counter / 1000.0
 
         per_percent = mah / level
