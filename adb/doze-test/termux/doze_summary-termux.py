@@ -240,7 +240,7 @@ def parse_alarm_events(events):
 # ============================================================
 
 def print_battery_stats(text, events):
-    print("\n## 電池統計與 CPU 狀態")
+    print("\n## 電池統計與 CPU 状態")
 
     match = re.search(
         r"Time on battery:\s*(.*?)\s+\(([\d.]+)%\)\s+realtime,"
@@ -261,6 +261,7 @@ def print_battery_stats(text, events):
 
     fields = [
         ("Screen on", r"^\s+Screen on:\s*(.*)"),
+        # 改為更廣泛的捕捉，順便帶出可能接在後方的原始說明
         ("Discharge", r"^\s+Discharge:\s*(.*)"),
         ("Light doze discharge", r"Device light doze discharge:\s*(.*)"),
         ("Deep doze discharge", r"Device deep doze discharge:\s*(.*)"),
@@ -276,6 +277,12 @@ def print_battery_stats(text, events):
         value = grab(text, pattern)
         print(f"- {name}：{value or '未知／未提供'}")
 
+    # === 【最後一哩路】：印出 Discharge 附近的原始完整區塊以供核實 ===
+    print("\n  🔍 [原始欄位對照] Discharge 區段原始文字：")
+    for line in text.splitlines():
+        if "Discharge:" in line or "Discharge screen" in line:
+            print(f"    > {line.strip()}")
+
     # 收集所有亮屏與熄屏事件並進行區間合併 (Interval Merging)
     screen_intervals = []
     current_on = None
@@ -289,14 +296,13 @@ def print_battery_stats(text, events):
     if current_on is not None:
         screen_intervals.append((current_on, events[-1][0]))
 
-    # 合併重疊或過於接近的亮屏區段
     merged_screens = []
     for start, end in sorted(screen_intervals):
         if not merged_screens:
             merged_screens.append([start, end])
         else:
             prev_start, prev_end = merged_screens[-1]
-            if start <= prev_end + 2000:  # 2秒內的微小間隔視為同一事件
+            if start <= prev_end + 2000:
                 merged_screens[-1][1] = max(prev_end, end)
             else:
                 merged_screens.append([start, end])
