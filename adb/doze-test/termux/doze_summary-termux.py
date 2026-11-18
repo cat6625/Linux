@@ -1,710 +1,1460 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
-doze_summary-termux.py (通用版) — 把 `dumpsys batterystats` 的完整輸出濃縮成約 100–150 行的摘要，
-適用於各品牌 Android 機型（移除特定品牌專屬欄位警告，並支援新版 Android 耗電格式）。
+Termux Android Doze / BatteryStats 摘要工具
+
+用法：
+
+python3 doze_summary-termux.py full.txt \
+  --checkin checkin.txt \
+  --pkg ch.deletescape.lawnchair.plah \
+  --deviceidle deviceidle.txt \
+  --mem mem_start.txt mem_end.txt \
+  --battery battery_start.txt battery_end.txt
+
+只使用 Python 標準函式庫。
+
+注意：
+Android 不同版本與廠牌的 dumpsys 格式可能不同。
+無法辨識的欄位會顯示警告，不會假裝成 0。
 """
+
 import argparse
 import collections
 import datetime as dt
+import os
 import re
 import sys
+
 
 WELL_KNOWN = {
     0: "root/kernel",
     1000: "system",
     1001: "radio/phone",
-    1020: "mdnsd(multicast DNS)",
+    1020: "mdnsd",
     1051: "netd",
     2000: "shell(adbd)",
 }
 
-
-# ---------------------------------------------------------------- helpers
-def parse_dur(s):
-    """'1h 4m 12s 31ms' / '+1h4m12s31ms' -> milliseconds"""
-    t = 0
-    for v, u in re.findall(r"(\d+)\s*(d|h|ms|m|s)", s):
-        t += int(v) * {"d": 86400000, "h": 3600000, "m": 60000, "s": 1000, "ms": 1}[u]
-    return t
+BURST_MINUTES = 6
+BURST_MAH = 9.0
+HIGH_DRAIN_MAH_H = 25.0
 
 
-def fmt(ms):
-    ms = int(ms)
-    return f"{ms // 3600000}h{ms % 3600000 // 60000:02d}m{ms % 60000 // 1000:02d}s"
+# ============================================================
+# 基礎工具
+# ============================================================
+
+def read_text(path):
+    if not path:
+        return ""
+
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def parse_dur(value):
+    units = {
+        "d": 86400000,
+        "h": 3600000,
+        "m": 60000,
+        "s": 1000,
+        "ms": 1,
+    }
+
+    total = 0
+
+    for number, unit in re.findall(
+        r"(\d+)\s*(ms|d|h|m|s)", value
+    ):
+        total += int(number) * units[unit]
+
+    return total
+
+
+def fmt(milliseconds):
+    milliseconds = max(0, int(milliseconds))
+
+    return (
+        f"{milliseconds // 3600000}h"
+        f"{milliseconds % 3600000 // 60000:02d}m"
+        f"{milliseconds % 60000 // 1000:02d}s"
+    )
 
 
 def grab(text, pattern, group=1, flags=re.M):
-    m = re.search(pattern, text, flags)
-    return m.group(group).strip() if m else None
+    match = re.search(pattern, text, flags)
 
+    return match.group(group).strip() if match else None
+
+
+def section(text, header, limit=80):
+    pos = text.find(header)
+
+    if pos < 0:
+        return []
+
+    return text[pos:].splitlines()[1:limit + 1]
+
+
+def unique(items):
+    return list(dict.fromkeys(items))
+
+
+# ============================================================
+# UID / Checkin
+# ============================================================
 
 def load_uidmap(path):
-    m = {}
+    result = collections.defaultdict(list)
+
     if not path:
-        return m
-    for l in open(path, encoding="utf-8", errors="ignore"):
-        p = l.strip().split(",")
-        if len(p) >= 6 and p[2] == "i" and p[3] == "uid":
+        return result
+
+    for line in read_text(path).splitlines():
+        fields = line.strip().split(",")
+
+        if len(fields) < 6:
+            continue
+
+        if fields[2] == "i" and fields[3] == "uid":
             try:
-                m.setdefault(int(p[4]), []).append(p[5])
+                uid = int(fields[4])
+                result[uid].append(fields[5])
             except ValueError:
-                pass
-    return m
+                continue
+
+    return result
 
 
-def uid_to_int(s):
-    if s.isdigit():
-        return int(s)
-    m = re.match(r"u(\d+)a(\d+)$", s)
-    if m:
-        return int(m.group(1)) * 100000 + 10000 + int(m.group(2))
+def uid_to_int(value):
+    if value.isdigit():
+        return int(value)
+
+    match = re.match(r"u(\d+)a(\d+)$", value)
+
+    if match:
+        return (
+            int(match.group(1)) * 100000
+            + 10000
+            + int(match.group(2))
+        )
+
     return None
 
 
-def label(uid_s, uidmap):
-    u = uid_to_int(uid_s)
-    if u is None:
-        return uid_s
-    if u < 10000:
-        return f"{uid_s}({WELL_KNOWN[u]})" if u in WELL_KNOWN else uid_s
-    names = uidmap.get(u)
-    if names:
-        return f"{uid_s}({names[0]})"
-    user, app = divmod(u, 100000)
-    if user > 0:
-        base = uidmap.get(app)
-        if base:
-            return f"{uid_s}(≈{base[0]},第二使用者/工作資料夾)"
-    return uid_s
+def label(uid_string, uidmap):
+    uid = uid_to_int(uid_string)
 
+    if uid is None:
+        return uid_string
+
+    if uid < 10000:
+        if uid in WELL_KNOWN:
+            return f"{uid_string}({WELL_KNOWN[uid]})"
+
+        return uid_string
+
+    names = uidmap.get(uid)
+
+    if names:
+        return f"{uid_string}({names[0]})"
+
+    return uid_string
+
+
+def per_uid_blocks(lines):
+    current = None
+    result = collections.defaultdict(list)
+
+    for line in lines:
+        match = re.match(
+            r"^  (u\d+[a-z]\d+|\d+):\s*$",
+            line
+        )
+
+        if match:
+            current = match.group(1)
+            continue
+
+        if current and line.startswith("    "):
+            result[current].append(line.strip())
+
+        elif current and line.startswith("  "):
+            current = None
+
+    return result
+
+
+# ============================================================
+# BatteryStats History
+# ============================================================
 
 def split_dump(lines):
-    for i, l in enumerate(lines):
-        if l.startswith("Statistics since last charge"):
-            return lines[:i], lines[i:]
+    for index, line in enumerate(lines):
+        if line.startswith("Statistics since last charge"):
+            return lines[:index], lines[index:]
+
     return lines, []
 
 
-def parse_history(hist):
-    ev = []
-    for l in hist:
-        m = re.match(r"^\s+(\+[\dhdms]+|0) \((\d+)\) (\d{3}) ?(.*)$", l)
-        if not m:
-            continue
-        ts, _, lvl, rest = m.groups()
-        t = 0 if ts == "0" else parse_dur(ts)
-        ev.append((t, int(lvl), rest))
-    return ev
+def parse_history(lines):
+    events = []
+    unparsed = 0
 
-
-def section(stats_text, header, n=14):
-    i = stats_text.find(header)
-    if i < 0:
-        return []
-    return stats_text[i:].split("\n")[1:n + 1]
-
-
-def per_uid_blocks(stats_lines):
-    cur, out = None, collections.defaultdict(list)
-    for l in stats_lines:
-        m = re.match(r"^  (u\d+[a-z]\d+|\d+):\s*$", l)
-        if m:
-            cur = m.group(1)
-            continue
-        if cur and l.startswith("    "):
-            out[cur].append(l.strip())
-        elif cur and l.startswith("  ") and not l.startswith("    "):
-            cur = None
-    return out
-
-
-def parse_suspend(path, year):
-    S, E = [], []
-    for l in open(path, encoding="utf-8", errors="ignore"):
-        m = re.match(
-            r"^(\w{3} +\d+ \d\d:\d\d:\d\d) \S+ systemd-sleep\[\d+\]: "
-            r"(Performing sleep operation|System returned from sleep operation) '(\w+)'",
-            l,
+    for line in lines:
+        match = re.match(
+            r"^\s+(\+[\dhdms]+|0)\s+\((\d+)\)\s+(\d{3})\s?(.*)$",
+            line
         )
-        if m:
-            t = dt.datetime.strptime(
-                f"{year} " + re.sub(r" +", " ", m.group(1)), "%Y %b %d %H:%M:%S"
+
+        if not match:
+            if line.strip():
+                unparsed += 1
+
+            continue
+
+        timestamp, _, level, rest = match.groups()
+
+        elapsed = (
+            0 if timestamp == "0"
+            else parse_dur(timestamp)
+        )
+
+        events.append(
+            (elapsed, int(level), rest)
+        )
+
+    events.sort(key=lambda item: item[0])
+
+    return events, unparsed
+
+
+def parse_idle(events):
+    result = []
+
+    for timestamp, _, rest in events:
+        match = re.search(
+            r"(?:^|\s)device_idle=([^\s]+)",
+            rest
+        )
+
+        if match:
+            result.append(
+                (timestamp, match.group(1))
             )
-            (S if m.group(2).startswith("Performing") else E).append(t)
-    iv = []
-    for a in S:
-        nxt = [b for b in E if b >= a]
-        if nxt:
-            iv.append((a, min(nxt)))
-    return sorted(set(iv))
+
+    return result
 
 
-def asleep_ratio(iv, a, b):
-    tot = (b - a).total_seconds()
-    if tot <= 0:
-        return 0.0
-    s = 0.0
-    for x, y in iv:
-        lo, hi = max(a, x), min(b, y)
-        if hi > lo:
-            s += (hi - lo).total_seconds()
-    return s / tot
+def parse_alarm_events(events):
+    result = []
 
+    for timestamp, _, rest in events:
+        if "+alarm" not in rest:
+            continue
 
-def mb(kb):
-    return f"{int(kb) / 1024:.1f} MB"
-
-
-# ---------------------------------------------------------------- optional sections
-def _stamp(path):
-    try:
-        with open(path, encoding="utf-8", errors="ignore") as f:
-            head = "".join(f.readline() for _ in range(5))
-        m = re.search(r"# captured: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", head)
-        if m:
-            return dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
-    except OSError:
-        pass
-    m = re.search(r"(\d{8})_(\d{6})", path)
-    if not m:
-        return None
-    try:
-        return dt.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
-    except ValueError:
-        return None
-
-
-def _mem_parse(txt):
-    d = {}
-    m = re.search(r"\*\* MEMINFO in pid (\d+) \[(.+?)\]", txt)
-    d["proc"] = m.group(2) if m else "?"
-    mm = re.search(
-        r"^\s+TOTAL\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)",
-        txt,
-        re.M,
-    )
-    if mm:
-        v = [int(x) for x in mm.groups()]
-        d.update(
-            pss=v[0], pdirty=v[1], pclean=v[2], swap=v[3], rss=v[4], heap_alloc=v[6]
+        match = re.search(
+            r'\+alarm=(\S+?):"([^"]*)"',
+            rest
         )
-    for k, key in (
+
+        if match:
+            result.append(
+                (timestamp, match.group(1), match.group(2))
+            )
+
+    return result
+
+
+# ============================================================
+# BatteryStats 統計
+# ============================================================
+
+def print_battery_stats(text, events):
+    print("\n## 電池統計與 CPU 狀態")
+
+    match = re.search(
+        r"Time on battery:\s*(.*?)\s+\(([\d.]+)%\)\s+realtime,"
+        r"\s*(.*?)\s+\(([\d.]+)%\)\s+uptime",
+        text
+    )
+
+    if match:
+        realtime, realtime_pct, uptime, uptime_pct = match.groups()
+
+        print(f"- 電池使用時間：{realtime}")
+        print(f"- CPU 清醒時間：{uptime}（{uptime_pct}%）")
+        print(
+            f"- CPU suspend 推算比例："
+            f"{100 - float(uptime_pct):.1f}%"
+        )
+
+        if float(realtime_pct) < 99.5:
+            print(
+                f"- 注意：統計期間只有 {realtime_pct}% "
+                "屬於電池供電時間。"
+            )
+    else:
+        print(
+            "- ⚠ 找不到 Time on battery，"
+            "無法計算 CPU 清醒比例。"
+        )
+
+    fields = [
+        ("Screen on", r"^\s+Screen on:\s*(.*)"),
+        ("Discharge", r"^\s+Discharge:\s*(.*)"),
+        (
+            "Light doze discharge",
+            r"Device light doze discharge:\s*(.*)"
+        ),
+        (
+            "Deep doze discharge",
+            r"Device deep doze discharge:\s*(.*)"
+        ),
+        (
+            "Light idle",
+            r"^\s+Device light idling:\s*(.*)"
+        ),
+        (
+            "Deep idle",
+            r"^\s+Device full idling:\s*(.*)"
+        ),
+        (
+            "Partial wakelock",
+            r"Total partial wakelock time:\s*(.*)"
+        ),
+        (
+            "Wi-Fi kernel active",
+            r"Wifi kernel active time:\s*(.*)"
+        ),
+        (
+            "Wi-Fi received",
+            r"Wifi data received:\s*(.*)"
+        ),
+        (
+            "Wi-Fi sent",
+            r"Wifi data sent:\s*(.*)"
+        ),
+    ]
+
+    for name, pattern in fields:
+        value = grab(text, pattern)
+        print(f"- {name}：{value or '未知／未提供'}")
+
+    screen_on = [
+        t for t, _, rest in events
+        if re.search(r"(^|\s)\+screen", rest)
+    ]
+
+    screen_off = [
+        t for t, _, rest in events
+        if re.search(r"(^|\s)-screen", rest)
+    ]
+
+    idle = parse_idle(events)
+
+    for timestamp in screen_on:
+        off = next(
+            (t for t in screen_off if t > timestamp),
+            None
+        )
+
+        duration = (
+            (off - timestamp) / 1000
+            if off is not None
+            else None
+        )
+
+        if duration is not None and duration < 60:
+            print(
+                f"- ℹ 短暫亮屏：{fmt(timestamp)}，"
+                f"約 {duration:.1f} 秒。"
+            )
+        else:
+            print(
+                f"- ⚠ 測試期間曾亮屏：{fmt(timestamp)}，"
+                f"持續時間："
+                f"{duration if duration is not None else '未知'} 秒。"
+            )
+
+
+# ============================================================
+# Doze / Alarm / Job / Wakeup
+# ============================================================
+
+def print_doze(events, uidmap):
+    print("\n## Doze 狀態與時間軸")
+
+    idle = parse_idle(events)
+
+    if not idle:
+        print("- 沒有辨識到 device_idle 狀態事件。")
+    else:
+        print(
+            "- device_idle 轉換：",
+            ", ".join(
+                f"{fmt(t)}={state}"
+                for t, state in idle
+            )
+        )
+
+        full = [
+            t for t, state in idle
+            if state == "full"
+        ]
+
+        if full:
+            print(f"- 首次記錄 full：{fmt(full[0])}")
+
+            if full[0] == 0:
+                print(
+                    "  ⚠ 統計起點已是 full，"
+                    "不能確定本次測試何時進入。"
+                )
+        else:
+            print("- 沒有記錄到 full（Deep Idle）事件。")
+
+        totals = collections.Counter()
+
+        for index, (timestamp, state) in enumerate(idle):
+            if index + 1 >= len(idle):
+                continue
+
+            end = idle[index + 1][0]
+
+            if end >= timestamp:
+                totals[state] += end - timestamp
+
+        if totals:
+            print("- 可確認的狀態持續時間：")
+
+            for state, duration in totals.items():
+                print(f"  - {state}：{fmt(duration)}")
+
+            print(
+                "- 最後一個狀態若沒有退出事件，"
+                "不會將未確認的尾端時間計入。"
+            )
+
+    alarms = parse_alarm_events(events)
+
+    print("\n## Alarm / DeviceIdle 鬧鐘")
+
+    deviceidle_alarms = [
+        (t, name)
+        for t, _, name in alarms
+        if "DeviceIdleController" in name
+    ]
+
+    if deviceidle_alarms:
+        for timestamp, name in deviceidle_alarms:
+            print(f"- {fmt(timestamp)}：{name}")
+    else:
+        print("- 沒有辨識到 DeviceIdleController 鬧鐘。")
+
+    progression = [
+        t for t, name in deviceidle_alarms
+        if "deep.progression" in name
+    ]
+
+    if progression:
+        print(
+            "- deep.progression：",
+            ", ".join(fmt(t) for t in progression)
+        )
+
+    normal_alarms = [
+        (t, uid, name)
+        for t, uid, name in alarms
+        if "DeviceIdle" not in name
+    ]
+
+    counter = collections.Counter(
+        (uid, name[:55])
+        for _, uid, name in normal_alarms
+    )
+
+    print("- 一般 Alarm 前 6 名：")
+
+    for (uid, name), count in counter.most_common(6):
+        print(
+            f"  - {label(uid, uidmap)}：{name} × {count}"
+        )
+
+    print("\n## Job / 網路活動")
+
+    jobs = collections.Counter()
+    cellular = 0
+
+    for _, _, rest in events:
+        for match in re.finditer(
+            r"\+job=(\S+?):",
+            rest
+        ):
+            jobs[label(match.group(1), uidmap)] += 1
+
+        if "cellular_high_tx_power" in rest:
+            cellular += 1
+
+    for name, count in jobs.most_common(10):
+        print(f"- Job {name}：{count} 次")
+
+    print(
+        f"- cellular_high_tx_power 事件：{cellular} 次"
+    )
+
+    print("\n## Wakeup AP")
+
+    wakeups = collections.Counter()
+
+    for _, _, rest in events:
+        for match in re.finditer(
+            r"wakeupap=(\S+?):",
+            rest
+        ):
+            wakeups[match.group(1)] += 1
+
+    if wakeups:
+        for uid, count in wakeups.most_common(8):
+            print(
+                f"- {label(uid, uidmap)}：{count} 次"
+            )
+    else:
+        print("- 沒有辨識到 wakeupap。")
+
+
+# ============================================================
+# Kernel Wakelock
+# ============================================================
+
+def print_wakelocks(text):
+    print("\n## Kernel Wakelock")
+
+    rows = []
+
+    for line in text.splitlines():
+        match = re.match(
+            r"^\s+Kernel Wake lock (\S+): (.*?) \((\d+) times\)",
+            line
+        )
+
+        if match:
+            name, duration, count = match.groups()
+
+            rows.append(
+                (
+                    parse_dur(duration),
+                    name,
+                    duration,
+                    count
+                )
+            )
+
+    rows.sort(reverse=True)
+
+    if not rows:
+        print("- 沒有辨識到 Kernel Wakelock 資料。")
+    else:
+        for _, name, duration, count in rows[:8]:
+            print(
+                f"- {name}：{duration}（{count} 次）"
+            )
+
+    wake_reasons = [
+        line.strip()
+        for line in text.splitlines()
+        if line.startswith("  Wakeup reason")
+    ]
+
+    print("\n## Wakeup reason")
+
+    if wake_reasons:
+        for line in wake_reasons[:8]:
+            print("-", line[:180])
+    else:
+        print("- 沒有辨識到 Wakeup reason。")
+
+
+# ============================================================
+# Charge Counter 放電分析
+# ============================================================
+
+def print_discharge(events, uidmap):
+    print("\n## 放電曲線（BatteryStats history charge）")
+
+    points = []
+
+    for timestamp, level, rest in events:
+        match = re.search(
+            r"(?:^|\s)charge=(\d+)",
+            rest
+        )
+
+        if match:
+            points.append(
+                (timestamp, int(match.group(1)))
+            )
+
+    levels = []
+
+    for timestamp, level, _ in events:
+        if not levels or levels[-1][1] != level:
+            levels.append((timestamp, level))
+
+    print(
+        "- 電量百分比變化：",
+        ", ".join(
+            f"{fmt(t)} → {level}%"
+            for t, level in levels
+        ) or "(無)"
+    )
+
+    if len(points) < 2:
+        print(
+            "- ⚠ charge 資料不足，"
+            "無法建立放電曲線。"
+        )
+        return
+
+    segments = []
+    base = points[0]
+
+    for index, point in enumerate(points[1:], start=1):
+        elapsed = point[0] - base[0]
+
+        if elapsed >= 1800000 or index == len(points) - 1:
+            hours = elapsed / 3600000
+
+            if hours > 0:
+                delta = base[1] - point[1]
+
+                if delta >= 0:
+                    rate = delta / hours
+
+                    segments.append(
+                        (
+                            base[0],
+                            point[0],
+                            delta,
+                            rate
+                        )
+                    )
+
+            base = point
+
+    for start, end, delta, rate in segments:
+        flag = (
+            "（疑似偏高）"
+            if rate > HIGH_DRAIN_MAH_H
+            else ""
+        )
+
+        print(
+            f"- {fmt(start)}–{fmt(end)}："
+            f"{delta:.1f} mAh，"
+            f"{rate:.1f} mAh/h {flag}"
+        )
+
+    print(
+        f"- 疑似突發耗電門檻："
+        f"{BURST_MINUTES} 分鐘內至少 "
+        f"{BURST_MAH:.0f} mAh。"
+    )
+
+    bursts = []
+
+    for index in range(len(points)):
+        best = None
+
+        for other in range(index + 1, len(points)):
+            elapsed = (
+                points[other][0] - points[index][0]
+            )
+
+            if elapsed > BURST_MINUTES * 60000:
+                break
+
+            delta = (
+                points[index][1] - points[other][1]
+            )
+
+            if delta >= BURST_MAH:
+                best = other
+
+        if best is not None:
+            bursts.append(
+                (
+                    points[index][0],
+                    points[best][0],
+                    points[index][1] - points[best][1]
+                )
+            )
+
+    if not bursts:
+        print("- 沒有符合門檻的突發耗電事件。")
+        return
+
+    for start, end, delta in bursts:
+        lo = start - 60000
+        hi = end + 60000
+
+        idle = [
+            f"{fmt(t)}={state}"
+            for t, state in parse_idle(events)
+            if lo <= t <= hi
+        ]
+
+        jobs = collections.Counter()
+
+        for timestamp, _, rest in events:
+            if lo <= timestamp <= hi:
+                for match in re.finditer(
+                    r"\+job=(\S+?):",
+                    rest
+                ):
+                    jobs[label(match.group(1), uidmap)] += 1
+
+        print(
+            f"- 疑似突發耗電：{fmt(start)}–{fmt(end)}，"
+            f"{delta:.1f} mAh"
+        )
+
+        print(
+            "  同時段 Doze 狀態：",
+            ", ".join(idle) or "(無)"
+        )
+
+        print(
+            "  同時段 Job：",
+            ", ".join(
+                f"{name} × {count}"
+                for name, count in jobs.most_common(4)
+            ) or "(無)"
+        )
+
+        print(
+            "  注意：這是時間上的關聯，"
+            "不能直接認定耗電原因。"
+        )
+
+
+# ============================================================
+# CPU running
+# ============================================================
+
+def print_cpu_running(events):
+    print("\n## CPU running（每 30 分鐘）")
+
+    if not events:
+        print("- 沒有 History 事件。")
+        return
+
+    run = None
+    last = None
+    buckets = collections.Counter()
+
+    for timestamp, _, rest in events:
+        if last is not None and run is True:
+            position = last
+
+            while position < timestamp:
+                end = min(
+                    timestamp,
+                    (position // 1800000 + 1) * 1800000
+                )
+
+                buckets[int(position // 1800000)] += (
+                    end - position
+                )
+
+                position = end
+
+        if re.search(r"(^|\s)\+running", rest):
+            run = True
+
+        if re.search(r"(^|\s)-running", rest):
+            run = False
+
+        last = timestamp
+
+    if run is True:
+        print(
+            "- ⚠ History 結束時 CPU 仍為 running，"
+            "未計入最後事件之後的時間。"
+        )
+
+    if run is None:
+        print(
+            "- ⚠ 無法確認 running 狀態，"
+            "以下結果只代表可辨識的區間。"
+        )
+
+    hot = [
+        (bucket, duration)
+        for bucket, duration in sorted(buckets.items())
+        if duration / 1800000 > 0.5
+    ]
+
+    if not hot:
+        print("- 沒有可辨識的清醒時間超過 50% 區段。")
+        return
+
+    for bucket, duration in hot:
+        print(
+            f"- {fmt(bucket * 1800000)}："
+            f"{duration / 1800000 * 100:.0f}%"
+        )
+
+
+# ============================================================
+# Estimated power use / UID
+# ============================================================
+
+def print_power(text, uidmap, args):
+    print("\n## 估算耗電（Estimated power use）")
+
+    print(
+        "注意：這是 Android 模型估算值，"
+        "不等同實際電池放電量。"
+    )
+
+    lines = section(
+        text,
+        "Estimated power use (mAh):",
+        80
+    )
+
+    for line in lines[:12]:
+        if line.strip():
+            print("-", line.strip()[:180])
+
+    uid_rows = []
+
+    for line in lines:
+        match = re.match(
+            r"^\s+[Uu][Ii][Dd] (\S+): ([\d.]+)",
+            line
+        )
+
+        if match:
+            uid_rows.append(
+                (
+                    float(match.group(2)),
+                    match.group(1)
+                )
+            )
+
+    uid_rows.sort(reverse=True)
+
+    print("- UID 耗電前 8 名：")
+
+    for value, uid in uid_rows[:8]:
+        print(
+            f"  - {label(uid, uidmap)}："
+            f"{value:.2f} mAh"
+        )
+
+    wanted = [
+        item.strip()
+        for item in args.uids.split(",")
+        if item.strip()
+    ]
+
+    if args.pkg:
+        reverse = collections.defaultdict(list)
+
+        for uid, names in uidmap.items():
+            for name in names:
+                reverse[name].append(uid)
+
+        for package in args.pkg.split(","):
+            package = package.strip()
+
+            if not package:
+                continue
+
+            matches = reverse.get(package)
+
+            if not matches:
+                print(
+                    f"- 找不到套件 {package} 的 UID，"
+                    "請確認 checkin.txt 有 UID mapping。"
+                )
+                continue
+
+            uid = matches[0]
+
+            user, app = divmod(uid, 100000)
+
+            if app >= 10000:
+                wanted.append(
+                    f"u{user}a{app - 10000}"
+                )
+            else:
+                wanted.append(str(uid))
+
+    if wanted:
+        print("\n## 指定 UID / 套件")
+
+        blocks = per_uid_blocks(text.splitlines())
+
+        for uid in unique(wanted):
+            row = next(
+                (
+                    value
+                    for value, key in uid_rows
+                    if key == uid
+                ),
+                None
+            )
+
+            if row is not None:
+                print(
+                    f"- {label(uid, uidmap)}："
+                    f"{row:.2f} mAh"
+                )
+            else:
+                print(
+                    f"- {label(uid, uidmap)}："
+                    "沒有可辨識的估算耗電資料"
+                )
+
+            shown = 0
+
+            for line in blocks.get(uid, []):
+                if re.search(
+                    r"(Top for|Fg Service|Foreground|"
+                    r"Total cpu time: u=|Wake lock|Job |"
+                    r"Wi-Fi network|Background for|Cached)",
+                    line,
+                    re.I
+                ):
+                    print("   ", line[:160])
+
+                    shown += 1
+
+                    if shown >= 8:
+                        break
+
+
+# ============================================================
+# deviceidle
+# ============================================================
+
+def print_deviceidle(path):
+    if not path:
+        return
+
+    text = read_text(path)
+
+    print("\n## deviceidle 摘錄")
+
+    if not text:
+        print("- 檔案不存在或內容為空。")
+        return
+
+    for key in [
+        "inactive_to",
+        "idle_after_inactive_to",
+        "min_time_to_alarm",
+        "idle_to",
+        "max_idle_to",
+    ]:
+        print(
+            f"- {key}：",
+            grab(
+                text,
+                r"^\s*" + re.escape(key) + r"=(\S+)"
+            )
+        )
+
+    for key in [
+        "mState",
+        "mLightState",
+        "mNextAlarmTime",
+        "mNextIdleDelay",
+        "mCharging",
+        "mScreenOn",
+    ]:
+        print(
+            f"- {key}：",
+            grab(
+                text,
+                r"(?:^|\s)" + re.escape(key) + r"=(\S+)"
+            )
+        )
+
+    position = text.find("Idling history:")
+
+    if position >= 0:
+        history = text[position:].splitlines()[1:]
+
+        rows = [
+            line.strip()
+            for line in history
+            if re.match(
+                r"^\s+(normal|light|deep)",
+                line
+            )
+        ]
+
+        print(
+            "- Idling history 最後 10 筆：",
+            " | ".join(rows[-10:]) or "(無)"
+        )
+    else:
+        print("- 沒有辨識到 Idling history。")
+
+
+# ============================================================
+# meminfo
+# ============================================================
+
+def parse_mem_block(text):
+    result = {}
+
+    process = re.search(
+        r"\*\* MEMINFO in pid (\d+) \[(.+?)\]",
+        text
+    )
+
+    result["proc"] = (
+        process.group(2)
+        if process
+        else "?"
+    )
+
+    lines = text.splitlines()
+
+    total_index = None
+
+    for index, line in enumerate(lines):
+        if re.match(r"^\s*TOTAL(?:\s|$)", line):
+            total_index = index
+            break
+
+    if total_index is None:
+        result["error"] = "找不到 TOTAL 欄位。"
+        return result
+
+    # Android meminfo 表格通常以表頭列描述欄位。
+    # 不同版本可能在表頭前有其他欄位，因此只在
+    # 可明確對應時採用；無法對應時不猜測欄位順序。
+
+    header = lines[total_index - 1] if total_index > 0 else ""
+
+    header_tokens = re.findall(
+        r"[A-Za-z][A-Za-z0-9_/-]*",
+        header
+    )
+
+    total_line = lines[total_index]
+
+    values = re.findall(
+        r"\d+",
+        total_line
+    )
+
+    if not header_tokens or len(header_tokens) != len(values):
+        result["error"] = (
+            "TOTAL 欄位與表頭無法可靠對應；"
+            "此 Android 版本可能使用不同 meminfo 格式。"
+        )
+        return result
+
+    mapping = {
+        name.lower(): int(value)
+        for name, value in zip(header_tokens, values)
+    }
+
+    aliases = {
+        "pss": ("pss",),
+        "pdirty": ("private_dirty", "privatedirty"),
+        "pclean": ("private_clean", "privateclean"),
+        "rss": ("rss",),
+        "swap": ("swappss", "swap_pss"),
+    }
+
+    for key, names in aliases.items():
+        for name in names:
+            if name in mapping:
+                result[key] = mapping[name]
+                break
+
+    if not all(
+        key in result
+        for key in ("pss", "pdirty", "pclean", "rss")
+    ):
+        result["error"] = (
+            "表頭未包含可辨識的 PSS、Private Dirty、"
+            "Private Clean 或 RSS 欄位。"
+        )
+
+    for title, key in [
         ("Java Heap", "java"),
         ("Native Heap", "native"),
         ("Graphics", "gfx"),
         ("System", "system"),
-    ):
-        m2 = re.search(r"^\s+" + re.escape(k) + r":\s+(\d+)", txt, re.M)
-        if m2:
-            d[key] = int(m2.group(1))
-    m2 = re.search(r"Views:\s+(\d+).*?Activities:\s+(\d+)", txt, re.S)
-    if m2:
-        d["views"], d["acts"] = int(m2.group(1)), int(m2.group(2))
-    return d
-
-
-def _mem_blocks(path):
-    txt = open(path, encoding="utf-8", errors="ignore").read()
-    up = re.search(r"Uptime: (\d+) Realtime: (\d+)", txt)
-    out = []
-    for part in re.split(r"(?=\*\* MEMINFO in pid)", txt):
-        if not part.startswith("** MEMINFO in pid"):
-            continue
-        d = _mem_parse(part)
-        d["path"], d["stamp"] = path, _stamp(path)
-        if up:
-            d["up"], d["rt"] = int(up.group(1)), int(up.group(2))
-        out.append(d)
-    if not out:
-        first = txt.strip().split("\n")[0][:80] if txt.strip() else "(空檔)"
-        out.append(
-            {
-                "path": path,
-                "error": f"沒有 meminfo 資料(檔案第一行:{first}) — 請確認進程是否正在執行",
-            }
+    ]:
+        match = re.search(
+            r"^\s*" + re.escape(title) + r":\s+(\d+)",
+            text,
+            re.M
         )
-    elif "Can't find service" in txt or "No process found" in txt:
-        out[-1]["warn"] = (
-            "檔案裡另有部分套件未執行(No process found)，已自動略過未啟動的套件"
-        )
-    return out
+
+        if match:
+            result[key] = int(match.group(1))
+
+    return result
 
 
-def summarize_meminfo(paths):
-    print("\n## 記憶體(dumpsys meminfo,單位 MB;1024 KB = 1 MB;單一時間點,請多量幾次)")
-    rows = [d for p in paths for d in _mem_blocks(p)]
-    for d in rows:
-        if "error" in d:
-            print(f"- ⚠ {d['path']}: {d['error']}")
-            continue
-        if "pss" not in d:
-            print(f"- ⚠ {d['path']}({d.get('proc')}): 解析失敗")
-            continue
-        priv = d["pdirty"] + d["pclean"]
-        when = d["stamp"].strftime("%m-%d %H:%M") if d["stamp"] else d["path"]
-        print(
-            f"- [{when}] {d['proc']}: PSS {mb(d['pss'])} | 私有記憶體(Private Dirty+Clean){mb(priv)} | RSS {mb(d['rss'])} | "
-            f"Swap PSS {mb(d['swap'])} | Java {mb(d.get('java', 0))} Native {mb(d.get('native', 0))} 圖形 {mb(d.get('gfx', 0))} 系統共用 {mb(d.get('system', 0))}"
-            f" | Views {d.get('views')} Activities {d.get('acts')}"
-        )
-        if d.get("warn"):
-            print(f"    ℹ {d['warn']}")
-        if "up" in d and d["rt"]:
-            print(
-                f"    開機至今 Realtime {fmt(d['rt'])},Uptime {fmt(d['up'])} → CPU 深度睡眠(suspend)累計約 {100 - d['up'] / d['rt'] * 100:.0f}%(= DevCheck 的「深度睡眠」)"
-            )
-    groups = collections.defaultdict(list)
-    for d in rows:
-        if "pss" in d:
-            groups[d["proc"]].append(d)
-    for proc, g in groups.items():
-        if len(g) >= 2:
-            a, b = g[0], g[-1]
-            print(
-                f"- {proc} 第一次 → 最後一次:PSS {(b['pss'] - a['pss']) / 1024:+.1f} MB,"
-                f"私有記憶體 {((b['pdirty'] + b['pclean']) - (a['pdirty'] + a['pclean'])) / 1024:+.1f} MB,"
-                f"Swap PSS {(b['swap'] - a['swap']) / 1024:+.1f} MB(同一進程在數小時內的自然波動)"
-            )
-    print(
-        "- 註:PSS 含按比例分攤的共用記憶體(「系統」那一欄),不同 App 之間比較請優先看「私有記憶體」;"
-        "Heap Alloc 是 native + dalvik 合計,不要當成 Java Heap。"
+def parse_stamp(path):
+    text = read_text(path)
+
+    match = re.search(
+        r"# captured: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)",
+        text
     )
 
-
-def summarize_battery(paths):
-    print("\n## 電池(dumpsys battery)")
-    pts = []
-    for p in paths:
-        txt = open(p, encoding="utf-8", errors="ignore").read()
-        lv = grab(txt, r"^\s+level: (\d+)")
-        cc = grab(txt, r"^\s+Charge counter: (\d+)")
-        if not (lv and cc):
-            print(f"- {p}: 解析失敗")
-            continue
-        st = _stamp(p)
-        pts.append((st, int(lv), int(cc) / 1000))
-        per = int(cc) / 1000 / int(lv) if int(lv) > 0 else 0
-        when = st.strftime("%m-%d %H:%M:%S") if st else p
-
-        # 僅在系統有提供電池保護欄位時才顯示（如三星機型）
-        prot_mode = grab(txt, r"mProtectBatteryMode: (\d+)")
-        prot_thresh = grab(txt, r"mProtectionThreshold: (\d+)")
-        prot_str = (
-            f"；電池保護模式={prot_mode}({prot_thresh}%)"
-            if prot_mode is not None
-            else ""
-        )
-
-        print(
-            f"- [{when}] level {lv}%、Charge counter {int(cc) / 1000:.1f} mAh → 每 1% 約 {per:.1f} mAh,推算滿電約 {per * 100:.0f} mAh{prot_str}"
-        )
-    if len(pts) >= 2 and pts[0][0] and pts[-1][0]:
-        hrs = (pts[-1][0] - pts[0][0]).total_seconds() / 3600
-        d = pts[0][2] - pts[-1][2]
-        if hrs > 0:
-            print(
-                f"- 區間放電:{d:.1f} mAh / {hrs:.2f} 小時 = {d / hrs:.1f} mAh/h(解析度約 4.5 mAh;含這段時間內任何亮屏與 adb 重連)"
-            )
-    txt = open(paths[-1], encoding="utf-8", errors="ignore").read()
-    pairs = []
-    for l in txt.split("\n"):
-        m = re.search(r"level:(\d+),.*? cc:(\d+),", l)
-        if m:
-            pairs.append((int(m.group(1)), int(m.group(2)) / 1000))
-    if pairs:
-        ratios = [c / lv_ for lv_, c in pairs if lv_]
-        print(
-            f"- 電池變化 log:{len(pairs)} 筆,cc ÷ level = {min(ratios):.1f}–{max(ratios):.1f} mAh/%"
-            "(cc 近似由 SOC 換算:高電量時 log 的 cc 可連續數小時不變,請以 dumpsys 的 Charge counter 與 batterystats 為準)"
-        )
-    # 僅在有三星 BSOH 健康度欄位時才顯示
-    bsoh = grab(txt, r"mSavedBatteryBsoh: (\S+)")
-    if bsoh and bsoh != "None":
-        print(f"- 電池健康度(BSOH): {bsoh}")
-
-
-# ---------------------------------------------------------------- main
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("full")
-    ap.add_argument("--uids", default="", help="要特別列出的 UID,逗號分隔")
-    ap.add_argument("--pkg", default="", help="要特別列出的套件名稱,逗號分隔(需要 --checkin)")
-    ap.add_argument("--checkin", help="adb shell dumpsys batterystats --checkin 的輸出")
-    ap.add_argument("--suspend", help="journalctl 睡眠紀錄輸出")
-    ap.add_argument("--deviceidle", help="adb shell dumpsys deviceidle 的輸出")
-    ap.add_argument("--mem", nargs="+", help="adb shell dumpsys meminfo <套件> 的輸出")
-    ap.add_argument("--battery", nargs="+", help="adb shell dumpsys battery 的輸出")
-    a = ap.parse_args()
-
-    uidmap = load_uidmap(a.checkin)
-    lines = open(a.full, encoding="utf-8", errors="ignore").read().split("\n")
-    hist, stats = split_dump(lines)
-    text = "\n".join(stats)
-    ev = parse_history(hist)
-
-    print("# 摘要:", a.full)
-    start = grab(text, r"Start clock time: (\S+)")
-    start_dt = None
-    if start:
+    if match:
         try:
-            start_dt = dt.datetime.strptime(start, "%Y-%m-%d-%H-%M-%S")
+            return dt.datetime.strptime(
+                match.group(1),
+                "%Y-%m-%d %H:%M:%S"
+            )
         except ValueError:
             pass
 
-    def wall(t):
-        return (
-            (start_dt + dt.timedelta(milliseconds=t)).strftime("%H:%M:%S")
-            if start_dt
-            else ""
+    match = re.search(
+        r"(\d{8})_(\d{6})",
+        path
+    )
+
+    if match:
+        try:
+            return dt.datetime.strptime(
+                match.group(1) + match.group(2),
+                "%Y%m%d%H%M%S"
+            )
+        except ValueError:
+            pass
+
+    return None
+
+
+def print_meminfo(paths):
+    print("\n## 記憶體（dumpsys meminfo，單位 MB）")
+
+    rows = []
+
+    for path in paths:
+        text = read_text(path)
+
+        if not text:
+            print(
+                f"- ⚠ {path}：檔案不存在或為空。"
+            )
+            continue
+
+        for block in re.split(
+            r"(?=\*\* MEMINFO in pid)",
+            text
+        ):
+            if not block.startswith("** MEMINFO in pid"):
+                continue
+
+            data = parse_mem_block(block)
+            data["path"] = path
+            data["stamp"] = parse_stamp(path)
+
+            rows.append(data)
+
+    if not rows:
+        print("- 沒有可分析的 meminfo 區塊。")
+        return
+
+    for data in rows:
+        if data.get("error"):
+            print(
+                f"- ⚠ {data['path']} ({data['proc']})："
+                f"{data['error']}"
+            )
+            continue
+
+        stamp = data["stamp"]
+
+        when = (
+            stamp.strftime("%m-%d %H:%M:%S")
+            if stamp
+            else data["path"]
         )
 
-    def tw(t):
-        w = wall(t)
-        return f"{fmt(t)}({w})" if w else fmt(t)
+        mb = lambda value: f"{value / 1024:.1f} MB"
 
-    print(f"- 統計起點:{start}(以下括號內為時鐘時間)")
-    m = re.search(
-        r"Time on battery: (.*?) \(([\d.]+)%\) realtime, (.*?) \(([\d.]+)%\) uptime",
-        text,
-    )
-    if m:
-        up = float(m.group(4))
+        private = (
+            data["pdirty"] + data["pclean"]
+        )
+
         print(
-            f"- 時長:{m.group(1)};CPU 清醒(uptime):{m.group(3)}({up}%)"
-            f" → **CPU 深度睡眠(suspend)約 {100 - up:.1f}%**(= DevCheck 的「深度睡眠」概念,"
-            "和 Doze 的 deep idle 是不同的東西)"
+            f"- [{when}] {data['proc']}："
+            f"PSS {mb(data['pss'])}，"
+            f"Private {mb(private)}，"
+            f"RSS {mb(data['rss'])}，"
+            f"Swap PSS {mb(data.get('swap', 0))}"
         )
-        if float(m.group(2)) < 99.5:
-            print(
-                f"  (「Time on battery」只占整段統計的 {m.group(2)}%:其餘是接著電源的時間)"
-            )
-    else:
-        print("- ⚠ 找不到「Time on battery」這一行,時長與 CPU 睡眠比例無法計算")
-    print(f"- 亮屏:{grab(text, r'^  Screen on: (.*)')}")
-    scr_on = [t for t, _, r in ev if re.search(r"(^|\s)\+screen", r) and t > 60000]
-    scr_off = [t for t, _, r in ev if re.search(r"(^|\s)-screen", r)]
-    idle_changes = [
-        (t, r.split("device_idle=")[1].split()[0])
-        for t, _, r in ev
-        if "device_idle=" in r
-    ]
-    for t_on in scr_on:
-        t_off = next((x for x in scr_off if x > t_on), None)
-        dur = (t_off - t_on) / 1000 if t_off else None
-        left_doze = any(
-            s in ("off",) and t_on - 10000 <= tt <= t_on + 60000
-            for tt, s in idle_changes
+
+        print(
+            "- 注意：PSS 包含按比例分攤的共用記憶體；"
+            "不同 App 比較時，建議同時觀察 Private Dirty + Clean。"
         )
-        if dur is not None and dur < 60 and not left_doze:
+
+
+# ============================================================
+# 電池快照
+# ============================================================
+
+def print_battery(paths):
+    print("\n## 電池快照（dumpsys battery）")
+
+    points = []
+
+    for path in paths:
+        text = read_text(path)
+
+        level = grab(
+            text,
+            r"^\s*level:\s*(\d+)"
+        )
+
+        counter = grab(
+            text,
+            r"^\s*Charge counter:\s*(\d+)"
+        )
+
+        if level is None or counter is None:
             print(
-                f"- ℹ 測試期間有短暫亮屏:{tw(t_on)},約 {dur:.1f} 秒,Doze 沒有因此退出(螢幕未解鎖),影響很小,不需要排除。"
+                f"- ⚠ {path}：找不到 level 或 Charge counter。"
             )
-        else:
+            continue
+
+        level = int(level)
+        counter = int(counter)
+
+        if level <= 0 or counter <= 0:
             print(
-                f"- ⚠ 測試期間有亮屏:{tw(t_on)}"
-                + (f",約 {dur:.0f} 秒" if dur is not None else "")
-                + (",且 Doze 在亮屏後 1 分鐘內退出" if left_doze else "")
-                + f"。建議把「有效待機區間」當作 0 – {fmt(t_on)},之後(例如為了讓 adb 重新連線而喚醒手機)的耗電不要算進待機。"
+                f"- ⚠ {path}：電量或 Charge counter 不合理，"
+                "不納入容量估算。"
             )
-            break
-    print(
-        f"- 放電 Discharge:{grab(text, r'^  Discharge: (.*)')}"
-        "(電池計數器 cc;百分比不是線性,請以 mAh 為準)"
-    )
-    print(
-        f"- Light doze 放電:{grab(text, r'Device light doze discharge: (.*)')};"
-        f"Deep doze 放電:{grab(text, r'Device deep doze discharge: (.*)')}"
-    )
-    print(f"- Light idle:{grab(text, r'^  Device light idling: (.*)')}")
-    print(f"- Deep idle(full):{grab(text, r'^  Device full idling: (.*)')}")
-    print(f"- Idle mode light:{grab(text, r'^  Idle mode light time: (.*)')}")
-    print(f"- Idle mode full:{grab(text, r'^  Idle mode full time: (.*)')}")
-    print(f"- Partial wakelock 總時間:{grab(text, r'Total partial wakelock time: (.*)')}")
-    print(
-        f"- WiFi kernel active:{grab(text, r'Wifi kernel active time: (.*)')};"
-        f"WiFi 收 {grab(text, r'Wifi data received: (.*)')},"
-        f"封包收 {grab(text, r'Wifi packets received: (.*)')} / 送 {grab(text, r'Wifi packets sent: (.*)')}"
-    )
+            continue
 
-    # ------------------------------------------------ Doze timeline
-    print("\n## Doze 狀態與計時(history)")
-    idle = [
-        (t, r.split("device_idle=")[1].split()[0])
-        for t, _, r in ev
-        if "device_idle=" in r
-    ]
-    print("- device_idle 轉換:", ", ".join(f"{fmt(t)}={s}" for t, s in idle) or "(無)")
+        timestamp = parse_stamp(path)
 
-    full = [t for t, s in idle if s == "full"]
-    if full:
-        note = "(重置時已在 deep idle,不能當進入時間)" if full[0] < 5000 else ""
-        print(f"- 第一次進入 deep idle:{tw(full[0])}{note}")
-    else:
-        print("- 本次沒有進入 deep idle")
+        # Android 常見 Charge counter 單位為 μAh。
+        # 若 OEM 使用不同單位，需以實際裝置輸出確認。
+        mah = counter / 1000.0
 
-    prog = []
-    for t, _, r in ev:
-        if "+alarm" in r and "DeviceIdleController" in r:
-            if m := re.search(r"DeviceIdleController\.(\w+\.?\w*)", r):
-                prog.append((t, m.group(1)))
-    print("- DeviceIdle 鬧鐘:", ", ".join(f"{fmt(t)} {n}" for t, n in prog) or "(無)")
+        per_percent = mah / level
 
-    all_alarms = [(t, r) for t, _, r in ev if "+alarm" in r]
-    aborts_detail = []
-    for t, _, r in ev:
-        if 'active=1000:"alarm"' in r or ("active=" in r and "alarm" in r.lower()):
-            related = [ar for at, ar in all_alarms if abs(at - t) <= 5000]
-            info = related[0].strip() if related else r.strip()
-            aborts_detail.append((t, info))
+        when = (
+            timestamp.strftime("%m-%d %H:%M:%S")
+            if timestamp
+            else path
+        )
 
-    print("- 因鬧鐘被拉回 active 的詳細紀錄:")
-    if aborts_detail:
-        for t, info in aborts_detail:
-            print(f"  * [{tw(t)}] {info}")
-    else:
-        print("  * (無)")
+        print(
+            f"- [{when}] level {level}% / "
+            f"Charge counter {mah:.1f} mAh"
+        )
 
-    # 僅在系統有觸發三星 FMM 鬧鐘時才顯示此列
-    fmm = [t for t, _, r in ev if "defaultScanStartTimer" in r and "+alarm" in r]
-    if fmm:
-        print("- Samsung FMM(defaultScanStartTimer)鬧鐘觸發:", ", ".join(tw(t) for t in fmm))
-        aborts_times = [t for t, _ in aborts_detail]
-        for ta in aborts_times:
-            nxt = [f for f in fmm if f >= ta]
-            if nxt:
+        print(
+            f"  每 1% 約 {per_percent:.1f} mAh，"
+            f"推算滿電容量約 {per_percent * 100:.0f} mAh"
+        )
+
+        points.append(
+            (timestamp, level, mah)
+        )
+
+    if len(points) >= 2:
+        first = points[0]
+        last = points[-1]
+
+        if first[0] and last[0]:
+            hours = (
+                last[0] - first[0]
+            ).total_seconds() / 3600
+
+            delta = first[2] - last[2]
+
+            if hours > 0 and delta >= 0:
                 print(
-                    f"  - 中止點 {fmt(ta)} 之後 {(nxt[0] - ta) / 60000:.1f} 分鐘有 FMM 鬧鐘"
-                    " (Doze 在鬧鐘 < min_time_to_alarm 時會放棄進入 deep idle)"
+                    f"- 區間放電：{delta:.1f} mAh / "
+                    f"{hours:.2f} 小時 = "
+                    f"{delta / hours:.1f} mAh/h"
                 )
 
-    chain = [t for t, n in prog if n == "deep.progression"]
-    if chain:
+            elif delta < 0:
+                print(
+                    "- ⚠ Charge counter 增加，"
+                    "可能有充電、計數器重置或讀值波動，"
+                    "不計算放電速率。"
+                )
+
+
+# ============================================================
+# 主程式
+# ============================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Android Doze / BatteryStats 摘要工具"
+    )
+
+    parser.add_argument(
+        "full",
+        help="dumpsys batterystats 完整輸出"
+    )
+
+    parser.add_argument("--uids", default="")
+    parser.add_argument("--pkg", default="")
+    parser.add_argument("--checkin")
+    parser.add_argument("--deviceidle")
+    parser.add_argument("--mem", nargs="+")
+    parser.add_argument("--battery", nargs="+")
+
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.full):
         print(
-            "- deep.progression 時間:",
-            ", ".join(fmt(t) for t in chain),
-            "(成功進入前通常是相隔約 31 分的兩個)",
+            f"錯誤：找不到檔案 {args.full}",
+            file=sys.stderr
+        )
+        return 2
+
+    full_text = read_text(args.full)
+
+    if not full_text:
+        print(
+            "錯誤：BatteryStats 檔案為空。",
+            file=sys.stderr
+        )
+        return 2
+
+    lines = full_text.splitlines()
+
+    history_lines, stats_lines = split_dump(lines)
+
+    stats_text = "\n".join(stats_lines)
+
+    events, unparsed = parse_history(history_lines)
+
+    uidmap = load_uidmap(args.checkin)
+
+    print("# Android Doze / BatteryStats 摘要")
+
+    print(f"- 原始檔案：{args.full}")
+    print(f"- History 行數：{len(history_lines)}")
+    print(f"- 成功解析事件：{len(events)}")
+    print(f"- 未辨識 History 行：{unparsed}")
+
+    if not events:
+        print(
+            "- ⚠ 沒有成功解析 History 事件。"
+            "可能是 Android 版本或 OEM 格式不同。"
         )
 
-    # ------------------------------------------------ discharge curve
-    print("\n## 放電曲線(用電池 cc;百分比不是線性,請看 mAh)")
-    pts = []
-    for t, _, r in ev:
-        c = re.search(r"(?:^|\s)charge=(\d+)", r)
-        if c:
-            pts.append((t, int(c.group(1))))
-    levels = []
-    for t, lv, _ in ev:
-        if not levels or levels[-1][1] != lv:
-            levels.append((t, lv))
-    print("- 電量百分比變化:", ", ".join(f"{fmt(t)}→{lv}%" for t, lv in levels))
-    iv = (
-        parse_suspend(a.suspend, start_dt.year)
-        if (a.suspend and start_dt)
-        else None
+    elif unparsed > len(events):
+        print(
+            "- ⚠ 未辨識行數偏高，"
+            "時間軸結果可能不完整。"
+        )
+
+    start_dt = grab(
+        stats_text,
+        r"Start clock time:\s*(\S+)"
     )
-    if len(pts) >= 2:
-        seg, base = [], pts[0]
-        for p in pts[1:]:
-            if p[0] - base[0] >= 1800000 or p is pts[-1]:
-                dh = (p[0] - base[0]) / 3600000
-                if dh > 0:
-                    seg.append(
-                        (base[0], p[0], base[1] - p[1], (base[1] - p[1]) / dh)
-                    )
-                base = p
-        for a0, b0, d, rate in seg:
-            extra = ""
-            if iv is not None:
-                r = asleep_ratio(
-                    iv,
-                    start_dt + dt.timedelta(milliseconds=a0),
-                    start_dt + dt.timedelta(milliseconds=b0),
-                )
-                extra = f" 電腦睡眠 {r * 100:3.0f}%"
-            flag = "  <-- 偏高" if rate > 25 else ""
-            print(
-                f"  {fmt(a0)} – {fmt(b0)}  ({wall(a0)}–{wall(b0)})  {d:4.1f} mAh  {rate:5.1f} mAh/h{extra}{flag}"
-            )
 
-        bursts, i = [], 0
-        while i < len(pts):
-            j = i + 1
-            best = None
-            while j < len(pts) and pts[j][0] - pts[i][0] <= 360000:
-                if pts[i][1] - pts[j][1] >= 9:
-                    best = j
-                j += 1
-            if best:
-                bursts.append((pts[i][0], pts[best][0], pts[i][1] - pts[best][1]))
-                i = best
-            else:
-                i += 1
-        print("- 突發耗電(6 分鐘內掉 ≥ 9 mAh):")
-        if not bursts:
-            print("  (無)")
-        for t0, t1, d in bursts:
-            lo, hi = t0 - 60000, t1 + 60000
-            near_idle = [f"{fmt(t)}={s}" for t, s in idle if lo <= t <= hi]
-            near_alarm = [f"{fmt(t)} {n}" for t, n in prog if lo <= t <= hi]
-            jobs = collections.Counter()
-            for t, _, r in ev:
-                if lo <= t <= hi:
-                    for mm in re.finditer(r"\+job=(\S+?):", r):
-                        jobs[label(mm.group(1), uidmap)] += 1
-            cell = any(
-                "cellular_high_tx_power" in r for t, _, r in ev if lo <= t <= hi
-            )
-            print(
-                f"  - {tw(t0)} → {fmt(t1)}:{d:.1f} mAh;同時段:{', '.join(near_idle + near_alarm) or '無 Doze 事件'}"
-                f";job 前幾名:{', '.join(f'{k}×{v}' for k, v in jobs.most_common(4)) or '無'}"
-                f"{';有 cellular_high_tx_power' if cell else ''}"
-            )
-    else:
-        print("- 沒有足夠的 charge= 點")
-
-    # ------------------------------------------------ CPU awake
-    run, last, buck = False, 0, collections.Counter()
-    for t, _, r in ev:
-        if run:
-            x = last
-            while x < t:
-                y = min(t, (x // 1800000 + 1) * 1800000)
-                buck[int(x // 1800000)] += y - x
-                x = y
-        last = t
-        if re.search(r"(^|\s)\+running", r):
-            run = True
-        if re.search(r"(^|\s)-running", r):
-            run = False
-    hot = [(k, v) for k, v in sorted(buck.items()) if v / 1800000 > 0.5]
-    print("\n## CPU 清醒時間(每 30 分鐘)")
     print(
-        "- 清醒超過 50% 的區段:",
-        ", ".join(f"{fmt(k * 1800000)}({v / 1800000 * 100:.0f}%)" for k, v in hot)
-        or "(無)",
+        "- 統計起點：",
+        start_dt or "未知"
     )
 
-    # ------------------------------------------------ wake sources
-    print("\n## 喚醒來源")
-    own = collections.Counter()
-    for _, _, r in ev:
-        for m2 in re.finditer(r"wakeupap=(\S+?):", r):
-            own[m2.group(1)] += 1
+    print_battery_stats(
+        stats_text,
+        events
+    )
+
+    print_doze(
+        events,
+        uidmap
+    )
+
+    print_wakelocks(
+        stats_text
+    )
+
+    print_discharge(
+        events,
+        uidmap
+    )
+
+    print_cpu_running(
+        events
+    )
+
+    print_power(
+        stats_text,
+        uidmap,
+        args
+    )
+
+    print_deviceidle(
+        args.deviceidle
+    )
+
+    if args.mem:
+        print_meminfo(args.mem)
+
+    if args.battery:
+        print_battery(args.battery)
+
+    print("\n## 資料品質提醒")
+
     print(
-        f"- wakeupap(共 {sum(own.values())} 次):",
-        ", ".join(f"{label(k, uidmap)} {v}" for k, v in own.most_common(8)),
+        "- 本摘要只分析目前能辨識的 dumpsys 欄位。"
     )
-    wr = [l.strip() for l in stats if l.startswith("  Wakeup reason")]
-    for l in wr[:5]:
-        print("- ", l[:150])
-    kw = []
-    for l in stats:
-        m2 = re.match(r"^  Kernel Wake lock (\S+): (.*?) \((\d+) times\)", l)
-        if m2:
-            kw.append((parse_dur(m2.group(2)), m2.group(1), m2.group(2), m2.group(3)))
-    kw.sort(reverse=True)
+
     print(
-        "- Kernel wakelock 前 5:",
-        "; ".join(f"{n} {d}({c}次)" for _, n, d, c in kw[:5]) or "(無)",
+        "- 沒有事件不代表系統沒有發生該事件。"
     )
-    tags = collections.Counter()
-    for _, _, r in ev:
-        m2 = re.search(r"\+alarm=(\S+?):\"([^\"]*)\"", r)
-        if m2 and "DeviceIdle" not in m2.group(2):
-            tags[(m2.group(1), m2.group(2)[:55])] += 1
+
     print(
-        "- 鬧鐘觸發前 6:",
-        "; ".join(f"{label(u, uidmap)} {n}×{c}" for (u, n), c in tags.most_common(6)),
+        "- BatteryStats 模型耗電值不等同實際電池放電量。"
     )
 
-    # ------------------------------------------------ power (相容大小寫 UID/Uid)
-    print("\n## 估算耗電(Estimated power use,模型值,只看占比;實際放電以 Discharge 為準)")
-    pw = section(text, "Estimated power use (mAh):", 40)
-    for l in pw[:10]:
-        if l.strip():
-            print("  ", l.strip()[:150])
-    uid_lines = [
-        (float(m2.group(2)), m2.group(1), l)
-        for l in pw
-        for m2 in [re.match(r"^\s+[Uu][Ii][Dd] (\S+): ([\d.]+)", l)]
-        if m2
-    ]
-    uid_lines.sort(reverse=True)
     print(
-        "- 耗電前 8 名 UID:",
-        ", ".join(f"{label(u, uidmap)} {v:.2f}" for v, u, _ in uid_lines[:8]),
+        "- device_idle=full 代表記錄到 full 狀態，"
+        "不代表整段測試都處於 Deep Idle。"
     )
 
-    # ------------------------------------------------ uids / packages of interest
-    want = [x.strip() for x in a.uids.split(",") if x.strip()]
-    if a.pkg:
-        rev = collections.defaultdict(list)
-        for u, names in uidmap.items():
-            for n in names:
-                rev[n].append(u)
-        for p in [x.strip() for x in a.pkg.split(",") if x.strip()]:
-            if p in rev:
-                u = rev[p][0]
-                user, app = divmod(u, 100000)
-                want.append(f"u{user}a{app - 10000}" if app >= 10000 else str(u))
-            else:
-                print(f"(找不到套件 {p};請確認該套件已安裝且有給 --checkin)")
-    if want:
-        blocks = per_uid_blocks(stats)
-        print("\n## 指定 UID / 套件")
-        for u in dict.fromkeys(want):
-            row = [l for v, uu, l in uid_lines if uu == u]
-            print(
-                f"- {label(u, uidmap)}: 估算耗電 {row[0].split(':')[1].strip() if row else '不在前列'}"
-            )
-            shown = 0
-            for l in blocks.get(u, []):
-                if re.search(
-                    r"(Top for|Fg Service|Foreground|Total cpu time: u=|Wake lock|Job |Wi-Fi network|Background for|Cached)",
-                    l,
-                ):
-                    print("   ", l[:140])
-                    shown += 1
-                    if shown >= 8:
-                        break
+    print(
+        "- 疑似突發耗電只表示時間關聯，"
+        "不能單憑此結果判定是哪個 App 或服務造成。"
+    )
 
-    # ------------------------------------------------ deviceidle
-    if a.deviceidle:
-        d = open(a.deviceidle, encoding="utf-8", errors="ignore").read()
-        print("\n## deviceidle(摘錄)")
-        for k in [
-            "inactive_to",
-            "idle_after_inactive_to",
-            "min_time_to_alarm",
-            "idle_to",
-            "max_idle_to",
-        ]:
-            print(f"- {k} = {grab(d, r'^\s+' + k + r'=(\S+)')}")
-        for k in [
-            "mState",
-            "mLightState",
-            "mNextAlarmTime",
-            "mNextIdleDelay",
-            "mCharging",
-            "mScreenOn",
-        ]:
-            print(f"- {k} = {grab(d, r'(?:^|\s)' + k + r'=(\S+)')}")
-        hist_i = d.find("Idling history:")
-        if hist_i >= 0:
-            h = [
-                x.strip()
-                for x in d[hist_i:].split("\n")[1:]
-                if re.match(r"^\s+(normal|light|deep)", x)
-            ]
-            print("- Idling history 最後 10 筆:", " | ".join(h[-10:]))
+    print(
+        "- 請保留 full.txt、checkin.txt、history.txt "
+        "等原始資料供進一步核對。"
+    )
 
-    if a.mem:
-        summarize_meminfo(a.mem)
-    if a.battery:
-        summarize_battery(a.battery)
+    print("\n摘要分析完成。")
 
-    print("\n(原始檔請自行保留;此摘要只含上述欄位。)")
+    return 0
 
 
 if __name__ == "__main__":
