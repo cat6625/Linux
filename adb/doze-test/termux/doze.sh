@@ -111,7 +111,7 @@ chmod 700 "$OUT_DIR"
 log() {
     printf '[TERMUX] %s %s\n' \
         "$(date '+%H:%M:%S')" "$*" |
-        tee -a "$OUT_DIR/timeline.txt"
+        tee -a "$OUT_DIR/timeline.txt" >&2
 }
 
 die() {
@@ -235,9 +235,12 @@ if [[ -n "$PORT" ]]; then
 else
     log "自動偵測 ADB Port。"
 
-    if PORT="$(detect_adb_port)"; then
-        log "偵測到 Port：${PORT}"
-    else
+if PORT="$(detect_adb_port)"; then
+    check_port "$PORT" ||
+        die "自動偵測回傳了無效 Port：${PORT}"
+
+    log "偵測到 Port：${PORT}"
+else
         echo
         echo "自動偵測失敗。"
 
