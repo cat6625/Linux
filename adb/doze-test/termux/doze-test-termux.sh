@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # -------------------------------------------------------------
 # Termux 版 Doze 測試 – 完整流程（含手動「下一步」）
+# 用法: ~/doze/doze.sh <無線除錯Port>
 # -------------------------------------------------------------
-set -euo pipefail          # 只在變數已宣告時才會拋錯
+set -euo pipefail
 
 # -------------------- 設定區 --------------------
-ADB_ADDR="127.0.0.1:41077"                 # Termux 本機的 ADB 端點
+DEFAULT_PORT="41077"          # 預設 Port（若執行時未帶參數則使用此值）
+PORT="${1:-$DEFAULT_PORT}"
+ADB_ADDR="127.0.0.1:${PORT}"  # Termux 本機的 ADB 端點
+
 PKGS=("com.sec.android.app.launcher" "ch.deletescape.lawnchair.plah")
 RECONNECT_TRIES=24
 MIN_ALARM_MIN=125
 WANT_NETSTATS=0
 SLEEP_SCREEN=1                # 1 = 立刻讓螢幕關閉，讓 Doze 計時從此開始
-#TEST_WAIT=300                # 等待 (秒) 讓手機自行進入 deep idle（可自行調整）#無效
 # ------------------------------------------------
 
-# ---------- 建立輸出目錄 ----------
+# ---------- 路徑設定 ----------
+SCRIPT_DIR="${HOME}/doze"
 TIMESTAMP="$(date +"%Y%m%d_%H%M")"
 OUT_DIR="${HOME}/storage/downloads/doze-test/${TIMESTAMP}"
 mkdir -p "$OUT_DIR"
@@ -28,7 +32,7 @@ connect_adb() {
   for i in $(seq 1 "$RECONNECT_TRIES"); do
     adb connect "$ADB_ADDR" >/dev/null 2>&1
     if [ "$(adb -s "$ADB_ADDR" get-state 2>/dev/null)" = "device" ]; then
-      log "ADB 已連線（第 $i 次嘗試）"
+      log "ADB 已連線至 $ADB_ADDR（第 $i 次嘗試）"
       return 0
     fi
     sleep 5
@@ -53,8 +57,8 @@ snapshot_mem() {
 }
 
 # ---------- 主流程 ----------
-log "=== Doze 測試開始 ==="
-connect_adb || { echo "無法連線到本機 ADB，請確認 Termux 已開啟「無線除錯」"; exit 1; }
+log "=== Doze 測試開始（目標端點：$ADB_ADDR） ==="
+connect_adb || { echo "無法連線到 $ADB_ADDR，請確認「無線除錯」已開啟且 Port 正確"; exit 1; }
 
 # 1️⃣ 先檢查未來的喚醒鬧鐘
 { stamp; adb -s "$ADB_ADDR" shell dumpsys alarm; } > "$OUT_DIR/alarm_start_full.txt"
@@ -95,9 +99,6 @@ echo -e "\n=== 手動步驟 ==="
 echo "當你想正式結束測試時，請在 Termux 鍵盤（或藍牙鍵盤）敲 Enter。"
 read -p "在手機上按 Enter 後繼續 → " _
 
-#log "使用者確認，開始等待 ${TEST_WAIT}s 讓手機進入 deep idle"
-#sleep "$TEST_WAIT"
-
 # -------------------------------------------------
 # 5️⃣ 醒來後確保 ADB 仍連線
 # -------------------------------------------------
@@ -128,10 +129,10 @@ if [ "$WANT_NETSTATS" = "1" ]; then
 fi
 
 # -------------------------------------------------
-# 8️⃣ 產生摘要（仍在手機端執行）
+# 8️⃣ 產生摘要（從內部安全目錄呼叫 Python）
 # -------------------------------------------------
 log "呼叫 Python 產生摘要 …"
-python3 "${HOME}/storage/downloads/doze-test/doze_summary-termux.py" "$OUT_DIR/full.txt" \
+python3 "${SCRIPT_DIR}/doze_summary-termux.py" "$OUT_DIR/full.txt" \
   --checkin "$OUT_DIR/checkin.txt" \
   --pkg "$(IFS=,; echo "${PKGS[*]}")" \
   --deviceidle "$OUT_DIR/deviceidle.txt" \
