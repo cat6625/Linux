@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -------------------------------------------------------------
-# Termux 版 Doze 測試 – 完整流程（自動偵測 Port + 手動「下一步」）
+# Termux 版 Doze 測試 – 完整流程（全高埠自動偵測 + 手動「下一步」）
 # 用法: doze [無線除錯Port]  (不帶參數則自動偵測)
 # -------------------------------------------------------------
 set -euo pipefail
@@ -17,18 +17,29 @@ SLEEP_SCREEN=1                # 1 = 立刻讓螢幕關閉，讓 Doze 計時從�
 # ---------- 自動偵測 / 決定 Port ----------
 detect_adb_port() {
   local connected
+  # 1. 先檢查目前已連線的本機 ADB 端點
   connected=$(adb devices 2>/dev/null | awk '/^127\.0\.0\.1:[0-9]+[[:space:]]+device$/ {print $1}' | cut -d: -f2 | head -n1 || true)
   if [ -n "$connected" ]; then
     echo "$connected"
     return 0
   fi
 
+  # 2. 透過 nmap 掃描全高埠範圍 (30000-65535)，並逐一驗證是否為有效 ADB 服務
   if command -v nmap >/dev/null 2>&1; then
     local scanned
-    scanned=$(nmap -T4 -p 30000-49999 127.0.0.1 2>/dev/null | awk '/^[0-9]+\/tcp[[:space:]]+open/ {print $1}' | cut -d/ -f1 | head -n1 || true)
+    scanned=$(nmap -sT -Pn -n --open -T4 -p 30000-65535 127.0.0.1 2>/dev/null |
+      awk '/^[0-9]+\/tcp[[:space:]]+open/ {print $1}' |
+      cut -d/ -f1)
+
     if [ -n "$scanned" ]; then
-      echo "$scanned"
-      return 0
+      for p in $scanned; do
+        if adb connect "127.0.0.1:${p}" >/dev/null 2>&1; then
+          if adb devices 2>/dev/null | awk -v addr="127.0.0.1:${p}" '$1==addr && $2=="device"{found=1} END{exit !found}'; then
+            echo "$p"
+            return 0
+          fi
+        fi
+      done
     fi
   fi
 
@@ -44,7 +55,7 @@ else
     echo "[INFO] 自動偵測成功：$PORT"
   else
     PORT="$DEFAULT_PORT"
-    echo "[WARN] 無法自動偵測（建議執行 pkg install nmap），改用預設 Port：$PORT"
+    echo "[WARN] 無法自動偵測（請確認已開啟無線除錯並安裝 nmap），改用預設 Port：$PORT"
   fi
 fi
 
@@ -93,7 +104,7 @@ snapshot_mem() {
 log "=== Doze 測試開始（目標端點：$ADB_ADDR） ==="
 connect_adb || { echo "無法連線到 $ADB_ADDR，請確認「無線除錯」已開啟"; exit 1; }
 
-# 1️⃣ 先檢查未來的喚醒鬧鐘
+# 1. 先檢查未來的喚醒鬧鐘
 { stamp; adb -s "$ADB_ADDR" shell dumpsys alarm; } > "$OUT_DIR/alarm_start_full.txt"
 NEXT=$(grep -A8 "Next wake from idle" "$OUT_DIR/alarm_start_full.txt" |
        grep -m1 -oE "triggerTime=[0-9-]+ [0-9:]+" | cut -d= -f2 || true)
@@ -108,10 +119,10 @@ if [ -n "$NEXT" ]; then
     [[ "$ans" =~ ^[Yy]$ ]] || { log "使用者取消測試"; exit 0; }
   fi
 else
-  log "目前沒有排定的 wake‑from‑idle 鬧鐘"
+  log "目前沒有排定的 wake-from-idle 鬧鐘"
 fi
 
-# 2️⃣ 測試前快照
+# 2. 測試前快照
 snapshot_mem mem_start.txt
 snapshot_battery battery_start.txt
 adb -s "$ADB_ADDR" shell dumpsys deviceidle unforce
@@ -119,22 +130,18 @@ adb -s "$ADB_ADDR" shell dumpsys batterystats --enable full-wake-history
 adb -s "$ADB_ADDR" shell dumpsys batterystats --reset
 log "batterystats 已重置"
 
-# 3️⃣ 立即關螢幕（讓 Doze 計時從此開始）
+# 3. 立即關螢幕（讓 Doze 計時從此開始）
 if [ "$SLEEP_SCREEN" = "1" ]; then
   adb -s "$ADB_ADDR" shell input keyevent KEYCODE_SLEEP
   log "已送出 KEYCODE_SLEEP"
 fi
 
-# -------------------------------------------------
-# 4️⃣ 手動一步：使用者在手機上按下 Enter 繼續
-# -------------------------------------------------
+# 4. 手動一步：使用者在手機上按下 Enter 繼續
 echo -e "\n=== 手動步驟 ==="
 echo "當你想正式結束測試時，請在 Termux 鍵盤（或藍牙鍵盤）敲 Enter。"
 read -p "在手機上按 Enter 後繼續 → " _
 
-# -------------------------------------------------
-# 5️⃣ 醒來後確保 ADB 仍連線（若 Port 在休眠期間變動也會自動重掃）
-# -------------------------------------------------
+# 5. 醒來後確保 ADB 仍連線（若 Port 在休眠期間變動也會自動重掃）
 if ! connect_adb; then
   echo "ADB 斷線，請亮屏約 5 秒再按 Enter 重試"
   read -p "已亮屏? 按 Enter 重試 → " _
@@ -147,17 +154,13 @@ if ! connect_adb; then
 fi
 log "ADB 重新連線成功"
 
-# -------------------------------------------------
-# 6️⃣ 立即抓取時間敏感資料
-# -------------------------------------------------
+# 6. 立即抓取時間敏感資料
 capture deviceidle.txt adb -s "$ADB_ADDR" shell dumpsys deviceidle
 snapshot_battery battery_end.txt
 snapshot_mem mem_end.txt
 adb -s "$ADB_ADDR" shell cmd role get-role-holders android.app.role.HOME | tee "$OUT_DIR/home_end.txt" || true
 
-# -------------------------------------------------
-# 7️⃣ 抓取較大檔案（batterystats、optional netstats）
-# -------------------------------------------------
+# 7. 抓取較大檔案（batterystats、optional netstats）
 capture full.txt    adb -s "$ADB_ADDR" shell dumpsys batterystats
 capture checkin.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
 capture history.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --history
@@ -165,9 +168,7 @@ if [ "$WANT_NETSTATS" = "1" ]; then
   capture netstats.txt adb -s "$ADB_ADDR" shell dumpsys netstats detail
 fi
 
-# -------------------------------------------------
-# 8️⃣ 產生摘要（從內部安全目錄呼叫 Python）
-# -------------------------------------------------
+# 8. 產生摘要（從內部安全目錄呼叫 Python）
 log "呼叫 Python 產生摘要 …"
 python3 "${SCRIPT_DIR}/doze_summary-termux.py" "$OUT_DIR/full.txt" \
   --checkin "$OUT_DIR/checkin.txt" \
