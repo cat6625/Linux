@@ -33,7 +33,21 @@ RESET_BATTERYSTATS=0
 
 # ------------------------------------------------
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_PATH="${BASH_SOURCE[0]}"
+
+# 若透過軟連結啟動，先解析實際檔案位置
+while [[ -L "$SOURCE_PATH" ]]; do
+    SOURCE_DIR="$(cd -P -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
+    LINK_TARGET="$(readlink "$SOURCE_PATH")"
+
+    if [[ "$LINK_TARGET" == /* ]]; then
+        SOURCE_PATH="$LINK_TARGET"
+    else
+        SOURCE_PATH="${SOURCE_DIR}/${LINK_TARGET}"
+    fi
+done
+
+SCRIPT_DIR="$(cd -P -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
 PYTHON_SCRIPT="${SCRIPT_DIR}/doze_summary-termux.py"
 
 DOWNLOAD_DIR="${HOME}/storage/downloads"
@@ -80,6 +94,9 @@ for cmd in adb python3 awk grep sed date timeout; do
         exit 1
     }
 done
+
+echo "腳本位置：${SCRIPT_DIR}" >&2
+echo "Python 摘要程式：${PYTHON_SCRIPT}" >&2
 
 [[ -f "$PYTHON_SCRIPT" ]] || {
     echo "錯誤：找不到 ${PYTHON_SCRIPT}" >&2
