@@ -28,7 +28,7 @@ log() {
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
 
     printf '[%s] [%s] %s\n' "$ts" "$level" "$*" |
-        tee -a "$LOG_FILE"
+        tee -a "$LOG_FILE" >&2
 }
 
 die() {
@@ -156,9 +156,12 @@ if [[ -n "${1:-}" ]]; then
 else
     log INFO "開始自動偵測 ADB 端點。"
 
-    if PORT="$(detect_adb_port)"; then
-        log INFO "偵測到 Port：${PORT}"
-    else
+if PORT="$(detect_adb_port)"; then
+    check_port "$PORT" ||
+        die "自動偵測回傳了無效 Port：${PORT}"
+
+    log INFO "偵測到 Port：${PORT}"
+else
         echo
         echo "無法自動偵測 ADB 端點。"
         echo "請確認手機已開啟「開發人員選項 → 無線除錯」。"
