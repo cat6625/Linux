@@ -236,7 +236,7 @@ NEXT=$(grep -A8 "Next wake from idle" "$OUT_DIR/alarm_start_full.txt" |
        grep -m1 -oE "triggerTime=[0-9-]+ [0-9:]+" | cut -d= -f2 || true)
 
 if [ -n "$NEXT" ]; then
-  PHONE_NOW=$(adb -s "$ADB_ADDR" shell date +"%Y-%m-%d %H:%M:%S" | tr -d '\r')
+  PHONE_NOW=$(adb -s "$ADB_ADDR" shell 'date +"%Y-%m-%d %H:%M:%S"' | tr -d '\r')
   NEXT_MIN=$(( ( $(date -d "$NEXT" +%s) - $(date -d "$PHONE_NOW" +%s) ) / 60 ))
   log "下一個喚醒鬧鐘在 $NEXT（約 ${NEXT_MIN} 分鐘後）"
   if [ "$NEXT_MIN" -lt "$MIN_ALARM_MIN" ]; then
