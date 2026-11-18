@@ -18,11 +18,13 @@ pkg install -y adb nmap coreutils
 
 ## 2️⃣ 複製腳本至 `$HOME/doze/adb.sh`
 
-```bash
-# 建立目錄（若已存在可跳過）
-mkdir -p "$HOME/doze"
 
+# 建立目錄（若已存在可跳過）
+```bash
+mkdir -p "$HOME/doze"
+```
 # 將下面完整腳本寫入 $HOME/doze/adb.sh
+```bash
 cat > "$HOME/doze/adb.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
