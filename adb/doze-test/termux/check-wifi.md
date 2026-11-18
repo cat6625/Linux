@@ -130,3 +130,101 @@ adb shell settings get global wifi_watchdog_poor_network_detection
 * **傳回 `0**` 代表已關閉。
 
 您可以執行上述指令，若抓取到了 `dumpsys_wifi.txt` 的重點片段或設定回傳值（例如 `wifi_scan_always_available` 的結果），隨時可以貼上來，我們就能精準判斷是哪個背景服務在頻繁喚醒 Wi-Fi 晶片！
+
+
+---
+
+
+
+**Grok**
+以下是一個實用的 **Wi-Fi 開關對比測試腳本**，可直接使用。
+
+### 使用方式
+1. 把下面內容存成 `wifi-test.sh`
+2. 執行：`sh wifi-test.sh`
+3. 腳本會自動：
+   - 記錄「目前狀態」
+   - 關閉 Wi-Fi
+   - 等待你指定的時間（預設 30 分鐘）
+   - 再次記錄狀態
+   - 最後把 Wi-Fi 重新打開
+   - 輸出前後對比重點
+
+---
+
+```bash
+#!/bin/bash
+
+# ====================== 可調整參數 ======================
+WAIT_MINUTES=30          # 關閉 Wi-Fi 後要等待的分鐘數（建議 30~60）
+LOG_FILE="wifi_test_$(date +%Y%m%d_%H%M%S).log"
+# =======================================================
+
+echo "=== Wi-Fi 耗電對比測試 ===" | tee -a "$LOG_FILE"
+echo "開始時間: $(date)" | tee -a "$LOG_FILE"
+echo "等待時間: ${WAIT_MINUTES} 分鐘" | tee -a "$LOG_FILE"
+echo "" | tee -a "$LOG_FILE"
+
+# 記錄函式
+record_status() {
+    local label=$1
+    echo "---------- $label ----------" | tee -a "$LOG_FILE"
+    echo "時間: $(date)" | tee -a "$LOG_FILE"
+
+    echo -e "\n[Wi-Fi 開關狀態]" | tee -a "$LOG_FILE"
+    adb shell dumpsys wifi | grep -E "Wi-Fi is|mWifiEnabled|wifiEnabled" | head -5 | tee -a "$LOG_FILE"
+
+    echo -e "\n[Top Wakeup Reasons]" | tee -a "$LOG_FILE"
+    adb shell dumpsys batterystats | grep -A 12 "Wakeup reason" | head -15 | tee -a "$LOG_FILE"
+
+    echo -e "\n[Wi-Fi 相關 Kernel Wakelock / Active]" | tee -a "$LOG_FILE"
+    adb shell dumpsys batterystats | grep -E "MT662x|wlan0|wifi.*active|Wi-Fi kernel" | head -15 | tee -a "$LOG_FILE"
+
+    echo -e "\n[目前連線 SSID]" | tee -a "$LOG_FILE"
+    adb shell dumpsys wifi | grep -E "mWifiInfo SSID|SSID:" | head -3 | tee -a "$LOG_FILE"
+
+    echo "" | tee -a "$LOG_FILE"
+}
+
+# 1. 記錄關閉前狀態
+record_status "關閉 Wi-Fi 前"
+
+# 2. 關閉 Wi-Fi
+echo ">>> 正在關閉 Wi-Fi..." | tee -a "$LOG_FILE"
+adb shell svc wifi disable
+sleep 3
+
+# 確認是否已關閉
+echo "確認 Wi-Fi 狀態:" | tee -a "$LOG_FILE"
+adb shell dumpsys wifi | grep -E "Wi-Fi is|mWifiEnabled" | head -3 | tee -a "$LOG_FILE"
+echo "" | tee -a "$LOG_FILE"
+
+# 3. 等待
+echo ">>> 開始等待 ${WAIT_MINUTES} 分鐘（請保持螢幕關閉）..." | tee -a "$LOG_FILE"
+echo "（等待期間可手動關閉螢幕）" | tee -a "$LOG_FILE"
+sleep $((WAIT_MINUTES * 60))
+
+# 4. 記錄關閉後狀態
+record_status "關閉 Wi-Fi ${WAIT_MINUTES} 分鐘後"
+
+# 5. 重新開啟 Wi-Fi
+echo ">>> 正在重新開啟 Wi-Fi..." | tee -a "$LOG_FILE"
+adb shell svc wifi enable
+sleep 5
+
+echo "=== 測試結束 ===" | tee -a "$LOG_FILE"
+echo "結束時間: $(date)" | tee -a "$LOG_FILE"
+echo "完整日誌已儲存至: $LOG_FILE" | tee -a "$LOG_FILE"
+echo ""
+echo "請把 $LOG_FILE 的內容貼給我，我幫你分析前後差異。"
+```
+
+---
+
+### 建議使用流程
+1. 手機接上電腦，確認 `adb devices` 看得到裝置
+2. 執行腳本：`sh wifi-test.sh`
+3. 執行後**立刻關閉手機螢幕**
+4. 等待結束後，把產生的 `.log` 檔內容貼給我
+
+需要我把等待時間改成可互動輸入，或再加上「記錄電池百分比變化」的功能嗎？
