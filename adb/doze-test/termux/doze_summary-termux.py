@@ -2,15 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (Optimized v5.0)
+Termux Android Doze / BatteryStats 摘要工具 (v5.2 fixed)
 
 用法：
 python3 doze_summary-termux.py full.txt \
   --checkin checkin.txt \
-  --pkg ch.deletescape.lawnchair.plah \
   --deviceidle deviceidle.txt \
   --mem mem_start.txt mem_end.txt \
   --battery battery_start.txt battery_end.txt
+
+可選：--pkg com.example.foo,com.example.bar
 
 只使用 Python 標準函式庫。
 """
@@ -28,6 +29,7 @@ WELL_KNOWN = {
     1001: "radio/phone",
     1020: "mdnsd",
     1051: "netd",
+    1082: "dns/clat",
     2000: "shell(adbd)",
 }
 
@@ -35,10 +37,10 @@ BURST_MINUTES = 6
 BURST_MAH = 9.0
 HIGH_DRAIN_MAH_H = 25.0
 
-# 預先編譯常用的正規表達式以提升效能
 RE_DUR = re.compile(r"(\d+)\s*(ms|d|h|m|s)")
-RE_UID_MAP = re.compile(r"^\s*(u\d+[a-z]\d+|\d+):\s*$")
-RE_HISTORY = re.compile(r"^\s*(\+[\dhdms]+|0)\s+\((\d+)\)\s+(\d{1,3})\s?(.*)$")
+RE_HISTORY = re.compile(
+    r"^\s*(\+[\dhdms]+|0)\s+\((\d+)\)\s+(-?\d{1,3}|\?+)\s?(.*)$"
+)
 RE_IDLE = re.compile(r"(?:^|\s)device_idle=([^\s]+)")
 RE_ALARM = re.compile(r'\+alarm=(\S+?):"([^"]*)"')
 RE_CHARGE = re.compile(r"(?:^|\s)charge=(\d+)")
@@ -61,13 +63,7 @@ def read_text(path):
 
 
 def parse_dur(value):
-    units = {
-        "d": 86400000,
-        "h": 3600000,
-        "m": 60000,
-        "s": 1000,
-        "ms": 1,
-    }
+    units = {"d": 86400000, "h": 3600000, "m": 60000, "s": 1000, "ms": 1}
     total = 0
     for number, unit in RE_DUR.findall(value):
         total += int(number) * units[unit]
@@ -93,10 +89,6 @@ def section(text, header, limit=80):
     if pos < 0:
         return []
     return text[pos:].splitlines()[1:limit + 1]
-
-
-def unique(items):
-    return list(dict.fromkeys(items))
 
 
 # ============================================================
@@ -143,19 +135,16 @@ def label(uid_string, uidmap):
     return uid_string
 
 
-def per_uid_blocks(lines):
-    current = None
-    result = collections.defaultdict(list)
-    for line in lines:
-        match = RE_UID_MAP.match(line)
-        if match:
-            current = match.group(1)
-            continue
-        if current:
-            if line.startswith("    "):
-                result[current].append(line.strip())
-            elif not line.startswith("    ") and line.strip():
-                current = None
+def resolve_pkg_uids(pkg_arg, uidmap):
+    if not pkg_arg:
+        return set()
+    pkgs = [p.strip() for p in pkg_arg.split(",") if p.strip()]
+    result = set()
+    for uid, names in uidmap.items():
+        for name in names:
+            for pkg in pkgs:
+                if name == pkg or name.startswith(pkg + ":"):
+                    result.add(uid)
     return result
 
 
@@ -174,10 +163,10 @@ def parse_history(lines):
     events = []
     stats = {
         "total": len(lines),
-        "parsed_events": 0,   # 成功解析的主事件行
-        "merged_details": 0,  # 合併至主事件的 Details / /proc/stat 補充行
-        "ignored": 0,         # 空白行與表頭說明行
-        "unparsed": 0         # 真正無法辨識的殘存行
+        "parsed_events": 0,
+        "merged_details": 0,
+        "ignored": 0,
+        "unparsed": 0,
     }
     last_event = None
 
@@ -189,9 +178,13 @@ def parse_history(lines):
 
         match = RE_HISTORY.match(line)
         if match:
-            timestamp, _, level, rest = match.groups()
+            timestamp, _, level_str, rest = match.groups()
             elapsed = 0 if timestamp == "0" else parse_dur(timestamp)
-            event_data = [elapsed, int(level), [rest]]
+            try:
+                level_int = int(level_str)
+            except ValueError:
+                level_int = -1
+            event_data = [elapsed, level_int, [rest]]
             events.append(event_data)
             last_event = event_data
             stats["parsed_events"] += 1
@@ -199,7 +192,6 @@ def parse_history(lines):
             if stripped.startswith("Battery History") or "used of" in stripped:
                 stats["ignored"] += 1
                 continue
-
             if last_event is not None:
                 last_event[2].append(stripped)
                 stats["merged_details"] += 1
@@ -253,7 +245,6 @@ def print_battery_stats(text, events):
         print(f"- 電池使用時間：{realtime}")
         print(f"- CPU 清醒時間：{uptime}（{uptime_pct}%）")
         print(f"- CPU suspend 推算比例：{100 - float(uptime_pct):.1f}%")
-
         if float(realtime_pct) < 99.5:
             print(f"- 注意：統計期間只有 {realtime_pct}% 屬於電池供電時間。")
     else:
@@ -261,7 +252,6 @@ def print_battery_stats(text, events):
 
     fields = [
         ("Screen on", r"^\s+Screen on:\s*(.*)"),
-        # 改為更廣泛的捕捉，順便帶出可能接在後方的原始說明
         ("Discharge", r"^\s+Discharge:\s*(.*)"),
         ("Light doze discharge", r"Device light doze discharge:\s*(.*)"),
         ("Deep doze discharge", r"Device deep doze discharge:\s*(.*)"),
@@ -277,13 +267,11 @@ def print_battery_stats(text, events):
         value = grab(text, pattern)
         print(f"- {name}：{value or '未知／未提供'}")
 
-    # === 【最後一哩路】：印出 Discharge 附近的原始完整區塊以供核實 ===
     print("\n  🔍 [原始欄位對照] Discharge 區段原始文字：")
     for line in text.splitlines():
         if "Discharge:" in line or "Discharge screen" in line:
             print(f"    > {line.strip()}")
 
-    # 收集所有亮屏與熄屏事件並進行區間合併 (Interval Merging)
     screen_intervals = []
     current_on = None
     for timestamp, _, rest in events:
@@ -293,7 +281,7 @@ def print_battery_stats(text, events):
             if timestamp >= current_on:
                 screen_intervals.append((current_on, timestamp))
             current_on = None
-    if current_on is not None:
+    if current_on is not None and events:
         screen_intervals.append((current_on, events[-1][0]))
 
     merged_screens = []
@@ -317,7 +305,8 @@ def print_battery_stats(text, events):
         else:
             print(f"- ⚠ 合併有效亮屏區段：{fmt(start)}–{fmt(end)}，持續約 {duration:.1f} 秒。")
 
-    print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}（註：此為歷史事件區間合併值，與 BatteryStats 原生 Screen on 定義與採樣口徑不同）")
+    print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}"
+          f"（註：與 BatteryStats 原生 Screen on 採樣口徑不同）")
 
 
 # ============================================================
@@ -331,10 +320,7 @@ def print_doze(events, uidmap):
     if not idle:
         print("- 沒有辨識到 device_idle 狀態事件。")
     else:
-        print(
-            "- device_idle 轉換：",
-            ", ".join(f"{fmt(t)}={state}" for t, state in idle)
-        )
+        print("- device_idle 轉換：", ", ".join(f"{fmt(t)}={state}" for t, state in idle))
 
         full = [t for t, state in idle if state == "full"]
         if full:
@@ -360,14 +346,18 @@ def print_doze(events, uidmap):
     alarms = parse_alarm_events(events)
     print("\n## Alarm / DeviceIdle 鬧鐘")
 
-    deviceidle_alarms = [(t, name) for t, _, name in alarms if "DeviceIdleController" in name]
+    deviceidle_alarms = []
+    for t, uid, name in alarms:
+        if "DeviceIdleController" in uid or "DeviceIdleController" in name:
+            deviceidle_alarms.append((t, uid, name))
+
     if deviceidle_alarms:
-        for timestamp, name in deviceidle_alarms:
+        for timestamp, _uid, name in deviceidle_alarms:
             print(f"- {fmt(timestamp)}：{name}")
     else:
         print("- 沒有辨識到 DeviceIdleController 鬧鐘。")
 
-    progression = [t for t, name in deviceidle_alarms if "deep.progression" in name]
+    progression = [t for t, _uid, name in deviceidle_alarms if "deep.progression" in name]
     if progression:
         print("- deep.progression：", ", ".join(fmt(t) for t in progression))
 
@@ -441,6 +431,16 @@ def print_wakelocks(text):
 # Charge Counter 放電分析
 # ============================================================
 
+def _level_at(points, ts):
+    level = None
+    for t, lv in points:
+        if t <= ts:
+            level = lv
+        else:
+            break
+    return level
+
+
 def print_discharge(events, uidmap):
     print("\n## 放電曲線與耗電分析（已過濾開機校正期）")
 
@@ -450,29 +450,47 @@ def print_discharge(events, uidmap):
         if match:
             points.append((timestamp, int(match.group(1))))
 
-    # 濾除開機前 300 秒（5分鐘）內的電量跳動
+    if not points:
+        print("- 沒有 charge counter 資料。")
+        return
+
     filtered_points = [p for p in points if p[0] >= 300000]
-    if not filtered_points and points:
+    if not filtered_points:
         filtered_points = points
 
     bursts = []
     for index in range(len(filtered_points)):
         best = None
+        best_delta = 0
         for other in range(index + 1, len(filtered_points)):
             elapsed = filtered_points[other][0] - filtered_points[index][0]
             if elapsed > BURST_MINUTES * 60000:
                 break
             delta = filtered_points[index][1] - filtered_points[other][1]
-            if delta >= BURST_MAH:
+            if delta >= BURST_MAH and delta > best_delta:
                 best = other
+                best_delta = delta
         if best is not None:
-            bursts.append((filtered_points[index][0], filtered_points[best][0], delta))
+            bursts.append((filtered_points[index][0], filtered_points[best][0]))
 
     if not bursts:
-        print("- 經防誤判過濾後：沒有符合門檻的異常突發耗電事件（已排除開機初期電量校正跳動）。")
-    else:
-        for start, end, delta in bursts:
-            print(f"- ⚠ 疑似突發耗電區段：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
+        print("- 經防誤判過濾後：沒有符合門檻的異常突發耗電事件。")
+        return
+
+    merged = []
+    for start, end in sorted(bursts):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+
+    for start, end in merged:
+        lv_start = _level_at(filtered_points, start)
+        lv_end = _level_at(filtered_points, end)
+        if lv_start is None or lv_end is None:
+            continue
+        delta = lv_start - lv_end
+        print(f"- ⚠ 疑似突發耗電區段：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
 
 
 # ============================================================
@@ -516,7 +534,7 @@ def print_cpu_running(events):
 # Estimated power use / UID
 # ============================================================
 
-def print_power(text, uidmap, args):
+def print_power(text, uidmap, pkg_uids=None):
     print("\n## 估算耗電（Estimated power use）")
     lines = section(text, "Estimated power use (mAh):", 80)
 
@@ -524,7 +542,24 @@ def print_power(text, uidmap, args):
         if line.strip():
             print("-", line.strip()[:180])
 
-    # 修正為更精確、不武斷的技術語意備註
+    # Computed vs actual drain 警告（MIUI powerkeeper 干擾的典型症狀）
+    summary_line = next((l for l in lines if "Computed drain" in l), None)
+    if summary_line:
+        m = re.search(
+            r"Computed drain:\s*([\d.]+),\s*actual drain:\s*([\d.]+)-([\d.]+)",
+            summary_line,
+        )
+        if m:
+            computed = float(m.group(1))
+            actual_low = float(m.group(2))
+            actual_high = float(m.group(3))
+            if computed > 0 and actual_low / computed >= 3:
+                print(f"  - ⚠ BatteryStats 模型只記錄到 {computed:.1f} mAh，"
+                      f"但依電量推算實際放電 {actual_low:.0f}–{actual_high:.0f} mAh"
+                      f"（差 {actual_low / computed:.1f} 倍）。")
+                print("    常見原因：MIUI powerkeeper 或廠商電源管理器覆寫了 BatteryStats；"
+                      "請以 actual drain 為準。")
+
     print("  - 💡 [說明] Discharge 為 BatteryStats 記錄的放電量；")
     print("    若此欄位取自 UAh 紀錄且裝置支援 coulomb counter，則基於電量計讀數，")
     print("    與 actual drain 的軟體模型估算範圍可能存在口徑或區間上的差異。")
@@ -538,7 +573,14 @@ def print_power(text, uidmap, args):
     uid_rows.sort(reverse=True)
     print("- UID 耗電前 8 名：")
     for value, uid in uid_rows[:8]:
-        print(f"  - {label(uid, uidmap)}：{value:.2f} mAh")
+        uid_int = uid_to_int(uid)
+        marker = "  ★ 目標包" if pkg_uids and uid_int in pkg_uids else ""
+        print(f"  - {label(uid, uidmap)}：{value:.2f} mAh{marker}")
+
+    if pkg_uids:
+        matched = [u for u in uid_rows if uid_to_int(u[1]) in pkg_uids]
+        if not matched:
+            print("  - ℹ 目標包未出現在前段 UID 耗電清單中（耗電量低於門檻，或本次統計未記錄）。")
 
 
 # ============================================================
@@ -554,7 +596,8 @@ def print_deviceidle(path):
         print("- 檔案不存在或內容為空。")
         return
 
-    for key in ["inactive_to", "idle_after_inactive_to", "min_time_to_alarm", "idle_to", "max_idle_to"]:
+    for key in ["inactive_to", "idle_after_inactive_to", "min_time_to_alarm",
+                "idle_to", "max_idle_to"]:
         print(f"- {key}：", grab(text, r"^\s*" + re.escape(key) + r"=(\S+)"))
 
     position = text.find("Idling history:")
@@ -565,7 +608,7 @@ def print_deviceidle(path):
 
 
 # ============================================================
-# meminfo (強固型解析)
+# meminfo
 # ============================================================
 
 def parse_mem_block(text):
@@ -584,18 +627,17 @@ def parse_mem_block(text):
         return result
 
     values = re.findall(r"\d+", total_line)
-    if values:
-        try:
-            result["pss"] = int(values[0])
-            result["pdirty"] = int(values[1]) if len(values) > 1 else 0
-            result["pclean"] = int(values[2]) if len(values) > 2 else 0
-            result["swap"] = int(values[3]) if len(values) > 3 else 0
-            result["rss"] = int(values[4]) if len(values) > 4 else int(values[0])
-        except ValueError:
-            result["error"] = "解析 TOTAL 數值時發生數字轉換錯誤。"
-            return result
-    else:
+    if not values:
         result["error"] = "TOTAL 行找不到任何數字。"
+        return result
+
+    try:
+        result["pss"] = int(values[0])
+        result["pdirty"] = int(values[1]) if len(values) > 1 else 0
+        result["pclean"] = int(values[2]) if len(values) > 2 else 0
+        result["swap"] = int(values[3]) if len(values) > 3 else 0
+    except ValueError:
+        result["error"] = "解析 TOTAL 數值時發生數字轉換錯誤。"
         return result
 
     return result
@@ -651,9 +693,101 @@ def print_meminfo(paths):
             f"- [{when}] {data['proc']}："
             f"PSS {mb(data['pss'])}，"
             f"Private {mb(private)}，"
-            f"RSS {mb(data['rss'])}，"
             f"Swap PSS {mb(data.get('swap', 0))}"
         )
+
+
+# ============================================================
+# 電池快照對比（--battery）
+# ============================================================
+
+def parse_battery_snapshot(path):
+    text = read_text(path)
+    if not text:
+        return None
+
+    result = {}
+
+    m = re.search(r"^\s*level:\s*(\d+)", text, re.M)
+    if m:
+        result["level"] = int(m.group(1))
+
+    m = re.search(r"^\s*status:\s*(\d+)", text, re.M)
+    if m:
+        result["status"] = int(m.group(1))
+
+    m = re.search(r"^\s*plugged:\s*(\d+)", text, re.M)
+    if m:
+        result["plugged"] = int(m.group(1))
+    else:
+        plugged = 0
+        if re.search(r"^\s*AC powered:\s*true", text, re.M):
+            plugged |= 1
+        if re.search(r"^\s*USB powered:\s*true", text, re.M):
+            plugged |= 2
+        if re.search(r"^\s*Wireless powered:\s*true", text, re.M):
+            plugged |= 4
+        result["plugged"] = plugged
+
+    m = re.search(r"^\s*voltage:\s*(\d+)", text, re.M)
+    if m:
+        result["voltage"] = int(m.group(1))
+
+    m = re.search(r"^\s*temperature:\s*(\d+)", text, re.M)
+    if m:
+        result["temperature"] = int(m.group(1))
+
+    return result or None
+
+
+def print_battery_snapshots(paths):
+    print("\n## 電池快照對比")
+    if not paths:
+        return
+
+    snaps = []
+    for path in paths:
+        snap = parse_battery_snapshot(path)
+        if snap:
+            stamp = parse_stamp(path)
+            snaps.append((path, snap, stamp))
+
+    if not snaps:
+        print("- 沒有可用的電池快照。")
+        return
+
+    for path, snap, stamp in snaps:
+        when = stamp.strftime("%m-%d %H:%M:%S") if stamp else os.path.basename(path)
+        parts = []
+        if "level" in snap:
+            parts.append(f"電量 {snap['level']}%")
+        if "status" in snap:
+            parts.append(f"status={snap['status']}")
+        if "plugged" in snap:
+            parts.append(f"plugged={snap['plugged']}")
+        if "voltage" in snap:
+            parts.append(f"電壓 {snap['voltage']}mV")
+        if "temperature" in snap:
+            parts.append(f"溫度 {snap['temperature'] / 10:.1f}°C")
+        print(f"- [{when}] {os.path.basename(path)}: " + ", ".join(parts))
+
+    if len(snaps) >= 2:
+        first = snaps[0][1]
+        last = snaps[-1][1]
+        first_stamp = snaps[0][2]
+        last_stamp = snaps[-1][2]
+
+        if first_stamp and last_stamp:
+            span = (last_stamp - first_stamp).total_seconds()
+            print(f"- 快照覆蓋時長：{fmt(span * 1000)}"
+                  f"（僅反映快照間隔，與 BatteryStats 累積統計口徑不同）")
+            if span < 60 and "level" in first and "level" in last:
+                print(f"  ⚠ 快照間隔只有 {span:.0f} 秒，電量變化不足以反映耗電；"
+                      f"請對照上方 BatteryStats 的 Discharge 值。")
+
+        if "level" in first and "level" in last:
+            diff = first["level"] - last["level"]
+            print(f"- 電量變化：{first['level']}% → {last['level']}%（下降 {diff}%）")
 
 
 # ============================================================
@@ -661,9 +795,8 @@ def print_meminfo(paths):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (Optimized)")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.2)")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
-    parser.add_argument("--uids", default="")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
     parser.add_argument("--deviceidle")
@@ -687,6 +820,7 @@ def main():
 
     events, h_stats = parse_history(history_lines)
     uidmap = load_uidmap(args.checkin)
+    pkg_uids = resolve_pkg_uids(args.pkg, uidmap)
 
     print("# Android Doze / BatteryStats 摘要")
     print(f"- 原始檔案：{args.full}")
@@ -696,6 +830,10 @@ def main():
     print(f"  - 忽略行數：{h_stats['ignored']}（空白行與標頭）")
     print(f"  - 未辨識殘存行：{h_stats['unparsed']}")
 
+    if args.pkg and not pkg_uids:
+        print(f"- ℹ 指定套件 {args.pkg} 未在 checkin.txt 中找到 UID 映射"
+              f"（可能未安裝、checkin.txt 不完整，或該 App 未出現在歷史記錄）。")
+
     start_dt = grab(stats_text, r"Start clock time:\s*(\S+)")
     print("- 統計起點：", start_dt or "未知")
 
@@ -704,11 +842,14 @@ def main():
     print_wakelocks(stats_text)
     print_discharge(events, uidmap)
     print_cpu_running(events)
-    print_power(stats_text, uidmap, args)
+    print_power(stats_text, uidmap, pkg_uids)
     print_deviceidle(args.deviceidle)
 
     if args.mem:
         print_meminfo(args.mem)
+
+    if args.battery:
+        print_battery_snapshots(args.battery)
 
     print("\n摘要分析完成。")
     return 0
