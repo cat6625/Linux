@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.2 fixed)
+Termux Android Doze / BatteryStats 摘要工具 (v5.3)
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -35,7 +35,7 @@ WELL_KNOWN = {
 
 BURST_MINUTES = 6
 BURST_MAH = 9.0
-HIGH_DRAIN_MAH_H = 25.0
+LIGHT_DOZE_MAH_H_LIMIT = 50.0
 
 RE_DUR = re.compile(r"(\d+)\s*(ms|d|h|m|s)")
 RE_HISTORY = re.compile(
@@ -267,6 +267,23 @@ def print_battery_stats(text, events):
         value = grab(text, pattern)
         print(f"- {name}：{value or '未知／未提供'}")
 
+    # ★ 新增：Light doze 功耗異常警告
+    light_mah_str = grab(text, r"Device light doze discharge:\s*([\d.]+)")
+    light_idle_str = grab(text, r"^\s+Device light idling:\s*(.*)")
+    if light_mah_str and light_idle_str:
+        try:
+            light_mah = float(light_mah_str)
+            light_dur_ms = parse_dur(light_idle_str)
+            if light_dur_ms > 0:
+                rate = light_mah / (light_dur_ms / 3600000)
+                if rate > LIGHT_DOZE_MAH_H_LIMIT:
+                    print(f"  ⚠ Light doze 功耗 {rate:.0f} mAh/h 異常偏高"
+                          f"（正常應 < {LIGHT_DOZE_MAH_H_LIMIT:.0f}，樣本 {light_idle_str.strip()}）。")
+                    print("    常見原因：light idle 前後過渡期耗電被計入、"
+                          "或 light idle 期間集中觸發 alarm/job。")
+        except ValueError:
+            pass
+
     print("\n  🔍 [原始欄位對照] Discharge 區段原始文字：")
     for line in text.splitlines():
         if "Discharge:" in line or "Discharge screen" in line:
@@ -306,7 +323,7 @@ def print_battery_stats(text, events):
             print(f"- ⚠ 合併有效亮屏區段：{fmt(start)}–{fmt(end)}，持續約 {duration:.1f} 秒。")
 
     print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}"
-          f"（註：與 BatteryStats 原生 Screen on 採樣口徑不同）")
+          f"（註：與 BatteryStats 原生 Screen on 採樣口徑不同，通常高 5–10%）")
 
 
 # ============================================================
@@ -428,6 +445,49 @@ def print_wakelocks(text):
 
 
 # ============================================================
+# Partial Wakelock
+# ============================================================
+
+def print_partial_wakelocks(text, uidmap):
+    print("\n## Partial Wakelock 前 8 名")
+    pos = text.find("All partial wake locks:")
+    if pos < 0:
+        print("- 沒有辨識到 All partial wake locks 區段。")
+        return
+
+    rows = []
+    for line in text[pos:].splitlines()[1:300]:
+        if not line.strip():
+            break
+        # 典型格式：
+        #   Wake lock u0a123 *sync*/com.example: 1000 (12 times) 15000ms
+        #   Wake lock 1000 *alarm*: 100ms partial (10 times) realtime
+        m = re.match(r"^\s+Wake lock (\S+?) (.+?):\s*(.*)$", line)
+        if not m:
+            continue
+        uid = m.group(1)
+        name = m.group(2)
+        rest = m.group(3)
+
+        dur_ms = parse_dur(rest)
+        times_match = re.search(r"\((\d+)\s+times\)", rest)
+        times = int(times_match.group(1)) if times_match else 0
+
+        if dur_ms == 0 and times == 0:
+            continue
+
+        rows.append((dur_ms, uid, name, times))
+
+    if not rows:
+        print("- 找到區段但無法解析任何 wakelock 行。")
+        return
+
+    rows.sort(reverse=True)
+    for dur_ms, uid, name, times in rows[:8]:
+        print(f"- {label(uid, uidmap)}：{fmt(dur_ms)}（{times} 次），{name[:60]}")
+
+
+# ============================================================
 # Charge Counter 放電分析
 # ============================================================
 
@@ -542,7 +602,7 @@ def print_power(text, uidmap, pkg_uids=None):
         if line.strip():
             print("-", line.strip()[:180])
 
-    # Computed vs actual drain 警告（MIUI powerkeeper 干擾的典型症狀）
+    # ★ 改進：Computed vs actual drain 警告，分級且不武斷
     summary_line = next((l for l in lines if "Computed drain" in l), None)
     if summary_line:
         m = re.search(
@@ -553,12 +613,21 @@ def print_power(text, uidmap, pkg_uids=None):
             computed = float(m.group(1))
             actual_low = float(m.group(2))
             actual_high = float(m.group(3))
-            if computed > 0 and actual_low / computed >= 3:
-                print(f"  - ⚠ BatteryStats 模型只記錄到 {computed:.1f} mAh，"
-                      f"但依電量推算實際放電 {actual_low:.0f}–{actual_high:.0f} mAh"
-                      f"（差 {actual_low / computed:.1f} 倍）。")
-                print("    常見原因：MIUI powerkeeper 或廠商電源管理器覆寫了 BatteryStats；"
-                      "請以 actual drain 為準。")
+            if computed > 0:
+                ratio = actual_low / computed
+                if ratio >= 5:
+                    print(f"  - ⚠ BatteryStats 模型只記錄到 {computed:.1f} mAh，"
+                          f"但依電量推算實際放電 {actual_low:.0f}–{actual_high:.0f} mAh"
+                          f"（差 {ratio:.1f} 倍）。")
+                    print("    兩種可能：")
+                    print("    1. 電池老化：實際容量遠小於設計容量，actual drain 被高估。")
+                    print("       建議用 `adb shell dumpsys battery` 檢查 Charge counter / health。")
+                    print("    2. 廠商電源管理器（如 MIUI powerkeeper）漏記耗電。")
+                elif ratio >= 3:
+                    print(f"  - ⚠ BatteryStats 模型只記錄到 {computed:.1f} mAh，"
+                          f"實際放電 {actual_low:.0f}–{actual_high:.0f} mAh"
+                          f"（差 {ratio:.1f} 倍），通常是廠商電源管理器覆寫所致。")
+                # 差 1.5–3 倍視為正常，不警告（BatteryStats 模型本就會低估）
 
     print("  - 💡 [說明] Discharge 為 BatteryStats 記錄的放電量；")
     print("    若此欄位取自 UAh 紀錄且裝置支援 coulomb counter，則基於電量計讀數，")
@@ -599,6 +668,14 @@ def print_deviceidle(path):
     for key in ["inactive_to", "idle_after_inactive_to", "min_time_to_alarm",
                 "idle_to", "max_idle_to"]:
         print(f"- {key}：", grab(text, r"^\s*" + re.escape(key) + r"=(\S+)"))
+
+    # 提示非預設的激進參數
+    inactive_to = grab(text, r"^\s*inactive_to=(\S+)")
+    idle_to = grab(text, r"^\s*idle_to=(\S+)")
+    if inactive_to in ("+1m0s0ms", "+0m30s0ms"):
+        print(f"- ℹ inactive_to 為 {inactive_to}（非預設 30m–1h），可能是測試設定。")
+    if idle_to in ("+15m0s0ms", "+10m0s0ms"):
+        print(f"- ℹ idle_to 為 {idle_to}（非預設 1h），可能是測試設定。")
 
     position = text.find("Idling history:")
     if position >= 0:
@@ -681,6 +758,12 @@ def print_meminfo(paths):
         print("- 沒有可分析的 meminfo 區塊。")
         return
 
+    # 同一 proc 前後差異警告
+    by_proc = collections.defaultdict(list)
+    for data in rows:
+        if not data.get("error"):
+            by_proc[data["proc"]].append(data)
+
     for data in rows:
         if data.get("error"):
             print(f"- ⚠ {data['path']} ({data['proc']})：{data['error']}")
@@ -695,6 +778,17 @@ def print_meminfo(paths):
             f"Private {mb(private)}，"
             f"Swap PSS {mb(data.get('swap', 0))}"
         )
+
+    for proc, entries in by_proc.items():
+        if len(entries) < 2:
+            continue
+        entries_sorted = sorted(entries, key=lambda d: d["stamp"] or dt.datetime.min)
+        first = entries_sorted[0]
+        last = entries_sorted[-1]
+        if first["pss"] > 0 and last["pss"] < first["pss"] * 0.5:
+            print(f"  ⚠ {proc} PSS 從 {first['pss'] / 1024:.1f} MB "
+                  f"降至 {last['pss'] / 1024:.1f} MB（> 50%），"
+                  f"可能被系統回收而非自然釋放。")
 
 
 # ============================================================
@@ -789,13 +883,18 @@ def print_battery_snapshots(paths):
             diff = first["level"] - last["level"]
             print(f"- 電量變化：{first['level']}% → {last['level']}%（下降 {diff}%）")
 
+        # 若快照期間有插電，提出警告
+        if first.get("plugged", 0) or last.get("plugged", 0):
+            print("  ⚠ 快照期間偵測到 plugged 非零（充電或 USB），"
+                  "放電數據可能不純。")
+
 
 # ============================================================
 # 主程式
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.2)")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.3)")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
@@ -840,6 +939,7 @@ def main():
     print_battery_stats(stats_text, events)
     print_doze(events, uidmap)
     print_wakelocks(stats_text)
+    print_partial_wakelocks(stats_text, uidmap)
     print_discharge(events, uidmap)
     print_cpu_running(events)
     print_power(stats_text, uidmap, pkg_uids)
