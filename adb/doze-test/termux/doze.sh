@@ -461,6 +461,7 @@ python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
     --deviceidle "$OUT_DIR/deviceidle.txt" \
     --mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt" \
     --battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt" \
+    --mask \
     > "$SUMMARY" 2>&1 || {
         log "⚠ Python 摘要產生失敗，請檢查 ${SUMMARY}"
     }
