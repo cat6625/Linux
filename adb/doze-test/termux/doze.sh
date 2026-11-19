@@ -8,6 +8,10 @@
 #   doze --reset-batterystats
 #   doze 41077 --reset-batterystats
 #
+# 目標包（可選，逗號分隔）：
+#   DOZE_PKGS="com.example.foo,com.example.bar" doze
+#   或直接修改下方 PKGS=(...)
+#
 # BatteryStats 預設不重置。
 # -------------------------------------------------------------
 
@@ -16,7 +20,12 @@ umask 077
 
 # -------------------- 設定區 --------------------
 
-PKGS=("ch.deletescape.lawnchair.plah")
+# ★ 目標包：預設留空（不指定），若要分析特定 App 請填入
+if [[ -n "${DOZE_PKGS:-}" ]]; then
+    IFS=',' read -r -a PKGS <<< "$DOZE_PKGS"
+else
+    PKGS=()
+fi
 
 RECONNECT_TRIES=24
 RECONNECT_INTERVAL=5
@@ -35,11 +44,9 @@ RESET_BATTERYSTATS=0
 
 SOURCE_PATH="${BASH_SOURCE[0]}"
 
-# 若透過軟連結啟動，先解析實際檔案位置
 while [[ -L "$SOURCE_PATH" ]]; do
     SOURCE_DIR="$(cd -P -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
     LINK_TARGET="$(readlink "$SOURCE_PATH")"
-
     if [[ "$LINK_TARGET" == /* ]]; then
         SOURCE_PATH="$LINK_TARGET"
     else
@@ -55,6 +62,8 @@ DOWNLOAD_DIR="${HOME}/storage/downloads"
 PORT=""
 ADB_ADDR=""
 
+FAILED_CAPTURES=()
+
 # ------------------------------------------------
 # 參數解析
 # ------------------------------------------------
@@ -66,6 +75,7 @@ for arg in "$@"; do
             ;;
         --help|-h)
             echo "用法：$0 [Port] [--reset-batterystats]"
+            echo "環境變數：DOZE_PKGS=\"pkg1,pkg2\" 指定目標包"
             exit 0
             ;;
         *)
@@ -119,16 +129,13 @@ python3 -c 'import sys; assert sys.version_info >= (3, 8)' || {
 # ------------------------------------------------
 
 TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
-
 OUT_DIR="${DOWNLOAD_DIR}/doze-test/${TIMESTAMP}"
 
 mkdir -p "$OUT_DIR"
 chmod 700 "$OUT_DIR"
 
 log() {
-    printf '[TERMUX] %s %s\n' \
-        "$(date '+%H:%M:%S')" "$*" |
-        tee -a "$OUT_DIR/timeline.txt" >&2
+    printf '[TERMUX] %s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$OUT_DIR/timeline.txt" >&2
 }
 
 die() {
@@ -142,13 +149,18 @@ stamp() {
 
 log "輸出目錄：${OUT_DIR}"
 
+if (( ${#PKGS[@]} > 0 )); then
+    log "目標包：$(IFS=,; echo "${PKGS[*]}")"
+else
+    log "目標包：未指定（僅做全局摘要）"
+fi
+
 # ------------------------------------------------
 # ADB 函式
 # ------------------------------------------------
 
 adb_is_connected() {
     local addr="$1"
-
     adb devices 2>/dev/null |
         awk -v addr="$addr" '
             $1 == addr && $2 == "device" { found=1 }
@@ -168,20 +180,16 @@ find_connected_port() {
 }
 
 detect_adb_port() {
-    local connected
-    local scanned
-    local p
-    local addr
+    local connected scanned p addr
 
     connected="$(find_connected_port || true)"
-
     if [[ -n "$connected" ]]; then
         printf '%s\n' "$connected"
         return 0
     fi
 
     command -v nmap >/dev/null 2>&1 || {
-        log "⚠ 找不到 nmap，無法自動掃描。"
+        log "⚠ 找不到 nmap，無法自動掃描（pkg install nmap 可啟用）。"
         return 1
     }
 
@@ -205,11 +213,8 @@ detect_adb_port() {
     while IFS= read -r p; do
         [[ -n "$p" ]] || continue
         check_port "$p" || continue
-
         addr="127.0.0.1:${p}"
-
         adb connect "$addr" >/dev/null 2>&1 || true
-
         if adb_is_connected "$addr"; then
             printf '%s\n' "$p"
             return 0
@@ -221,22 +226,15 @@ detect_adb_port() {
 
 connect_adb() {
     local attempt
-
     for ((attempt=1; attempt<=RECONNECT_TRIES; attempt++)); do
         adb connect "$ADB_ADDR" >/dev/null 2>&1 || true
-
-        if adb -s "$ADB_ADDR" get-state 2>/dev/null |
-            grep -qx 'device'; then
-
+        if adb -s "$ADB_ADDR" get-state 2>/dev/null | grep -qx 'device'; then
             log "ADB 已連線至 ${ADB_ADDR}（第 ${attempt} 次）"
             return 0
         fi
-
         log "ADB 尚未連線，第 ${attempt}/${RECONNECT_TRIES} 次重試。"
-
         sleep "$RECONNECT_INTERVAL"
     done
-
     return 1
 }
 
@@ -245,29 +243,19 @@ connect_adb() {
 # ------------------------------------------------
 
 if [[ -n "$PORT" ]]; then
-    check_port "$PORT" ||
-        die "Port 必須是 1–65535 的整數。"
-
+    check_port "$PORT" || die "Port 必須是 1–65535 的整數。"
     log "使用手動 Port：${PORT}"
 else
     log "自動偵測 ADB Port。"
-
-if PORT="$(detect_adb_port)"; then
-    check_port "$PORT" ||
-        die "自動偵測回傳了無效 Port：${PORT}"
-
-    log "偵測到 Port：${PORT}"
-else
+    if PORT="$(detect_adb_port)"; then
+        check_port "$PORT" || die "自動偵測回傳了無效 Port：${PORT}"
+        log "偵測到 Port：${PORT}"
+    else
         echo
         echo "自動偵測失敗。"
-
-        read -r -p "請輸入無線除錯 Port（Enter 取消）： " PORT
-
-        [[ -n "$PORT" ]] ||
-            die "使用者取消。"
-
-        check_port "$PORT" ||
-            die "Port 格式錯誤。"
+        read -r -p "請輸入無線除錯 Port（Enter 取消）： " PORT || die "使用者中斷"
+        [[ -n "$PORT" ]] || die "使用者取消。"
+        check_port "$PORT" || die "Port 格式錯誤。"
     fi
 fi
 
@@ -280,21 +268,21 @@ ADB_ADDR="127.0.0.1:${PORT}"
 capture() {
     local filename="$1"
     shift
-
     local output="${OUT_DIR}/${filename}"
     local rc=0
 
     log "擷取 ${filename}。"
-
     "$@" > "$output" 2>&1 || rc=$?
 
     if (( rc != 0 )); then
         log "⚠ ${filename} 擷取失敗，退出碼 ${rc}。"
         printf '\n[CAPTURE ERROR] exit_code=%s\n' "$rc" >> "$output"
+        FAILED_CAPTURES+=("${filename}(rc=${rc})")
     fi
 
     if [[ ! -s "$output" ]]; then
         log "⚠ ${filename} 是空檔。"
+        FAILED_CAPTURES+=("${filename}(empty)")
     fi
 
     return 0
@@ -304,7 +292,6 @@ snapshot_battery() {
     local filename="$1"
     local output="${OUT_DIR}/${filename}"
     local rc=0
-
     {
         stamp
         adb -s "$ADB_ADDR" shell dumpsys battery
@@ -312,8 +299,8 @@ snapshot_battery() {
 
     if (( rc != 0 )); then
         log "⚠ 電池快照失敗：${filename}"
+        FAILED_CAPTURES+=("${filename}(rc=${rc})")
     fi
-
     return 0
 }
 
@@ -324,13 +311,17 @@ snapshot_mem() {
 
     {
         stamp
-
-        for p in "${PKGS[@]}"; do
+        if (( ${#PKGS[@]} == 0 )); then
             echo
-            echo "===== PACKAGE: ${p} ====="
-
-            adb -s "$ADB_ADDR" shell dumpsys meminfo "$p" || true
-        done
+            echo "# 未指定目標包；輸出全局 meminfo 摘要"
+            adb -s "$ADB_ADDR" shell dumpsys meminfo || true
+        else
+            for p in "${PKGS[@]}"; do
+                echo
+                echo "===== PACKAGE: ${p} ====="
+                adb -s "$ADB_ADDR" shell dumpsys meminfo "$p" || true
+            done
+        fi
     } > "$output" 2>&1
 
     return 0
@@ -342,70 +333,47 @@ snapshot_mem() {
 
 log "=== Doze 測試開始，目標端點：${ADB_ADDR} ==="
 
-connect_adb ||
-    die "無法連線到 ${ADB_ADDR}，請確認無線除錯是否開啟。"
+connect_adb || die "無法連線到 ${ADB_ADDR}，請確認無線除錯是否開啟。"
 
-# ------------------------------------------------
 # 1. 測試前鬧鐘檢查
-# ------------------------------------------------
-
-capture alarm_start_full.txt \
-    adb -s "$ADB_ADDR" shell dumpsys alarm
+capture alarm_start_full.txt adb -s "$ADB_ADDR" shell dumpsys alarm
 
 NEXT="$(
-    grep -A12 -m1 "Next wake from idle" \
-        "$OUT_DIR/alarm_start_full.txt" |
+    grep -A40 -m1 "Next wake from idle" "$OUT_DIR/alarm_start_full.txt" |
     grep -m1 -oE 'triggerTime=[^,[:space:]]+[[:space:]][0-9:]+' |
     sed 's/^triggerTime=//' || true
 )"
 
 if [[ -n "$NEXT" ]]; then
     log "找到 Next wake from idle：${NEXT}"
-
     echo
     echo "找到下一個 wake-from-idle 鬧鐘：${NEXT}"
     echo "請自行確認該鬧鐘是否會影響測試。"
-
-    read -r -p "仍要繼續測試嗎？[y/N] " ans
-
-    [[ "$ans" =~ ^[Yy]$ ]] ||
-        die "使用者取消測試。"
+    read -r -p "仍要繼續測試嗎？[y/N] " ans || die "使用者中斷"
+    [[ "$ans" =~ ^[Yy]$ ]] || die "使用者取消測試。"
 else
     log "無法從目前輸出可靠辨識下一個 wake-from-idle 鬧鐘。"
     log "這不代表系統一定沒有鬧鐘。"
 fi
 
-# ------------------------------------------------
 # 2. 測試前快照
-# ------------------------------------------------
-
 snapshot_mem mem_start.txt
 snapshot_battery battery_start.txt
 
 adb -s "$ADB_ADDR" shell dumpsys deviceidle unforce ||
     log "⚠ deviceidle unforce 執行失敗。"
 
-# ------------------------------------------------
 # 3. BatteryStats 設定
-# ------------------------------------------------
-
 if (( ENABLE_FULL_WAKE_HISTORY )); then
-    adb -s "$ADB_ADDR" shell \
-        dumpsys batterystats --enable full-wake-history ||
+    adb -s "$ADB_ADDR" shell dumpsys batterystats --enable full-wake-history ||
         log "⚠ full-wake-history 不支援或執行失敗。"
 fi
 
 if (( RESET_BATTERYSTATS )); then
     log "使用者要求重置 BatteryStats，先保存原始統計。"
-
-    capture batterystats_before_reset_full.txt \
-        adb -s "$ADB_ADDR" shell dumpsys batterystats
-
-    capture batterystats_before_reset_checkin.txt \
-        adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
-
-    capture batterystats_before_reset_history.txt \
-        adb -s "$ADB_ADDR" shell dumpsys batterystats --history
+    capture batterystats_before_reset_full.txt adb -s "$ADB_ADDR" shell dumpsys batterystats
+    capture batterystats_before_reset_checkin.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
+    capture batterystats_before_reset_history.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --history
 
     echo
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -413,13 +381,11 @@ if (( RESET_BATTERYSTATS )); then
     echo "這會清除系統既有的累積統計資料。"
     echo "已將可取得的重置前輸出保存至測試資料夾。"
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
-    read -r -p "輸入 RESET 才會執行： " confirm
+    read -r -p "輸入 RESET 才會執行： " confirm || die "使用者中斷"
 
     if [[ "$confirm" == "RESET" ]]; then
         adb -s "$ADB_ADDR" shell dumpsys batterystats --reset ||
             die "BatteryStats 重置失敗。"
-
         log "BatteryStats 已依使用者確認重置。"
     else
         log "未確認重置，保留原有 BatteryStats。"
@@ -428,46 +394,33 @@ else
     log "BatteryStats 保留原有統計，不執行 --reset。"
 fi
 
-# ------------------------------------------------
 # 4. 關閉螢幕
-# ------------------------------------------------
-
 if [[ "$SLEEP_SCREEN" == "1" ]]; then
     adb -s "$ADB_ADDR" shell input keyevent KEYCODE_SLEEP ||
         log "⚠ KEYCODE_SLEEP 執行失敗。"
-
     log "已送出 KEYCODE_SLEEP。"
     log "關屏不代表已進入 Deep Doze。"
 fi
 
-# ------------------------------------------------
 # 5. 等待使用者手動結束
-# ------------------------------------------------
-
 echo
 echo "======================================"
 echo "Doze 測試已開始。"
 echo "請保持手機螢幕關閉並等待測試時間。"
 echo "完成後回到 Termux，按 Enter 繼續。"
 echo "======================================"
+read -r -p "按 Enter 結束測試 → " _ || true
 
-read -r -p "按 Enter 結束測試 → " _
-
-# ------------------------------------------------
 # 6. 重新連線
-# ------------------------------------------------
-
 if ! connect_adb; then
     echo
     echo "ADB 目前無法連線。"
     echo "請確認手機已亮屏，且無線除錯仍開啟。"
-
-    read -r -p "完成後按 Enter 重試 → " _
+    read -r -p "完成後按 Enter 重試 → " _ || die "使用者中斷"
 
     if NEW_PORT="$(detect_adb_port)"; then
         PORT="$NEW_PORT"
         ADB_ADDR="127.0.0.1:${PORT}"
-
         log "重新偵測到端點：${ADB_ADDR}"
     fi
 
@@ -477,45 +430,34 @@ fi
 
 log "ADB 重新連線成功。"
 
-# ------------------------------------------------
 # 7. 擷取測試後資料
-# ------------------------------------------------
-
-capture deviceidle.txt \
-    adb -s "$ADB_ADDR" shell dumpsys deviceidle
-
+capture deviceidle.txt adb -s "$ADB_ADDR" shell dumpsys deviceidle
 snapshot_battery battery_end.txt
 snapshot_mem mem_end.txt
 
-capture home_end.txt \
-    adb -s "$ADB_ADDR" shell cmd role \
-    get-role-holders android.app.role.HOME
-
-capture full.txt \
-    adb -s "$ADB_ADDR" shell dumpsys batterystats
-
-capture checkin.txt \
-    adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
-
-capture history.txt \
-    adb -s "$ADB_ADDR" shell dumpsys batterystats --history
+capture home_end.txt adb -s "$ADB_ADDR" shell cmd role get-role-holders android.app.role.HOME
+capture full.txt adb -s "$ADB_ADDR" shell dumpsys batterystats
+capture checkin.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
+capture history.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --history
 
 if [[ "$WANT_NETSTATS" == "1" ]]; then
-    capture netstats.txt \
-        adb -s "$ADB_ADDR" shell dumpsys netstats detail
+    capture netstats.txt adb -s "$ADB_ADDR" shell dumpsys netstats detail
 fi
 
-# ------------------------------------------------
 # 8. Python 摘要
-# ------------------------------------------------
-
 log "開始產生 Python 摘要。"
 
 SUMMARY="${OUT_DIR}/summary-${TIMESTAMP}.txt"
 
+# 動態組裝 --pkg 參數（空陣列時不傳）
+PKG_ARGS=()
+if (( ${#PKGS[@]} > 0 )); then
+    PKG_ARGS=(--pkg "$(IFS=,; echo "${PKGS[*]}")")
+fi
+
 python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
     --checkin "$OUT_DIR/checkin.txt" \
-    --pkg "$(IFS=,; echo "${PKGS[*]}")" \
+    "${PKG_ARGS[@]}" \
     --deviceidle "$OUT_DIR/deviceidle.txt" \
     --mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt" \
     --battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt" \
@@ -525,6 +467,13 @@ python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
 
 if [[ -s "$SUMMARY" ]]; then
     cat "$SUMMARY"
+fi
+
+if (( ${#FAILED_CAPTURES[@]} > 0 )); then
+    log "⚠ 以下擷取有問題："
+    for f in "${FAILED_CAPTURES[@]}"; do
+        log "  - ${f}"
+    done
 fi
 
 log "=== Doze 測試完成 ==="
