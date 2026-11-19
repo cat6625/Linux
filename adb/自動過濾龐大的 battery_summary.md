@@ -1,9 +1,9 @@
 這個 Python 腳本能自動過濾龐大的 battery_summary.txt（或解壓縮後的 bugreport.txt），精準擷取餵給 AI 所需的 4 大核心統計區塊，並自動限制過長清單的列數（避免成千上萬個微小的系統服務耗盡你的 AI 額度）。
 本腳本僅使用 Python 內建標準函式庫，無需安裝任何額外套件即可直接執行。
 
-一、 完整 Python 過濾腳本（battery_extractt.py）
+一、 完整 Python 過濾腳本（battery_extract.py）
 
-你可以點擊下方程式碼區塊右上角的 「複製（Copy）」 圖示，將程式碼存成 battery_extractt.py：
+你可以點擊下方程式碼區塊右上角的 「複製（Copy）」 圖示，將程式碼存成 battery_extract.py：
 ```py
 import sys
 import os
@@ -103,7 +103,7 @@ def extract_battery_summary(
     print(f"輸出檔案：{output_path}（可直接複製全部內容貼給 AI 分析）")
 
 if __name__ == "__main__":
-    # 支援命令列傳入自訂檔名，例如：python battery_extractt.py bugreport-xxx.txt
+    # 支援命令列傳入自訂檔名，例如：python battery_extract.py bugreport-xxx.txt
     input_file = sys.argv[1] if len(sys.argv) > 1 else "battery_summary.txt"
     output_file = sys.argv[2] if len(sys.argv) > 2 else "battery_for_ai.txt"
     extract_battery_summary(input_file, output_file)
@@ -113,12 +113,12 @@ if __name__ == "__main__":
 
 1. 基本執行（預設讀取同資料夾下的 battery_summary.txt）
 ```bash
-python battery_extractt.py
+python battery_extract.py
 ```
 執行後會在同目錄產生 battery_for_ai.txt（通常不到 10 KB），直接全選複製貼給 AI 即可。
 3. 直接處理從 bugreport.zip 解壓出來的大型 .txt 檔
 ```bash
-python battery_extractt.py bugreport-pixel-2026-11-19.txt
+python battery_extract.py bugreport-pixel-2026-11-19.txt
 ```
 (腳本同樣能從數十 MB 的完整系統除錯報告中，精準把這 4 個電池統計區塊挖出來。)
 4. 內建防爆額度設計（Top 35 截斷）：
