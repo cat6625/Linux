@@ -212,3 +212,113 @@ echo "請把 $LOG_FILE 內容貼給我"
 4. 等待結束後，把產生的 `.log` 檔內容貼給我
 
 需要我把等待時間改成可互動輸入，或再加上「記錄電池百分比變化」的功能嗎？
+
+---
+
+```markdown
+# Android Wi-Fi 耗電問題測試報告與結論
+
+## 一、問題摘要
+
+裝置在長時間待機時出現明顯耗電，主要特徵如下：
+
+- Wi-Fi Kernel Active 時間高達 **58.8%**
+- Wakeup Reason 第一名長期為 **`238:SPM:336:wlan0`**
+- Deep Doze 期間仍有較高放電（約 402 mAh）
+- 實際流量接近 0B，但 radio 仍頻繁活躍
+
+初步判斷為 **Wi-Fi 開啟並連線時，驅動層（MT662x）無法有效進入低功耗狀態**。
+
+---
+
+## 二、測試方法
+
+### 測試 1：基本狀態觀察
+使用以下指令觀察 Wi-Fi 掃描行為與 wakeup 來源：
+
+```bash
+adb shell settings get global wifi_scan_always_enabled
+adb shell dumpsys wifi | grep -E "schedulePeriodicScanTimer|No partial scan|startConnectivityScan"
+adb shell dumpsys batterystats | grep -A 15 "Wakeup reason"
+```
+
+### 測試 2：關閉 Wi-Fi 前後對比（未重置）
+- 記錄當前 batterystats
+- 關閉 Wi-Fi
+- 等待 30 分鐘
+- 再次記錄 batterystats
+
+### 測試 3：重置後精確對比（推薦方法）
+```bash
+# 重置計數器
+adb shell dumpsys batterystats --reset
+
+# 開啟 Wi-Fi → 記錄
+# 關閉 Wi-Fi → 等待 20 分鐘 → 再次記錄
+```
+
+---
+
+## 三、測試結果
+
+### 測試 1 結果
+- `wifi_scan_always_enabled = 0`（已關閉）
+- 存在大量 `schedulePeriodicScanTimer`（20s / 40s）
+- 頻繁出現「No partial scan because firmware roaming is supported」
+- Wakeup 第一名穩定為 `wlan0`
+
+### 測試 2 結果（未重置）
+| 項目                  | 關閉前          | 關閉 30 分鐘後   |
+|-----------------------|-----------------|------------------|
+| wlan0 Wakeup 時間     | 13m 25s (1030次)| 13m 25s (1030次) |
+| 其他主要 Wakeup       | 無明顯變化      | 無明顯變化       |
+
+→ 數據未增加，代表關閉 Wi-Fi 後不再產生新的 wlan0 wakeup。
+
+### 測試 3 結果（重置後）
+- 重置後各項計數歸零
+- 關閉 Wi-Fi 並等待 20 分鐘後，**未再出現 wlan0 相關 Wakeup**
+
+---
+
+## 四、結論
+
+1. **主要耗電來源已確認**  
+   Wi-Fi 開啟並連線時，wlan0（MT662x）會頻繁喚醒系統，即使幾乎沒有實際流量。
+
+2. **關閉 Wi-Fi 效果明確**  
+   關閉 Wi-Fi 後，wlan0 相關 wakeup 基本停止，證明問題與 Wi-Fi radio 直接相關。
+
+3. **可能成因**
+   - Firmware Roaming 開啟，導致 radio 需持續監聽
+   - Framework 持續安排 Periodic Scan Timer
+   - 部分系統服務（GMS、小米推送等）維持網路請求
+
+4. **Doze 本身運作正常**  
+   Deep Idle 時間比例不低，問題不在 Doze 機制失效，而是 Wi-Fi 底層無法配合進入低功耗。
+
+---
+
+## 五、建議改善方式
+
+| 優先級 | 方法 | 說明 |
+|--------|------|------|
+| 高 | 長時間不用時關閉 Wi-Fi | 最直接有效的方式 |
+| 高 | 使用自動化工具 | 螢幕關閉後延遲關閉 Wi-Fi，亮屏時自動開啟 |
+| 中 | 檢查路由器 Power Save | 開啟 U-APSD / WMM Power Save |
+| 中 | 限制高 wakeup 應用 | 小米推送（xmsf）、Brave、Termux 等 |
+| 低 | 觀察其他系統設定 | 關閉「智慧連線」、「Wi-Fi 輔助」等功能 |
+
+---
+
+## 六、後續可進行的驗證
+
+若需要更精確的數據，可進行以下測試：
+
+- Wi-Fi 開啟狀態下待機 1 小時 vs 關閉狀態下待機 1 小時，比較放電量與 wakeup 次數
+- 使用 `adb shell dumpsys batterystats --reset` 後分別記錄兩種狀態的完整數據
+
+---
+
+**報告結束**
+```
