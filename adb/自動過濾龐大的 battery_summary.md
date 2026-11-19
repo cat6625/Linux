@@ -19,8 +19,8 @@
 ## 二、 完整 Python 腳本原始碼（`battery_extract.py`）
 
 將以下程式碼儲存為 `battery_extract.py`，並與 `full.txt`、`checkin.txt` 放在同一個資料夾中（僅使用 Python 內建標準函式庫，無需安裝額外套件）：
-
-    import os
+```python
+import os
 import re
 import sys
 from typing import Dict
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     full_file = sys.argv if len(sys.argv) > 1 else "full.txt"
     checkin_file = sys.argv if len(sys.argv) > 2 else "checkin.txt"
     extract_battery_report(full_file, checkin_file)
-
+```
 ---
 
 ## 三、 終端機執行方式
