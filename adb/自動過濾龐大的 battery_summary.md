@@ -5,7 +5,6 @@
 
 你可以點擊下方程式碼區塊右上角的 「複製（Copy）」 圖示，將程式碼存成 extract_battery.py：
 ```py
-python
 import sys
 import os
 import re
