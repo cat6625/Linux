@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.4 完整優化版)
+Termux Android Doze / BatteryStats 摘要工具 (v5.5 完整優化版)
 
-優化項目：
-1. 排除亮屏區段（Screen On）對突發耗電偵測的干擾，並自動關聯純黑屏突發耗電期間的元兇 Job/Alarm。
-2. 智慧偵測手動 --reset 切片測試，抑制 actual drain 與 Computed drain 口徑不同造成的假警報。
-3. 新增 --mask 參數，一鍵自動遮蔽 Email、IP、MAC 與手機號碼等敏感個人資訊。
+v5.5 優化項目：
+1. 動態比對「History 推算亮屏」與「BatteryStats 原生 Screen on」時間，誤差 < 3% 時顯示兩者口徑幾乎一致，避免制式誤差註解矛盾。
+2. 修正黑屏放電結論用語：結合 Screen off discharge 數據計算每小時平均待機耗電率，避免「黑屏零耗電」的過強推論。
+3. 補充 Estimated power use 重複歸因說明：明確提示 UID 分攤值與 Global 項目不可直接加總。
+4. 保留 v5.4 亮屏突發耗電過濾、--reset 切片識別與 --mask 一鍵隱私遮罩功能。
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -254,7 +255,7 @@ def parse_alarm_events(events):
 
 
 # ============================================================
-# BatteryStats 統計（回傳 merged_screens 供後續突發耗電過濾使用）
+# BatteryStats 統計（★ v5.5：動態比對亮屏誤差，避免制式註解矛盾）
 # ============================================================
 
 def print_battery_stats(text, events):
@@ -279,6 +280,8 @@ def print_battery_stats(text, events):
     fields = [
         ("Screen on", r"^\s+Screen on:\s*(.*)"),
         ("Discharge", r"^\s+Discharge:\s*(.*)"),
+        ("Screen off discharge", r"^\s+Screen off discharge:\s*(.*)"),
+        ("Screen on discharge", r"^\s+Screen on discharge:\s*(.*)"),
         ("Light doze discharge", r"Device light doze discharge:\s*(.*)"),
         ("Deep doze discharge", r"Device deep doze discharge:\s*(.*)"),
         ("Light idle", r"^\s+Device light idling:\s*(.*)"),
@@ -308,11 +311,6 @@ def print_battery_stats(text, events):
                           "或 light idle 期間集中觸發 alarm/job。")
         except ValueError:
             pass
-
-    print("\n  🔍 [原始欄位對照] Discharge 區段原始文字：")
-    for line in text.splitlines():
-        if "Discharge:" in line or "Discharge screen" in line:
-            print(f"    > {line.strip()}")
 
     screen_intervals = []
     current_on = None
@@ -347,8 +345,19 @@ def print_battery_stats(text, events):
         else:
             print(f"- ⚠ 合併有效亮屏區段：{fmt(start)}–{fmt(end)}，持續約 {duration:.1f} 秒。")
 
-    print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}"
-          f"（註：與 BatteryStats 原生 Screen on 採樣口徑不同，通常高 5–10%）")
+    # ★ v5.5：動態計算 History 推算亮屏與原生 Screen on 的差距
+    native_screen_str = grab(text, r"^\s+Screen on:\s*(.*?)\s+\(")
+    native_screen_ms = parse_dur(native_screen_str) if native_screen_str else 0
+    if native_screen_ms > 0:
+        diff_pct = abs(total_screen_derived_ms - native_screen_ms) / native_screen_ms * 100
+        if diff_pct <= 3.0:
+            note = f"兩種採樣口徑幾乎一致（誤差僅 {diff_pct:.1f}%）"
+        else:
+            note = f"與原生 Screen on 採樣口徑差異 {diff_pct:.1f}%"
+    else:
+        note = "與原生 Screen on 採樣口徑不同，通常略高"
+
+    print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}（{note}）")
 
     return merged_screens
 
@@ -383,7 +392,7 @@ def print_doze(events, uidmap):
                 totals[state] += end - timestamp
 
         if totals:
-            print("- 可確認的狀態持續時間：")
+            print("- 可確認的狀態持續時間（註：首個轉換事件前的初始區間未計入）：")
             for state, duration in totals.items():
                 print(f"  - {state}：{fmt(duration)}")
 
@@ -424,7 +433,7 @@ def print_doze(events, uidmap):
 
     for name, count in jobs.most_common(10):
         print(f"- Job {name}：{count} 次")
-    print(f"- cellular_high_tx_power 事件：{cellular} 次")
+    print(f"- cellular_high_tx_power 事件計數：{cellular} 次（基頻高功率發射狀態切換計數，非獨立喚醒次數）")
 
     print("\n## Wakeup AP")
     wakeups = collections.Counter()
@@ -512,7 +521,7 @@ def print_partial_wakelocks(text, uidmap):
 
 
 # ============================================================
-# Charge Counter 放電分析（★ 優化：排除亮屏操作並自動關聯背景元兇）
+# Charge Counter 放電分析（★ v5.5：修正結論用語並結合黑屏平均放電率）
 # ============================================================
 
 def _level_at(points, ts):
@@ -547,9 +556,23 @@ def _find_window_culprits(events, start, end, uidmap):
     return [f"{k}({v}次)" for k, v in culprits.most_common(3)]
 
 
-def print_discharge(events, uidmap, merged_screens=None):
-    print("\n## 放電曲線與耗電分析（已過濾開機校正期與亮屏操作）")
+def print_discharge(text, events, uidmap, merged_screens=None):
+    print(f"\n## 放電曲線與耗電分析（突發門檻：{BURST_MINUTES} 分鐘內 >= {BURST_MAH} mAh，已過濾開機前 5 分鐘校正期）")
     merged_screens = merged_screens or []
+
+    # 讀取原生黑屏總放電量與黑屏總時間，計算基準待機耗電率
+    screen_off_mah_str = grab(text, r"^\s+Screen off discharge:\s*([\d.]+)\s*mAh")
+    screen_off_dur_str = grab(text, r"^\s+Time on battery screen off:\s*(.*?)\s+\(")
+    screen_off_summary = ""
+    if screen_off_mah_str and screen_off_dur_str:
+        try:
+            off_mah = float(screen_off_mah_str)
+            off_hours = parse_dur(screen_off_dur_str) / 3600000.0
+            if off_hours > 0:
+                off_rate = off_mah / off_hours
+                screen_off_summary = f"黑屏期間累積耗電 {off_mah:.1f} mAh（平均 {off_rate:.1f} mAh/h）"
+        except ValueError:
+            pass
 
     points = []
     for timestamp, level, rest in events:
@@ -559,6 +582,8 @@ def print_discharge(events, uidmap, merged_screens=None):
 
     if not points:
         print("- 沒有 charge counter 資料。")
+        if screen_off_summary:
+            print(f"- ℹ {screen_off_summary}。")
         return
 
     filtered_points = [p for p in points if p[0] >= 300000]
@@ -580,10 +605,6 @@ def print_discharge(events, uidmap, merged_screens=None):
         if best is not None:
             bursts.append((filtered_points[index][0], filtered_points[best][0]))
 
-    if not bursts:
-        print("- 經防誤判過濾後：沒有符合門檻的異常突發耗電事件。")
-        return
-
     merged = []
     for start, end in sorted(bursts):
         if merged and start <= merged[-1][1]:
@@ -600,15 +621,22 @@ def print_discharge(events, uidmap, merged_screens=None):
         delta = lv_start - lv_end
 
         if _overlaps_screen_on(start, end, merged_screens):
-            print(f"- ℹ 亮屏操作耗電區段（已排除誤判）：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
+            print(f"- ℹ 亮屏操作耗電區段（與亮屏時段重疊）：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
         else:
             screen_off_bursts += 1
             culprits = _find_window_culprits(events, start, end, uidmap)
             culprit_str = f" ｜ 活躍程式：{', '.join(culprits)}" if culprits else ""
             print(f"- ⚠ 純黑屏突發耗電區段：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh{culprit_str}")
 
+    # ★ v5.5：修正過強結論，精準陳述黑屏累積耗電與突發事件檢測結果
     if screen_off_bursts == 0:
-        print("- ✅ 結論：所有高耗電區段皆發生在亮屏使用期間，純待機黑屏下無異常突發掉電。")
+        base_msg = "目前偵測到的高耗電突發區段皆與亮屏操作重疊；純黑屏時段未檢出超過門檻的突發掉電"
+        if screen_off_summary:
+            print(f"- ✅ 結論：{base_msg}（{screen_off_summary}）。")
+        else:
+            print(f"- ✅ 結論：{base_msg}。")
+    elif screen_off_summary:
+        print(f"- ℹ 基準對照：{screen_off_summary}。")
 
 
 # ============================================================
@@ -616,7 +644,7 @@ def print_discharge(events, uidmap, merged_screens=None):
 # ============================================================
 
 def print_cpu_running(events):
-    print("\n## CPU running（每 30 分鐘）")
+    print("\n## CPU running（每 30 分鐘採樣窗口 > 50% 清醒區段）")
     if not events:
         print("- 沒有 History 事件。")
         return
@@ -641,15 +669,17 @@ def print_cpu_running(events):
 
     hot = [(b, d) for b, d in sorted(buckets.items()) if d / 1800000 > 0.5]
     if not hot:
-        print("- 沒有可辨識的清醒時間超過 50% 區段。")
+        print("- 沒有可辨識的單一 30 分鐘窗口清醒時間超過 50% 區段。")
         return
 
     for bucket, duration in hot:
-        print(f"- {fmt(bucket * 1800000)}：{duration / 1800000 * 100:.0f}%")
+        start_ms = bucket * 1800000
+        end_ms = (bucket + 1) * 1800000
+        print(f"- {fmt(start_ms)}–{fmt(end_ms)}：{duration / 1800000 * 100:.0f}%")
 
 
 # ============================================================
-# Estimated power use / UID（★ 優化：智慧識別 --reset 中途切片）
+# Estimated power use / UID（★ v5.5：補充重複歸因與不可加總口徑說明）
 # ============================================================
 
 def print_power(text, uidmap, pkg_uids=None):
@@ -698,6 +728,12 @@ def print_power(text, uidmap, pkg_uids=None):
                     print(f"  - ⚠ BatteryStats 模型只記錄到 {computed:.1f} mAh，"
                           f"實際放電 {actual_low:.0f}–{actual_high:.0f} mAh"
                           f"（差 {ratio:.1f} 倍），通常是廠商電源管理器覆寫所致。")
+
+    # ★ v5.5：明確標示電源模型歸因口徑，避免將 UID 總和與 Global 或 Discharge 直接相加比較
+    print("  - 💡 [口徑說明] Estimated power use 為系統軟體估算模型（單位：mAh）；")
+    print("    其中 UID 數值已包含螢幕（screen）與系統元件的分攤（smearing/proportional），")
+    print("    與上方 Global 項目存在重複歸因，因此前幾名 UID 加總可能大於 Computed drain，")
+    print("    僅供相對耗電排序參考，不可直接與 Global 項目相加。")
 
     uid_rows = []
     for line in lines:
@@ -945,7 +981,7 @@ def print_battery_snapshots(paths):
 
         if "level" in first and "level" in last:
             diff = first["level"] - last["level"]
-            print(f"- 電量變化：{first['level']}% → {last['level']}%（下降 {diff}%）")
+            print(f"- 電量變化：{first['level']}% → {last['level']}%（下降 {diff}%，註：整數百分比具取整誤差，不直接換算為精確 mAh）")
 
         if first.get("plugged", 0) or last.get("plugged", 0):
             print("  ⚠ 快照期間偵測到 plugged 非零（充電或 USB），"
@@ -957,7 +993,7 @@ def print_battery_snapshots(paths):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.4)")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.5)")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
@@ -990,7 +1026,7 @@ def main():
         uidmap = load_uidmap(args.checkin)
         pkg_uids = resolve_pkg_uids(args.pkg, uidmap)
 
-        print("# Android Doze / BatteryStats 摘要 (v5.4)")
+        print("# Android Doze / BatteryStats 摘要 (v5.5)")
         print(f"- 原始檔案：{args.full}")
         print(f"- History 總行數：{h_stats['total']}")
         print(f"  - 成功解析事件行：{h_stats['parsed_events']}")
@@ -1009,7 +1045,7 @@ def main():
         print_doze(events, uidmap)
         print_wakelocks(stats_text)
         print_partial_wakelocks(stats_text, uidmap)
-        print_discharge(events, uidmap, merged_screens)
+        print_discharge(stats_text, events, uidmap, merged_screens)
         print_cpu_running(events)
         print_power(stats_text, uidmap, pkg_uids)
         print_deviceidle(args.deviceidle)
