@@ -1,18 +1,43 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具
+# Termux Doze 測試工具  v1.1.0（2026-11-20）
 #
 # 用法：
 #   doze
 #   doze 41077
 #   doze --reset-batterystats
 #   doze 41077 --reset-batterystats
+#   doze --type screen-off --design-cap 5000 --charge-limit 80% --note "文字"
+#   doze --manual      只印出電腦端手動採集的 adb 指令，不執行測試
+#   doze --version
+#
+# 測試條件（可選；未提供時摘要標示「未提供」，不會被猜測）：
+#   --type daily|screen-off|ab   測試類型：日常混合／受控黑屏待機／A/B 對照
+#   --design-cap <mAh>           設計容量（使用者提供）
+#   --charge-limit <文字>        充電上限，例如 80% 或 100%
+#   --note <文字>                其他條件，例如 "Wi-Fi 開、行動網路關"
+#   --device <文字>              機型；未提供時自動由 getprop 組成
+#   也可用環境變數 DOZE_TEST_TYPE / DOZE_DESIGN_CAP / DOZE_CHARGE_LIMIT /
+#   DOZE_NOTE / DOZE_DEVICE 代替參數。
 #
 # 目標包（可選，逗號分隔）：
 #   DOZE_PKGS="com.example.foo,com.example.bar" doze
 #   或直接修改下方 PKGS=(...)
 #
 # BatteryStats 預設不重置。
+#
+# 修改內容：
+#   v1.1.0（2026-11-20）
+#     - 新增測試條件參數 --type / --design-cap / --charge-limit / --note /
+#       --device（及對應環境變數），傳給 doze_summary-termux.py（需 v5.8 以上）。
+#     - 新增 device_info.txt：擷取廠牌、機型、Android 版本、Build ID（不含序號），
+#       並自動組成 --device。
+#     - 新增 --manual：印出不依賴 Termux 的電腦端手動採集指令與摘要指令。
+#     - 新增 --version；時間軸記錄 doze.sh 與摘要程式的版本。
+#     - 參數解析改為 while 迴圈，並檢查選項值（類型、容量數字）。
+#   v1.0.0
+#     - 無線除錯 ADB 自動偵測／連線、Doze 與 batterystats 擷取、
+#       呼叫 Python 產生摘要。
 # -------------------------------------------------------------
 
 set -Eeuo pipefail
@@ -39,6 +64,14 @@ SCAN_TIMEOUT=45
 SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
+
+DOZE_SH_VERSION="1.1.0"
+
+TEST_TYPE="${DOZE_TEST_TYPE:-}"
+DESIGN_CAP="${DOZE_DESIGN_CAP:-}"
+CHARGE_LIMIT="${DOZE_CHARGE_LIMIT:-}"
+TEST_NOTE="${DOZE_NOTE:-}"
+DEVICE_NAME="${DOZE_DEVICE:-}"
 
 # ------------------------------------------------
 
@@ -68,26 +101,90 @@ FAILED_CAPTURES=()
 # 參數解析
 # ------------------------------------------------
 
-for arg in "$@"; do
-    case "$arg" in
+print_manual() {
+    cat <<'MANUAL'
+# 不依賴 Termux 的手動採集（電腦已用 adb 連上手機）
+# 1) 測試前
+adb shell dumpsys deviceidle unforce
+adb shell dumpsys batterystats --enable full-wake-history
+(echo "# captured: $(date '+%Y-%m-%d %H:%M:%S')"; adb shell dumpsys battery) > battery_start.txt
+# 2) 關螢幕並等待測試時間（建議黑屏、不操作）
+# 3) 測試後
+(echo "# captured: $(date '+%Y-%m-%d %H:%M:%S')"; adb shell dumpsys battery) > battery_end.txt
+adb shell dumpsys batterystats > full.txt
+adb shell dumpsys batterystats --checkin > checkin.txt
+adb shell dumpsys deviceidle > deviceidle.txt
+for k in ro.product.manufacturer ro.product.model ro.build.version.release; do adb shell getprop $k; done
+# 4) 摘要（測試條件請依實際填寫；不確定的項目可省略）
+python3 doze_summary-termux.py full.txt --checkin checkin.txt --deviceidle deviceidle.txt   --battery battery_start.txt battery_end.txt   --test-type screen-off --design-capacity 5000 --charge-limit 80% --device "機型" --mask
+MANUAL
+}
+
+need_value() {
+    [[ $# -ge 2 && -n "$2" ]] || {
+        echo "選項 $1 需要參數。" >&2
+        exit 2
+    }
+}
+
+while (( $# > 0 )); do
+    case "$1" in
         --reset-batterystats)
             RESET_BATTERYSTATS=1
             ;;
+        --type)
+            need_value "$@"; TEST_TYPE="$2"; shift
+            ;;
+        --design-cap)
+            need_value "$@"; DESIGN_CAP="$2"; shift
+            ;;
+        --charge-limit)
+            need_value "$@"; CHARGE_LIMIT="$2"; shift
+            ;;
+        --note)
+            need_value "$@"; TEST_NOTE="$2"; shift
+            ;;
+        --device)
+            need_value "$@"; DEVICE_NAME="$2"; shift
+            ;;
+        --manual)
+            print_manual
+            exit 0
+            ;;
+        --version)
+            echo "doze.sh v${DOZE_SH_VERSION}"
+            exit 0
+            ;;
         --help|-h)
-            echo "用法：$0 [Port] [--reset-batterystats]"
+            sed -n '2,/^# ------------------------------------------------------------\{1,\}$/p' "${BASH_SOURCE[0]}" | sed -n '1,45p'
             echo "環境變數：DOZE_PKGS=\"pkg1,pkg2\" 指定目標包"
             exit 0
             ;;
+        -*)
+            echo "未知選項：$1" >&2
+            exit 2
+            ;;
         *)
             if [[ -z "$PORT" ]]; then
-                PORT="$arg"
+                PORT="$1"
             else
-                echo "未知參數：$arg" >&2
+                echo "未知參數：$1" >&2
                 exit 2
             fi
             ;;
     esac
+    shift
 done
+
+case "$TEST_TYPE" in
+    ""|daily|screen-off|ab) ;;
+    *) echo "--type 只能是 daily、screen-off 或 ab。" >&2; exit 2 ;;
+esac
+
+if [[ -n "$DESIGN_CAP" && ! "$DESIGN_CAP" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "--design-cap 必須是數字（mAh）。" >&2
+    exit 2
+fi
 
 # ------------------------------------------------
 # 基礎檢查
@@ -148,6 +245,12 @@ stamp() {
 }
 
 log "輸出目錄：${OUT_DIR}"
+
+PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
+if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.8 以上）"
+fi
+log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
 if (( ${#PKGS[@]} > 0 )); then
     log "目標包：$(IFS=,; echo "${PKGS[*]}")"
@@ -335,6 +438,39 @@ log "=== Doze 測試開始，目標端點：${ADB_ADDR} ==="
 
 connect_adb || die "無法連線到 ${ADB_ADDR}，請確認無線除錯是否開啟。"
 
+# 0. 裝置資訊（不含序號）
+get_prop() {
+    adb -s "$ADB_ADDR" shell getprop "$1" 2>/dev/null | tr -d '\r' || true
+}
+
+DEV_MANUFACTURER="$(get_prop ro.product.manufacturer)"
+DEV_MODEL="$(get_prop ro.product.model)"
+DEV_RELEASE="$(get_prop ro.build.version.release)"
+{
+    stamp
+    echo "ro.product.manufacturer=${DEV_MANUFACTURER}"
+    echo "ro.product.model=${DEV_MODEL}"
+    echo "ro.product.device=$(get_prop ro.product.device)"
+    echo "ro.build.version.release=${DEV_RELEASE}"
+    echo "ro.build.version.sdk=$(get_prop ro.build.version.sdk)"
+    echo "ro.build.display.id=$(get_prop ro.build.display.id)"
+} > "$OUT_DIR/device_info.txt" 2>&1 || true
+
+if [[ -z "$DEVICE_NAME" && -n "${DEV_MODEL}${DEV_MANUFACTURER}" ]]; then
+    DEVICE_NAME="${DEV_MANUFACTURER} ${DEV_MODEL} (Android ${DEV_RELEASE:-?})"
+fi
+log "裝置：${DEVICE_NAME:-未取得}"
+
+COND_ARGS=()
+[[ -n "$TEST_TYPE" ]] && COND_ARGS+=(--test-type "$TEST_TYPE")
+[[ -n "$DESIGN_CAP" ]] && COND_ARGS+=(--design-capacity "$DESIGN_CAP")
+[[ -n "$CHARGE_LIMIT" ]] && COND_ARGS+=(--charge-limit "$CHARGE_LIMIT")
+[[ -n "$TEST_NOTE" ]] && COND_ARGS+=(--note "$TEST_NOTE")
+[[ -n "$DEVICE_NAME" ]] && COND_ARGS+=(--device "$DEVICE_NAME")
+if [[ -z "$TEST_TYPE" ]]; then
+    log "測試類型未指定（摘要將標示「未提供」）。"
+fi
+
 # 1. 測試前鬧鐘檢查
 capture alarm_start_full.txt adb -s "$ADB_ADDR" shell dumpsys alarm
 
@@ -458,6 +594,7 @@ fi
 python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
     --checkin "$OUT_DIR/checkin.txt" \
     "${PKG_ARGS[@]}" \
+    "${COND_ARGS[@]}" \
     --deviceidle "$OUT_DIR/deviceidle.txt" \
     --mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt" \
     --battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt" \
