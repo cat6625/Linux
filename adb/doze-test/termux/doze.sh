@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具  v1.1.0（2026-11-20）
+# Termux Doze 測試工具  v1.2.0（2026-11-21）
 #
 # 用法：
 #   doze
@@ -9,6 +9,8 @@
 #   doze 41077 --reset-batterystats
 #   doze --type screen-off --design-cap 5000 --charge-limit 80% --note "文字"
 #   doze --manual      只印出電腦端手動採集的 adb 指令，不執行測試
+#   doze --resume 20261120_183359   接續既有測試資料夾，只補擷取測試後資料與摘要
+#   doze 40887 --resume 20261120_183359   同上，並指定新的無線偵錯 Port
 #   doze --version
 #
 # 測試條件（可選；未提供時摘要標示「未提供」，不會被猜測）：
@@ -27,6 +29,17 @@
 # BatteryStats 預設不重置。
 #
 # 修改內容：
+#   v1.2.0（2026-11-21）
+#     - 測試結束後若 ADB 連不上（例如 Redmi／HyperOS 長時間後自動關閉無線偵錯、
+#       Port 已改變），不再兩分鐘後放棄；改為互動重連：Enter 重新掃描、直接輸入
+#       新 Port、或 q 離開。掃描失敗時不再對舊 Port 空等重試。
+#     - 新增 --resume <資料夾>：離開後可接續既有資料夾，只補擷取測試後資料與摘要
+#       （測試條件與目標包由資料夾內的 doze_args.txt 還原；Port 可另外指定）。
+#     - 新增 doze_args.txt：記錄測試條件、目標包、TEST_START／TEST_END（本機時間）。
+#     - home_end.txt：role 指令失敗（例如 Android 11）時改用 package resolve-activity，
+#       且不再列為擷取失敗。
+#     - Python 摘要的錯誤訊息另存 summary-error.txt，不再混進摘要檔。
+#     - 啟動時提示：長時間測試後可能需要重新開啟無線偵錯。
 #   v1.1.0（2026-11-20）
 #     - 新增測試條件參數 --type / --design-cap / --charge-limit / --note /
 #       --device（及對應環境變數），傳給 doze_summary-termux.py（需 v5.8 以上）。
@@ -53,7 +66,7 @@ else
 fi
 
 RECONNECT_TRIES=24
-RECONNECT_INTERVAL=5
+RECONNECT_INTERVAL="${DOZE_RECONNECT_INTERVAL:-5}"
 
 WANT_NETSTATS=0
 SLEEP_SCREEN=1
@@ -65,7 +78,10 @@ SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
 
-DOZE_SH_VERSION="1.1.0"
+DOZE_SH_VERSION="1.2.0"
+
+RESUME_DIR=""
+TEST_START=""
 
 TEST_TYPE="${DOZE_TEST_TYPE:-}"
 DESIGN_CAP="${DOZE_DESIGN_CAP:-}"
@@ -147,6 +163,9 @@ while (( $# > 0 )); do
         --device)
             need_value "$@"; DEVICE_NAME="$2"; shift
             ;;
+        --resume)
+            need_value "$@"; RESUME_DIR="$2"; shift
+            ;;
         --manual)
             print_manual
             exit 0
@@ -156,7 +175,7 @@ while (( $# > 0 )); do
             exit 0
             ;;
         --help|-h)
-            sed -n '2,/^# ------------------------------------------------------------\{1,\}$/p' "${BASH_SOURCE[0]}" | sed -n '1,45p'
+            awk 'NR>1 && /^# -----/{c++; if(c==2) exit} NR>1{print}' "${BASH_SOURCE[0]}"
             echo "環境變數：DOZE_PKGS=\"pkg1,pkg2\" 指定目標包"
             exit 0
             ;;
@@ -225,11 +244,56 @@ python3 -c 'import sys; assert sys.version_info >= (3, 8)' || {
 # 輸出目錄及日誌
 # ------------------------------------------------
 
-TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
-OUT_DIR="${DOWNLOAD_DIR}/doze-test/${TIMESTAMP}"
-
-mkdir -p "$OUT_DIR"
+if [[ -n "$RESUME_DIR" ]]; then
+    if [[ -d "$RESUME_DIR" ]]; then
+        OUT_DIR="$(cd -P -- "$RESUME_DIR" && pwd)"
+    elif [[ -d "${DOWNLOAD_DIR}/doze-test/${RESUME_DIR}" ]]; then
+        OUT_DIR="${DOWNLOAD_DIR}/doze-test/${RESUME_DIR}"
+    else
+        echo "找不到要接續的資料夾：${RESUME_DIR}" >&2
+        exit 1
+    fi
+    TIMESTAMP="$(basename "$OUT_DIR")"
+else
+    TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
+    OUT_DIR="${DOWNLOAD_DIR}/doze-test/${TIMESTAMP}"
+    mkdir -p "$OUT_DIR"
+fi
 chmod 700 "$OUT_DIR"
+
+ARGS_FILE="${OUT_DIR}/doze_args.txt"
+
+save_run_args() {
+    {
+        echo "TEST_TYPE=${TEST_TYPE}"
+        echo "DESIGN_CAP=${DESIGN_CAP}"
+        echo "CHARGE_LIMIT=${CHARGE_LIMIT}"
+        echo "TEST_NOTE=${TEST_NOTE}"
+        echo "DEVICE_NAME=${DEVICE_NAME}"
+        echo "PKGS=$(IFS=,; echo "${PKGS[*]:-}")"
+        echo "TEST_START=${TEST_START}"
+    } > "$ARGS_FILE"
+}
+
+load_run_args() {
+    local key value
+    [[ -f "$ARGS_FILE" ]] || return 0
+    while IFS='=' read -r key value; do
+        case "$key" in
+            TEST_TYPE)    [[ -n "$TEST_TYPE" ]] || TEST_TYPE="$value" ;;
+            DESIGN_CAP)   [[ -n "$DESIGN_CAP" ]] || DESIGN_CAP="$value" ;;
+            CHARGE_LIMIT) [[ -n "$CHARGE_LIMIT" ]] || CHARGE_LIMIT="$value" ;;
+            TEST_NOTE)    [[ -n "$TEST_NOTE" ]] || TEST_NOTE="$value" ;;
+            DEVICE_NAME)  [[ -n "$DEVICE_NAME" ]] || DEVICE_NAME="$value" ;;
+            PKGS)
+                if (( ${#PKGS[@]} == 0 )) && [[ -n "$value" ]]; then
+                    IFS=',' read -r -a PKGS <<< "$value"
+                fi
+                ;;
+            TEST_START)   TEST_START="$value" ;;
+        esac
+    done < "$ARGS_FILE"
+}
 
 log() {
     printf '[TERMUX] %s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$OUT_DIR/timeline.txt" >&2
@@ -248,7 +312,7 @@ log "輸出目錄：${OUT_DIR}"
 
 PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
 if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
-    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.8 以上）"
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.9.1 以上）"
 fi
 log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
@@ -328,17 +392,61 @@ detect_adb_port() {
 }
 
 connect_adb() {
-    local attempt
-    for ((attempt=1; attempt<=RECONNECT_TRIES; attempt++)); do
+    local tries="${1:-$RECONNECT_TRIES}" attempt
+    for ((attempt=1; attempt<=tries; attempt++)); do
         adb connect "$ADB_ADDR" >/dev/null 2>&1 || true
         if adb -s "$ADB_ADDR" get-state 2>/dev/null | grep -qx 'device'; then
             log "ADB 已連線至 ${ADB_ADDR}（第 ${attempt} 次）"
             return 0
         fi
-        log "ADB 尚未連線，第 ${attempt}/${RECONNECT_TRIES} 次重試。"
+        log "ADB 尚未連線，第 ${attempt}/${tries} 次重試。"
         sleep "$RECONNECT_INTERVAL"
     done
     return 1
+}
+
+# 先對目前端點短暫重試；失敗後進入互動重連（無線偵錯可能被系統自動關閉、Port 可能已改變）
+ensure_adb() {
+    local quick_tries="${1:-6}" answer new_port
+    if connect_adb "$quick_tries"; then
+        return 0
+    fi
+    while true; do
+        echo
+        echo "ADB 無法連線：無線偵錯可能已被系統自動關閉，Port 也可能已改變。"
+        echo "請在手機重新開啟「無線偵錯」（保持亮屏、同一個 Wi-Fi），然後："
+        echo "  Enter     自動掃描 Port"
+        echo "  <Port>    直接輸入「無線偵錯」主頁面顯示的連線 Port（不是配對 Port）"
+        echo "  q         離開（已擷取的資料保留，之後可用 --resume 補抓）"
+        read -r -p "> " answer || return 1
+        new_port=""
+        case "$answer" in
+            q|Q)
+                return 1
+                ;;
+            "")
+                new_port="$(detect_adb_port || true)"
+                ;;
+            *)
+                if check_port "$answer"; then
+                    new_port="$answer"
+                else
+                    echo "Port 格式錯誤。"
+                    continue
+                fi
+                ;;
+        esac
+        if [[ -z "$new_port" ]]; then
+            log "未偵測到可用的無線偵錯 Port。"
+            continue
+        fi
+        PORT="$new_port"
+        ADB_ADDR="127.0.0.1:${PORT}"
+        log "改用端點：${ADB_ADDR}"
+        if connect_adb 6; then
+            return 0
+        fi
+    done
 }
 
 # ------------------------------------------------
@@ -434,9 +542,16 @@ snapshot_mem() {
 # 主流程
 # ------------------------------------------------
 
-log "=== Doze 測試開始，目標端點：${ADB_ADDR} ==="
+if [[ -n "$RESUME_DIR" ]]; then
+    log "=== 接續既有資料夾（只補擷取測試後資料與摘要），目標端點：${ADB_ADDR} ==="
+    log "注意：接續模式的測試後資料擷取時間為現在，不等於測試結束時間（見 doze_args.txt 的 TEST_START／TEST_END）。"
+    load_run_args
+else
+    log "=== Doze 測試開始，目標端點：${ADB_ADDR} ==="
+    log "提示：部分機型（例如 Redmi／HyperOS）可能在長時間測試後自動關閉無線偵錯；結束時若連不上，可重新開啟後輸入新 Port，或離開後用 --resume 補抓。"
+fi
 
-connect_adb || die "無法連線到 ${ADB_ADDR}，請確認無線除錯是否開啟。"
+ensure_adb 6 || die "無法連線到 ${ADB_ADDR}，請確認無線偵錯是否開啟。"
 
 # 0. 裝置資訊（不含序號）
 get_prop() {
@@ -470,6 +585,8 @@ COND_ARGS=()
 if [[ -z "$TEST_TYPE" ]]; then
     log "測試類型未指定（摘要將標示「未提供」）。"
 fi
+
+if [[ -z "$RESUME_DIR" ]]; then
 
 # 1. 測試前鬧鐘檢查
 capture alarm_start_full.txt adb -s "$ADB_ADDR" shell dumpsys alarm
@@ -538,6 +655,9 @@ if [[ "$SLEEP_SCREEN" == "1" ]]; then
     log "關屏不代表已進入 Deep Doze。"
 fi
 
+TEST_START="$(date '+%Y-%m-%d %H:%M:%S')"
+save_run_args
+
 # 5. 等待使用者手動結束
 echo
 echo "======================================"
@@ -546,22 +666,18 @@ echo "請保持手機螢幕關閉並等待測試時間。"
 echo "完成後回到 Termux，按 Enter 繼續。"
 echo "======================================"
 read -r -p "按 Enter 結束測試 → " _ || true
+echo "TEST_END=$(date '+%Y-%m-%d %H:%M:%S')" >> "$ARGS_FILE"
+
+fi   # 結束「非接續模式」的測試前流程
 
 # 6. 重新連線
-if ! connect_adb; then
+if ! ensure_adb 6; then
+    log "ADB 未能重新連線；已擷取的資料保留於 ${OUT_DIR}"
     echo
-    echo "ADB 目前無法連線。"
-    echo "請確認手機已亮屏，且無線除錯仍開啟。"
-    read -r -p "完成後按 Enter 重試 → " _ || die "使用者中斷"
-
-    if NEW_PORT="$(detect_adb_port)"; then
-        PORT="$NEW_PORT"
-        ADB_ADDR="127.0.0.1:${PORT}"
-        log "重新偵測到端點：${ADB_ADDR}"
-    fi
-
-    connect_adb ||
-        die "重新連線失敗，原始資料保留於 ${OUT_DIR}"
+    echo "尚未擷取測試後資料。若手機沒有充電或重開機，統計通常仍保留在手機上"
+    echo "（充電或重開機可能使其重置）。重新開啟無線偵錯後可執行："
+    echo "  doze <新Port> --resume ${TIMESTAMP}"
+    exit 1
 fi
 
 log "ADB 重新連線成功。"
@@ -571,7 +687,11 @@ capture deviceidle.txt adb -s "$ADB_ADDR" shell dumpsys deviceidle
 snapshot_battery battery_end.txt
 snapshot_mem mem_end.txt
 
-capture home_end.txt adb -s "$ADB_ADDR" shell cmd role get-role-holders android.app.role.HOME
+{
+    adb -s "$ADB_ADDR" shell cmd role get-role-holders android.app.role.HOME 2>/dev/null ||
+    adb -s "$ADB_ADDR" shell cmd package resolve-activity --brief \
+        -a android.intent.action.MAIN -c android.intent.category.HOME
+} > "$OUT_DIR/home_end.txt" 2>&1 || true
 capture full.txt adb -s "$ADB_ADDR" shell dumpsys batterystats
 capture checkin.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --checkin
 capture history.txt adb -s "$ADB_ADDR" shell dumpsys batterystats --history
@@ -591,17 +711,28 @@ if (( ${#PKGS[@]} > 0 )); then
     PKG_ARGS=(--pkg "$(IFS=,; echo "${PKGS[*]}")")
 fi
 
+EXTRA_ARGS=()
+if [[ -s "$OUT_DIR/mem_start.txt" && -s "$OUT_DIR/mem_end.txt" ]]; then
+    EXTRA_ARGS+=(--mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt")
+fi
+if [[ -s "$OUT_DIR/battery_start.txt" && -s "$OUT_DIR/battery_end.txt" ]]; then
+    EXTRA_ARGS+=(--battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt")
+fi
+
+SUMMARY_ERR="${OUT_DIR}/summary-error.txt"
+
 python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
     --checkin "$OUT_DIR/checkin.txt" \
     "${PKG_ARGS[@]}" \
     "${COND_ARGS[@]}" \
     --deviceidle "$OUT_DIR/deviceidle.txt" \
-    --mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt" \
-    --battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt" \
+    "${EXTRA_ARGS[@]}" \
     --mask \
-    > "$SUMMARY" 2>&1 || {
-        log "⚠ Python 摘要產生失敗，請檢查 ${SUMMARY}"
+    > "$SUMMARY" 2> "$SUMMARY_ERR" || {
+        log "⚠ Python 摘要產生失敗，錯誤訊息見 ${SUMMARY_ERR}"
+        tail -n 5 "$SUMMARY_ERR" >&2 || true
     }
+[[ -s "$SUMMARY_ERR" ]] || rm -f "$SUMMARY_ERR"
 
 if [[ -s "$SUMMARY" ]]; then
     cat "$SUMMARY"

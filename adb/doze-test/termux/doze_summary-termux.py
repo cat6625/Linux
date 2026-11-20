@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.9)
+Termux Android Doze / BatteryStats 摘要工具 (v5.9.1)
 
 v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計的數字，不同 AI 會給出不同答案）
 1. 新增「AI 讀取規則」與 [記錄]／[估算]／[推測] 標籤，區分事件、模型估算與推論。
@@ -19,7 +19,9 @@ v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計�
 9. v5.9：亮屏耗電區段加註「歸屬口徑與 Screen on discharge 不同」；新增「百分比記帳」（Amount discharged、History 起訖百分比，
    並檢查 actual drain 是否源自該記帳）；追問模式新增 --section charge，window 輸出標示涵蓋範圍與截斷；
    Doze 參數措辭改為「AOSP 參考值」，不暗示使用者修改。
-10. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
+10. v5.9.1：修正某分項放電為 0 mAh（例如 Deep doze discharge: 0）時速率指標 KeyError 使摘要中斷；該分項改列「低於量化步進」。
+11. v5.9.1：每個區塊獨立保護，單一區塊出錯只標示該區塊失敗，其餘照常輸出。
+12. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -1290,6 +1292,9 @@ def print_rate_metrics(text, caps, res, conflict, step=None):
         if duration_ms < floor_ms:
             skipped.append(f"{label_text}（樣本 {fmt(duration_ms)} < {floor_ms // 60000} 分鐘）")
             continue
+        if step_mah and mah <= 0:
+            skipped.append(f"{label_text}（0 mAh，低於量化步進）")
+            continue
         if step_mah and mah > 0 and step_mah / mah > MAX_REL_ERR:
             skipped.append(f"{label_text}（{mah:.1f} mAh，量化誤差約 ±{step_mah / mah * 100:.0f}%）")
             continue
@@ -1297,7 +1302,7 @@ def print_rate_metrics(text, caps, res, conflict, step=None):
         hours = duration_ms / 3600000.0
         err = step_mah or 0.0
         if res:
-            pct = res["fields"][field][1]
+            pct = res["fields"][field][1] if field in res["fields"] else mah / res["capacity"] * 100.0
             half = res["step_pct"]
             print(f"- [推測·電量計步進換算] {label_text}：{pct:.1f}% ÷ {hours:.2f}h ≈ {pct / hours:.2f} %/h"
                   f"（量化誤差範圍 {max(0.0, pct - half) / hours:.2f}–{(pct + half) / hours:.2f} %/h）")
@@ -1744,10 +1749,19 @@ def run_section(args, stats_text, events, uidmap, pkg_uids):
 # 主程式
 # ============================================================
 
+def _safe(func, default, *func_args):
+    """單一區塊出錯時只標示該區塊失敗，其餘區塊照常輸出。"""
+    try:
+        return func(*func_args)
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n⚠ 區塊 {func.__name__} 執行失敗（{type(exc).__name__}: {exc}）；其餘區塊不受影響。")
+        return default
+
+
 def build_parser():
     env = os.environ.get
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.9)")
-    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.9")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.9.1)")
+    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.9.1")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
@@ -1798,7 +1812,7 @@ def main():
         if args.section:
             run_section(args, stats_text, events, uidmap, pkg_uids)
         else:
-            print("# Android Doze / BatteryStats 摘要 (v5.9)")
+            print("# Android Doze / BatteryStats 摘要 (v5.9.1)")
             print(f"- 原始檔案：{args.full}")
             print(f"- History 總行數：{h_stats['total']}")
             print(f"  - 成功解析事件行：{h_stats['parsed_events']}")
@@ -1810,32 +1824,32 @@ def main():
                 print(f"- ℹ 指定套件 {args.pkg} 未在 checkin.txt 中找到 UID 映射"
                       f"（可能未安裝、checkin.txt 不完整，或該 App 未出現在歷史記錄）。")
 
-            print_reading_rules()
-            print_test_conditions(args, stats_text)
+            _safe(print_reading_rules, None)
+            _safe(print_test_conditions, None, args, stats_text)
 
-            merged_screens = print_battery_stats(stats_text, events)
-            caps, res, conflict = print_capacity_check(stats_text, args)
-            print_rate_metrics(stats_text, caps, res, conflict, counter_step(events))
-            print_measured_drain(events, merged_screens, stats_text, caps)
-            print_pct_ledger(stats_text, events, caps)
-            print_headroom(stats_text, res)
+            merged_screens = _safe(print_battery_stats, [], stats_text, events) or []
+            caps, res, conflict = _safe(print_capacity_check, ({}, None, False), stats_text, args)
+            _safe(print_rate_metrics, None, stats_text, caps, res, conflict, _safe(counter_step, None, events))
+            _safe(print_measured_drain, None, events, merged_screens, stats_text, caps)
+            _safe(print_pct_ledger, None, stats_text, events, caps)
+            _safe(print_headroom, None, stats_text, res)
 
-            print_doze(events, uidmap)
-            print_wakelocks(stats_text)
-            print_partial_wakelocks(stats_text, uidmap)
-            print_discharge(stats_text, events, uidmap, merged_screens)
-            print_cpu_running(events)
-            print_power(stats_text, uidmap, pkg_uids)
-            print_deviceidle(args.deviceidle)
+            _safe(print_doze, None, events, uidmap)
+            _safe(print_wakelocks, None, stats_text)
+            _safe(print_partial_wakelocks, None, stats_text, uidmap)
+            _safe(print_discharge, None, stats_text, events, uidmap, merged_screens)
+            _safe(print_cpu_running, None, events)
+            _safe(print_power, None, stats_text, uidmap, pkg_uids)
+            _safe(print_deviceidle, None, args.deviceidle)
 
             if args.mem:
-                print_meminfo(args.mem)
+                _safe(print_meminfo, None, args.mem)
 
             if args.battery:
                 stats_ms = _dur_of(stats_text, r"Time on battery:\s*(.*?)\s+\(")
-                print_battery_snapshots(args.battery, stats_ms)
+                _safe(print_battery_snapshots, None, args.battery, stats_ms)
 
-            print_followups(args)
+            _safe(print_followups, None, args)
             print("\n摘要分析完成。")
     finally:
         sys.stdout = old_stdout
