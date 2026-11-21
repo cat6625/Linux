@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具  v1.2.0（2026-11-21）
+# Termux Doze 測試工具  v1.3.0（2026-11-21）
 #
 # 用法：
 #   doze
@@ -11,6 +11,7 @@
 #   doze --manual      只印出電腦端手動採集的 adb 指令，不執行測試
 #   doze --resume 20261120_183359   接續既有測試資料夾，只補擷取測試後資料與摘要
 #   doze 40887 --resume 20261120_183359   同上，並指定新的無線偵錯 Port
+#   doze --summary-only 20261120_183359   不連 ADB，用既有資料夾重新產生摘要
 #   doze --version
 #
 # 測試條件（可選；未提供時摘要標示「未提供」，不會被猜測）：
@@ -29,6 +30,15 @@
 # BatteryStats 預設不重置。
 #
 # 修改內容：
+#   v1.3.0（2026-11-21）
+#     - 測試起訖時間（TEST_START／TEST_END，本機時間）傳給摘要程式的
+#       --test-start／--test-end，摘要可切出「測試時段」（需摘要程式 v5.10 以上）。
+#     - 新增 --summary-only <資料夾>：不連 ADB，用既有資料夾重新產生摘要
+#       （救回的資料、或升級摘要程式後重算；輸出為 summary-<時間>-re.txt，不覆蓋原摘要）。
+#     - 舊版（v1.1.0 以前）建立、沒有 doze_args.txt 的資料夾：測試起訖改由
+#       timeline.txt 推算並寫入 doze_args.txt（開始＝送出 KEYCODE_SLEEP；
+#       結束＝其後第一筆時間軸紀錄，約略值，可能晚於實際結束數秒）。
+#     - 摘要流程抽成函式 run_summary，--resume 與 --summary-only 共用。
 #   v1.2.0（2026-11-21）
 #     - 測試結束後若 ADB 連不上（例如 Redmi／HyperOS 長時間後自動關閉無線偵錯、
 #       Port 已改變），不再兩分鐘後放棄；改為互動重連：Enter 重新掃描、直接輸入
@@ -78,10 +88,12 @@ SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
 
-DOZE_SH_VERSION="1.2.0"
+DOZE_SH_VERSION="1.3.0"
 
 RESUME_DIR=""
+SUMMARY_ONLY=0
 TEST_START=""
+TEST_END=""
 
 TEST_TYPE="${DOZE_TEST_TYPE:-}"
 DESIGN_CAP="${DOZE_DESIGN_CAP:-}"
@@ -166,6 +178,9 @@ while (( $# > 0 )); do
         --resume)
             need_value "$@"; RESUME_DIR="$2"; shift
             ;;
+        --summary-only)
+            need_value "$@"; RESUME_DIR="$2"; SUMMARY_ONLY=1; shift
+            ;;
         --manual)
             print_manual
             exit 0
@@ -214,7 +229,12 @@ check_port() {
     (( 10#$1 >= 1 && 10#$1 <= 65535 ))
 }
 
-for cmd in adb python3 awk grep sed date timeout; do
+REQUIRED_CMDS=(adb python3 awk grep sed date timeout)
+if (( SUMMARY_ONLY )); then
+    REQUIRED_CMDS=(python3 awk grep sed date)
+fi
+
+for cmd in "${REQUIRED_CMDS[@]}"; do
     command -v "$cmd" >/dev/null 2>&1 || {
         echo "錯誤：缺少必要指令 ${cmd}" >&2
         exit 1
@@ -290,7 +310,8 @@ load_run_args() {
                     IFS=',' read -r -a PKGS <<< "$value"
                 fi
                 ;;
-            TEST_START)   TEST_START="$value" ;;
+            TEST_START)   [[ -z "$value" ]] || TEST_START="$value" ;;
+            TEST_END)     [[ -z "$value" ]] || TEST_END="$value" ;;
         esac
     done < "$ARGS_FILE"
 }
@@ -312,7 +333,7 @@ log "輸出目錄：${OUT_DIR}"
 
 PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
 if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
-    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.9.1 以上）"
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.10 以上）"
 fi
 log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
@@ -320,6 +341,106 @@ if (( ${#PKGS[@]} > 0 )); then
     log "目標包：$(IFS=,; echo "${PKGS[*]}")"
 else
     log "目標包：未指定（僅做全局摘要）"
+fi
+
+build_cond_args() {
+    COND_ARGS=()
+    [[ -z "$TEST_TYPE" ]] || COND_ARGS+=(--test-type "$TEST_TYPE")
+    [[ -z "$DESIGN_CAP" ]] || COND_ARGS+=(--design-capacity "$DESIGN_CAP")
+    [[ -z "$CHARGE_LIMIT" ]] || COND_ARGS+=(--charge-limit "$CHARGE_LIMIT")
+    [[ -z "$TEST_NOTE" ]] || COND_ARGS+=(--note "$TEST_NOTE")
+    [[ -z "$DEVICE_NAME" ]] || COND_ARGS+=(--device "$DEVICE_NAME")
+    [[ -z "$TEST_START" ]] || COND_ARGS+=(--test-start "$TEST_START")
+    [[ -z "$TEST_END" ]] || COND_ARGS+=(--test-end "$TEST_END")
+    return 0
+}
+
+# 舊版資料夾沒有 doze_args.txt 時，由 timeline.txt 推算測試起訖（約略值）
+derive_window_from_timeline() {
+    local tl="${OUT_DIR}/timeline.txt" base_day start_t end_t next_day
+    [[ -f "$tl" ]] || return 0
+    [[ -z "$TEST_START" || -z "$TEST_END" ]] || return 0
+    base_day="${TIMESTAMP:0:4}-${TIMESTAMP:4:2}-${TIMESTAMP:6:2}"
+    start_t="$(awk '/已送出 KEYCODE_SLEEP/{print $2; exit}' "$tl")"
+    end_t="$(awk '/關屏不代表已進入 Deep Doze/{f=1; next} f && /^\[TERMUX\] [0-9]/{print $2; exit}' "$tl")"
+    if [[ -z "$start_t" || -z "$end_t" ]]; then
+        return 0
+    fi
+    [[ -n "$TEST_START" ]] || TEST_START="${base_day} ${start_t}"
+    if [[ -z "$TEST_END" ]]; then
+        if [[ "$end_t" < "$start_t" ]]; then
+            next_day="$(date -d "${base_day} +1 day" '+%Y-%m-%d' 2>/dev/null || echo "$base_day")"
+            TEST_END="${next_day} ${end_t}"
+        else
+            TEST_END="${base_day} ${end_t}"
+        fi
+    fi
+    log "由 timeline.txt 推算測試起訖（約略值）：${TEST_START} – ${TEST_END}"
+    {
+        echo "TEST_START=${TEST_START}"
+        echo "TEST_END=${TEST_END}"
+    } >> "$ARGS_FILE"
+}
+
+SUMMARY_SUFFIX=""
+
+run_summary() {
+    build_cond_args
+    log "開始產生 Python 摘要。"
+
+    SUMMARY="${OUT_DIR}/summary-${TIMESTAMP}${SUMMARY_SUFFIX}.txt"
+
+    # 動態組裝 --pkg 參數（空陣列時不傳）
+    PKG_ARGS=()
+    if (( ${#PKGS[@]} > 0 )); then
+        PKG_ARGS=(--pkg "$(IFS=,; echo "${PKGS[*]}")")
+    fi
+
+    EXTRA_ARGS=()
+    if [[ -s "$OUT_DIR/mem_start.txt" && -s "$OUT_DIR/mem_end.txt" ]]; then
+        EXTRA_ARGS+=(--mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt")
+    fi
+    if [[ -s "$OUT_DIR/battery_start.txt" && -s "$OUT_DIR/battery_end.txt" ]]; then
+        EXTRA_ARGS+=(--battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt")
+    fi
+
+    SUMMARY_ERR="${OUT_DIR}/summary-error.txt"
+
+    python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
+        --checkin "$OUT_DIR/checkin.txt" \
+        "${PKG_ARGS[@]}" \
+        "${COND_ARGS[@]}" \
+        --deviceidle "$OUT_DIR/deviceidle.txt" \
+        "${EXTRA_ARGS[@]}" \
+        --mask \
+        > "$SUMMARY" 2> "$SUMMARY_ERR" || {
+            log "⚠ Python 摘要產生失敗，錯誤訊息見 ${SUMMARY_ERR}"
+            tail -n 5 "$SUMMARY_ERR" >&2 || true
+        }
+    [[ -s "$SUMMARY_ERR" ]] || rm -f "$SUMMARY_ERR"
+
+    if [[ -s "$SUMMARY" ]]; then
+        cat "$SUMMARY"
+    fi
+}
+
+if (( SUMMARY_ONLY )); then
+    log "=== 只重新產生摘要（不連 ADB），資料夾：${OUT_DIR} ==="
+    load_run_args
+    if [[ -z "$DEVICE_NAME" && -f "$OUT_DIR/device_info.txt" ]]; then
+        DEV_MANUFACTURER="$(sed -n 's/^ro.product.manufacturer=//p' "$OUT_DIR/device_info.txt" | head -n 1)"
+        DEV_MODEL="$(sed -n 's/^ro.product.model=//p' "$OUT_DIR/device_info.txt" | head -n 1)"
+        DEV_RELEASE="$(sed -n 's/^ro.build.version.release=//p' "$OUT_DIR/device_info.txt" | head -n 1)"
+        if [[ -n "${DEV_MODEL}${DEV_MANUFACTURER}" ]]; then
+            DEVICE_NAME="${DEV_MANUFACTURER} ${DEV_MODEL} (Android ${DEV_RELEASE:-?})"
+        fi
+    fi
+    derive_window_from_timeline
+    [[ -s "$OUT_DIR/full.txt" ]] || die "找不到 ${OUT_DIR}/full.txt，無法產生摘要。"
+    SUMMARY_SUFFIX="-re"
+    run_summary
+    log "=== 摘要完成 ==="
+    exit 0
 fi
 
 # ------------------------------------------------
@@ -546,6 +667,7 @@ if [[ -n "$RESUME_DIR" ]]; then
     log "=== 接續既有資料夾（只補擷取測試後資料與摘要），目標端點：${ADB_ADDR} ==="
     log "注意：接續模式的測試後資料擷取時間為現在，不等於測試結束時間（見 doze_args.txt 的 TEST_START／TEST_END）。"
     load_run_args
+    derive_window_from_timeline
 else
     log "=== Doze 測試開始，目標端點：${ADB_ADDR} ==="
     log "提示：部分機型（例如 Redmi／HyperOS）可能在長時間測試後自動關閉無線偵錯；結束時若連不上，可重新開啟後輸入新 Port，或離開後用 --resume 補抓。"
@@ -576,12 +698,6 @@ if [[ -z "$DEVICE_NAME" && -n "${DEV_MODEL}${DEV_MANUFACTURER}" ]]; then
 fi
 log "裝置：${DEVICE_NAME:-未取得}"
 
-COND_ARGS=()
-[[ -n "$TEST_TYPE" ]] && COND_ARGS+=(--test-type "$TEST_TYPE")
-[[ -n "$DESIGN_CAP" ]] && COND_ARGS+=(--design-capacity "$DESIGN_CAP")
-[[ -n "$CHARGE_LIMIT" ]] && COND_ARGS+=(--charge-limit "$CHARGE_LIMIT")
-[[ -n "$TEST_NOTE" ]] && COND_ARGS+=(--note "$TEST_NOTE")
-[[ -n "$DEVICE_NAME" ]] && COND_ARGS+=(--device "$DEVICE_NAME")
 if [[ -z "$TEST_TYPE" ]]; then
     log "測試類型未指定（摘要將標示「未提供」）。"
 fi
@@ -666,7 +782,8 @@ echo "請保持手機螢幕關閉並等待測試時間。"
 echo "完成後回到 Termux，按 Enter 繼續。"
 echo "======================================"
 read -r -p "按 Enter 結束測試 → " _ || true
-echo "TEST_END=$(date '+%Y-%m-%d %H:%M:%S')" >> "$ARGS_FILE"
+TEST_END="$(date '+%Y-%m-%d %H:%M:%S')"
+echo "TEST_END=${TEST_END}" >> "$ARGS_FILE"
 
 fi   # 結束「非接續模式」的測試前流程
 
@@ -701,42 +818,7 @@ if [[ "$WANT_NETSTATS" == "1" ]]; then
 fi
 
 # 8. Python 摘要
-log "開始產生 Python 摘要。"
-
-SUMMARY="${OUT_DIR}/summary-${TIMESTAMP}.txt"
-
-# 動態組裝 --pkg 參數（空陣列時不傳）
-PKG_ARGS=()
-if (( ${#PKGS[@]} > 0 )); then
-    PKG_ARGS=(--pkg "$(IFS=,; echo "${PKGS[*]}")")
-fi
-
-EXTRA_ARGS=()
-if [[ -s "$OUT_DIR/mem_start.txt" && -s "$OUT_DIR/mem_end.txt" ]]; then
-    EXTRA_ARGS+=(--mem "$OUT_DIR/mem_start.txt" "$OUT_DIR/mem_end.txt")
-fi
-if [[ -s "$OUT_DIR/battery_start.txt" && -s "$OUT_DIR/battery_end.txt" ]]; then
-    EXTRA_ARGS+=(--battery "$OUT_DIR/battery_start.txt" "$OUT_DIR/battery_end.txt")
-fi
-
-SUMMARY_ERR="${OUT_DIR}/summary-error.txt"
-
-python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
-    --checkin "$OUT_DIR/checkin.txt" \
-    "${PKG_ARGS[@]}" \
-    "${COND_ARGS[@]}" \
-    --deviceidle "$OUT_DIR/deviceidle.txt" \
-    "${EXTRA_ARGS[@]}" \
-    --mask \
-    > "$SUMMARY" 2> "$SUMMARY_ERR" || {
-        log "⚠ Python 摘要產生失敗，錯誤訊息見 ${SUMMARY_ERR}"
-        tail -n 5 "$SUMMARY_ERR" >&2 || true
-    }
-[[ -s "$SUMMARY_ERR" ]] || rm -f "$SUMMARY_ERR"
-
-if [[ -s "$SUMMARY" ]]; then
-    cat "$SUMMARY"
-fi
+run_summary
 
 if (( ${#FAILED_CAPTURES[@]} > 0 )); then
     log "⚠ 以下擷取有問題："
