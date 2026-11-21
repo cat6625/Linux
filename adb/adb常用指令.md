@@ -1,8 +1,25 @@
 ## adb常用指令
 
 **内存(pss)占用前 25 名**
-```js
+```bash
 adb shell dumpsys meminfo | sed -n '/Total PSS by process:/,$p' | grep -E "^ +[0-9,]+K: .*\(pid [0-9]+\)" | head -n 25
+```
+
+**綜合去識別化指令**
+1. 所有 Email 地址 → 替換為 user@example.com
+2. IPv4 位址（如區域網路或連線 IP）→ 替換為 0.0.0.0
+3. MAC 位址（如藍牙或 Wi-Fi 路由器硬體位址）→ 替換為 00:00:00:00:00:00
+4. 自訂關鍵字 → 替換為指定的遮罩字串（若有多個關鍵字，只要多加幾行 -e 's/關鍵字/HIDDEN/g' \ 即可）。
+```bash
+sed -E \
+  -e 's#[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}#HIDDEN_EMAIL#g' \
+  -e 's#\b([0-9]{1,3}\.){3}[0-9]{1,3}\b#0.0.0.0#g' \
+  -e 's#([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}#00:00:00:00:00:00#g' \
+  -e 's#你的WiFi名稱#HIDDEN_WIFI#g' \
+  -e 's#你的其他關鍵字#HIDDEN_TEXT#g' \
+  -e 's#你的其他關鍵字#HIDDEN_TEXT#g' \
+  -e 's#你的其他關鍵字#HIDDEN_TEXT#g' \
+  full.txt > full_clean.txt
 ```
 
 
