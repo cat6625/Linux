@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具  v1.3.1（2026-11-21）
+# Termux Doze 測試工具  v1.3.2（2026-11-21）
 #
 # 用法：
 #   doze
@@ -30,6 +30,11 @@
 # BatteryStats 預設不重置。
 #
 # 修改內容：
+#   v1.3.2（2026-11-21）
+#     - --charge-limit 輸入檢查：接受 50–100 的數字（可加 %，自動補成 80%）或 unknown，
+#       其他值（例如誤打成 8 或 10）直接報錯，避免把錯誤條件寫進摘要。
+#     - 摘要程式建議版本改為 v5.12 以上（容量反推、History 被截斷時的說明、
+#       下降量過小時改報上限）。
 #   v1.3.1（2026-11-21）
 #     - 傳給摘要程式 --collector "doze.sh v<版本>"，摘要的測試條件會記錄採集工具版本。
 #     - 摘要程式建議版本改為 v5.11 以上（測試時段的時間錨點改良，History 起點被截斷時
@@ -92,7 +97,7 @@ SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
 
-DOZE_SH_VERSION="1.3.1"
+DOZE_SH_VERSION="1.3.2"
 
 RESUME_DIR=""
 SUMMARY_ONLY=0
@@ -219,6 +224,22 @@ case "$TEST_TYPE" in
     *) echo "--type 只能是 daily、screen-off 或 ab。" >&2; exit 2 ;;
 esac
 
+if [[ -n "$CHARGE_LIMIT" ]]; then
+    case "$CHARGE_LIMIT" in
+        unknown|未知)
+            ;;
+        *)
+            limit_number="${CHARGE_LIMIT%\%}"
+            if [[ "$limit_number" =~ ^[0-9]+$ ]] && (( limit_number >= 50 && limit_number <= 100 )); then
+                CHARGE_LIMIT="${limit_number}%"
+            else
+                echo "--charge-limit 必須是 50–100 的百分比（例如 80% 或 100%）或 unknown；收到「${CHARGE_LIMIT}」。" >&2
+                exit 2
+            fi
+            ;;
+    esac
+fi
+
 if [[ -n "$DESIGN_CAP" && ! "$DESIGN_CAP" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     echo "--design-cap 必須是數字（mAh）。" >&2
     exit 2
@@ -337,7 +358,7 @@ log "輸出目錄：${OUT_DIR}"
 
 PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
 if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
-    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.11 以上）"
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.12 以上）"
 fi
 log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
