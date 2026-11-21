@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.14)
+Termux Android Doze / BatteryStats 摘要工具 (v5.14.1)
 
 v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計的數字，不同 AI 會給出不同答案）
 1. 新增「AI 讀取規則」與 [記錄]／[估算]／[推測] 標籤，區分事件、模型估算與推論。
@@ -35,7 +35,8 @@ v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計�
     百分比未變的取整、幾乎全黑屏；Wi-Fi 0B 與 kernel active 並列的註記；快照電壓回升註記。
 16. v5.14：測試時段內偵測純黑屏突發並列出排除突發後的基線；末段無讀數變動時報低耗電上限；亮屏重疊的突發窗只列前 5 段；
     History 被截斷的說明不再以「相近／不相近」下判斷；百分比記帳新增「電量計換算 % 對 History 百分比點數差」。
-17. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
+17. v5.14.1：末段無讀數變動的註記只在上限明顯低於前段時才印（步進過大時不誤導）；百分比差距不再出現「-0.0」。
+18. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -1372,8 +1373,10 @@ def _rng(low, high, digits=2):
 
 
 def _signed_rng(low, high, digits=1):
-    a = f"{low:+.{digits}f}"
-    b = f"{high:+.{digits}f}"
+    def one(x):
+        text = f"{x:+.{digits}f}"
+        return f"{0:.{digits}f}" if text in (f"+{0:.{digits}f}", f"-{0:.{digits}f}") else text
+    a, b = one(low), one(high)
     return a if a == b else f"{a} 至 {b}"
 
 
@@ -1965,9 +1968,12 @@ def print_test_window(args, text, events, merged_screens, caps, step, uidmap):
                 tail_hours = end_gap / 3600000.0
                 front_rate = drops / max((last_t - first_t) / 3600000.0, 1e-9)
                 tail_bound = step / tail_hours
-                lower_text = "，明顯低於前段" if tail_bound < 0.5 * front_rate else ""
-                print(f"  ℹ 時段末段 {fmt(end_gap)} 沒有讀數變動：該段下降至多約一個步進（≤ {step:g} mAh，≤ {tail_bound:.1f} mAh/h），"
-                      f"前段平均 {front_rate:.1f} mAh/h{lower_text}；整個時段的平均包含這段低耗電期。")
+                if tail_bound < 0.5 * front_rate:
+                    print(f"  ℹ 時段末段 {fmt(end_gap)} 沒有讀數變動：該段下降至多約一個步進（≤ {step:g} mAh，≤ {tail_bound:.1f} mAh/h），"
+                          f"明顯低於前段平均 {front_rate:.1f} mAh/h；整個時段的平均包含這段低耗電期。")
+                elif tail_bound < 0.8 * front_rate:
+                    print(f"  ℹ 時段末段 {fmt(end_gap)} 沒有讀數變動：該段下降至多約一個步進（≤ {step:g} mAh，≤ {tail_bound:.1f} mAh/h），"
+                          f"低於前段平均 {front_rate:.1f} mAh/h。")
             if rises:
                 print(f"  ⚠ 時段內電量計曾上升 +{rises} mAh（含充電），已排除。")
             if hours >= 10 / 60.0 and drops > 0:
@@ -2284,8 +2290,8 @@ def _safe(func, default, *func_args):
 
 def build_parser():
     env = os.environ.get
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.14)")
-    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.14")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.14.1)")
+    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.14.1")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
@@ -2339,7 +2345,7 @@ def main():
         if args.section:
             run_section(args, stats_text, events, uidmap, pkg_uids)
         else:
-            print("# Android Doze / BatteryStats 摘要 (v5.14)")
+            print("# Android Doze / BatteryStats 摘要 (v5.14.1)")
             print(f"- 原始檔案：{args.full}")
             print(f"- History 總行數：{h_stats['total']}")
             print(f"  - 成功解析事件行：{h_stats['parsed_events']}")
