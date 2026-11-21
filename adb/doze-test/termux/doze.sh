@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具  v1.3.0（2026-11-21）
+# Termux Doze 測試工具  v1.3.1（2026-11-21）
 #
 # 用法：
 #   doze
@@ -30,6 +30,10 @@
 # BatteryStats 預設不重置。
 #
 # 修改內容：
+#   v1.3.1（2026-11-21）
+#     - 傳給摘要程式 --collector "doze.sh v<版本>"，摘要的測試條件會記錄採集工具版本。
+#     - 摘要程式建議版本改為 v5.11 以上（測試時段的時間錨點改良，History 起點被截斷時
+#       也能正確換算；舊版在跨日長時間統計窗可能把測試時段算錯）。
 #   v1.3.0（2026-11-21）
 #     - 測試起訖時間（TEST_START／TEST_END，本機時間）傳給摘要程式的
 #       --test-start／--test-end，摘要可切出「測試時段」（需摘要程式 v5.10 以上）。
@@ -88,7 +92,7 @@ SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
 
-DOZE_SH_VERSION="1.3.0"
+DOZE_SH_VERSION="1.3.1"
 
 RESUME_DIR=""
 SUMMARY_ONLY=0
@@ -333,7 +337,7 @@ log "輸出目錄：${OUT_DIR}"
 
 PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
 if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
-    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.10 以上）"
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.11 以上）"
 fi
 log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
@@ -350,6 +354,7 @@ build_cond_args() {
     [[ -z "$CHARGE_LIMIT" ]] || COND_ARGS+=(--charge-limit "$CHARGE_LIMIT")
     [[ -z "$TEST_NOTE" ]] || COND_ARGS+=(--note "$TEST_NOTE")
     [[ -z "$DEVICE_NAME" ]] || COND_ARGS+=(--device "$DEVICE_NAME")
+    COND_ARGS+=(--collector "doze.sh v${DOZE_SH_VERSION}")
     [[ -z "$TEST_START" ]] || COND_ARGS+=(--test-start "$TEST_START")
     [[ -z "$TEST_END" ]] || COND_ARGS+=(--test-end "$TEST_END")
     return 0

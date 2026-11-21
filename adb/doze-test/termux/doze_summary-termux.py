@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.10)
+Termux Android Doze / BatteryStats 摘要工具 (v5.11)
 
 v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計的數字，不同 AI 會給出不同答案）
 1. 新增「AI 讀取規則」與 [記錄]／[估算]／[推測] 標籤，區分事件、模型估算與推論。
@@ -19,12 +19,15 @@ v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計�
 9. v5.9：亮屏耗電區段加註「歸屬口徑與 Screen on discharge 不同」；新增「百分比記帳」（Amount discharged、History 起訖百分比，
    並檢查 actual drain 是否源自該記帳）；追問模式新增 --section charge，window 輸出標示涵蓋範圍與截斷；
    Doze 參數措辭改為「AOSP 參考值」，不暗示使用者修改。
-10. v5.10：修正某分項放電為 0 mAh（例如 Deep doze discharge: 0）時速率指標 KeyError 使摘要中斷；該分項改列「低於量化步進」。
-11. v5.10：每個區塊獨立保護，單一區塊出錯只標示該區塊失敗，其餘照常輸出。
-12. v5.10：新增 --test-start／--test-end（doze.sh 自動傳入）與「測試時段」區塊：依統計起點換算偏移，切出測試時段的電量計差值、
+10. v5.11：修正某分項放電為 0 mAh（例如 Deep doze discharge: 0）時速率指標 KeyError 使摘要中斷；該分項改列「低於量化步進」。
+11. v5.11：每個區塊獨立保護，單一區塊出錯只標示該區塊失敗，其餘照常輸出。
+12. v5.11：新增 --test-start／--test-end（doze.sh 自動傳入）與「測試時段」區塊：依統計起點換算偏移，切出測試時段的電量計差值、
     黑屏區段、亮屏、Doze 狀態與喚醒來源；--section window／charge 支援 --window test。
     亮屏耗電區段、百分比記帳倍率改以「約為電量計的 X–Y%」表述；UID 耗電加註 screen 分攤；補回 doze 與黑屏放電「是否子集未確認」。
-13. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
+13. v5.11：測試時段的時間錨點改為 History 的 TIME: 事件／電量快照結束時間／統計起點（依序），History 起點被截斷時不再用統計起點硬換算；
+    速率行補上「÷ 容量」兩步算式；「改善空間上限」標示全窗參考且只表示占比；全域耗電項目改為完整緊湊列出並檢查閉合；
+    測試時段的百分比與電量計落差就近警告；actual drain 與 Amount discharged 的關係改為「同源」敘述；新增 --collector。
+14. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -677,7 +680,7 @@ def print_discharge(text, events, uidmap, merged_screens=None):
 
         if _overlaps_screen_on(start, end, merged_screens):
             overlap_count += 1
-            print(f"- ℹ 亮屏操作耗電區段（與亮屏時段重疊）：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
+            print(f"- ℹ 亮屏重疊的突發耗電窗：{fmt(start)}–{fmt(end)}，消耗約 {delta:.1f} mAh")
         else:
             screen_off_bursts += 1
             culprits = _find_window_culprits(events, start, end, uidmap)
@@ -688,12 +691,12 @@ def print_discharge(text, events, uidmap, merged_screens=None):
         print("  （上列為電量計在時間窗內的下降量；窗界可能跨過亮屏邊界，歸屬口徑與 Screen on discharge 不同，"
               "不可與之比較或相加。）")
     if screen_off_bursts == 0:
-        print(f"- [記錄] 依門檻（{BURST_MINUTES} 分鐘內 >= {BURST_MAH} mAh，採 History charge= 欄位）"
+        print(f"- [記錄] 依門檻（{BURST_MINUTES} 分鐘內 >= {BURST_MAH} mAh，本工具預設值、非系統定義；採 History charge= 欄位）"
               f"檢出的突發區段中，純黑屏時段為 0 段；這只代表「未超過門檻」，不代表黑屏待機正常。")
         if screen_off_summary:
-            print(f"- [估算] {screen_off_summary}。")
+            print(f"- [電量計差值] {screen_off_summary}。")
     elif screen_off_summary:
-        print(f"- [估算] 基準對照：{screen_off_summary}。")
+        print(f"- [電量計差值] 基準對照：{screen_off_summary}。")
 
 
 # ============================================================
@@ -743,14 +746,29 @@ def print_power(text, uidmap, pkg_uids=None):
     print("\n## 估算耗電（Estimated power use）[估算]")
     lines = section(text, "Estimated power use (mAh):", 80)
 
-    shown = 0
+    items = []
+    computed_value = None
     for line in lines:
         if not line.strip() or re.match(r"^\s+[Uu][Ii][Dd] ", line):
             continue
-        print("-", line.strip()[:160])
-        shown += 1
-        if shown >= 9:
-            break
+        header = re.search(r"Computed drain:\s*([\d.]+)", line)
+        if header:
+            computed_value = float(header.group(1))
+            print("-", line.strip()[:160])
+            continue
+        item = re.match(r"^\s+([A-Za-z][A-Za-z_ ]*?):\s*([\d.]+)\b", line)
+        if item and item.group(1).strip().lower() not in ("capacity", "global"):
+            items.append((item.group(1).strip(), float(item.group(2))))
+    if items:
+        threshold = max(0.5, 0.01 * computed_value) if computed_value else 0.5
+        listed = sorted((i for i in items if i[1] >= threshold), key=lambda x: -x[1])
+        omitted = [i for i in items if i[1] < threshold]
+        print(f"- 全域項目（≥{threshold:.1f} mAh）：" + "、".join(f"{n} {v:.3g}" for n, v in listed))
+        total_items = sum(v for _n, v in items)
+        tail = f"；略去 {len(omitted)} 項（合計 {sum(v for _n, v in omitted):.2f} mAh）" if omitted else ""
+        if computed_value:
+            print(f"  各項合計 {total_items:.0f} mAh，Computed drain {computed_value:.0f} mAh"
+                  f"（{total_items / computed_value * 100:.0f}%）{tail}；項目口徑不同（含 screen 等共用項），不保證閉合。")
 
     discharge_str = grab(text, r"^\s+Discharge:\s*([\d.]+)\s*mAh")
     discharge_mah = float(discharge_str) if discharge_str else None
@@ -1134,6 +1152,8 @@ def print_test_conditions(args, text):
     test_type = TEST_TYPES.get(args.test_type) if args.test_type else None
     print(f"- 測試類型：{test_type or '未提供'}")
     print(f"- 裝置：{args.device or '未提供'}")
+    if args.collector:
+        print(f"- 採集工具：{args.collector}")
     print(f"- 設計容量（使用者提供）：{args.design_capacity:.0f} mAh"
           if args.design_capacity else "- 設計容量（使用者提供）：未提供")
     print(f"- 充電上限（使用者提供）：{args.charge_limit or '未提供'}")
@@ -1323,8 +1343,8 @@ def print_rate_metrics(text, caps, res, conflict, step=None):
         elif cmin:
             low = max(0.0, mah - err) / cmax * 100.0 / hours
             high = (mah + err) / cmin * 100.0 / hours
-            print(f"- [推測] {label_text}：{mah:.1f} mAh ÷ {hours:.2f}h ≈ {low:.2f}–{high:.2f} %/h"
-                  f"（含容量範圍 {cmin:.0f}–{cmax:.0f} mAh 與量化誤差 ±{err:g} mAh）")
+            print(f"- [推測] {label_text}：{mah:.1f} mAh ÷ {hours:.2f}h = {mah / hours:.1f} mAh/h；"
+                  f"再 ÷ 容量 {cmin:.0f}–{cmax:.0f} mAh ≈ {low:.2f}–{high:.2f} %/h（含量化誤差 ±{err:g} mAh）")
         else:
             print(f"- [電量計差值] {label_text}：{mah:.1f} mAh ÷ {hours:.2f}h ≈ {mah / hours:.1f} mAh/h"
                   f"（無容量資料，無法換算 %/h）")
@@ -1467,7 +1487,7 @@ def print_pct_ledger(text, events, caps):
         parts = [f"{label_text} {value}%" for label_text, value in (("亮屏", on), ("黑屏", off), ("doze", doze)) if value is not None]
         if parts:
             total = sum(v for v in (on, off, doze) if v is not None)
-            print(f"- [記錄] Amount discharged 分項：{'、'.join(parts)}（合計 {total}%）")
+            print(f"- [記錄] Amount discharged 分項：{'、'.join(parts)}（各項取整後相加 {total}%）")
             if total < 0.5 * low or total > 1.5 * high:
                 print(f"  ⚠ 分項合計 {total}% 與上下界 {low}%–{high}% 不一致；欄位口徑不同，原因無法由本資料判定。")
         discharge = grab(text, r"^\s+Discharge:\s*([\d.]+)")
@@ -1492,9 +1512,8 @@ def print_pct_ledger(text, events, caps):
         if actual and cap_power and lower is not None and upper is not None:
             a_low, a_high = float(actual.group(1)), float(actual.group(2))
             if abs(cap_power * lower / 100.0 - a_low) <= 1.0 and abs(cap_power * upper / 100.0 - a_high) <= 1.0:
-                print(f"- [推測] actual drain {a_low:.0f}–{a_high:.0f} mAh = Capacity {cap_power:.0f} × "
-                      f"{lower}%–{upper}%，與 Amount discharged 吻合；表示 actual drain 來自這套百分比記帳，"
-                      f"而不是電量計差值。")
+                print(f"- [推測] actual drain {a_low:.0f}–{a_high:.0f} mAh 等於 Capacity {cap_power:.0f} × {lower}%–{upper}%，"
+                      f"與 Amount discharged 同源，因此不是電量計差值；這不代表它比較準。")
 
 
 def print_headroom(text, res):
@@ -1516,10 +1535,10 @@ def print_headroom(text, res):
             low = max(0.0, off - half) / (total + half) * 100
             high = min(100.0, (off + half) / max(total - half, 1e-9) * 100)
             extra = f"（量化範圍 {low:.1f}–{high:.1f}%）"
-        print(f"- [推測] 黑屏放電約占總放電 {share:.1f}%{extra}："
-              f"即使黑屏耗電完全消除，總放電最多再少這個比例。")
+        print(f"- [推測] 黑屏放電約占總記錄放電 {share:.1f}%{extra}（全窗參考，不是測試時段結論）；"
+              f"僅表示占比，不代表可實際消除的耗電量。")
         if on is not None:
-            print(f"- [推測] 亮屏放電約占總放電 {on / total * 100:.1f}%。")
+            print(f"- [推測] 亮屏放電約占總記錄放電 {on / total * 100:.1f}%（全窗參考）。")
     light = fields.get("Light doze discharge")
     deep = fields.get("Deep doze discharge")
     if off and light is not None and deep is not None:
@@ -1617,26 +1636,70 @@ def stats_start_clock(text):
     return parse_clock(grab(text, r"Start clock time:\s*(\S+)") or "")
 
 
+def history_clock_base(args, text, events):
+    """回傳 (History 偏移 0 對應的本機時間, 來源說明)。優先順序：TIME: 事件 → 電量快照結束時間 → 統計起點。"""
+    hist_end = max((t for t, _l, _r in events), default=0)
+    pairs = []
+    for t, _lv, rest in events:
+        match = re.search(r"TIME:\s*(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})", rest)
+        if match:
+            clock = parse_clock(match.group(1))
+            if clock:
+                pairs.append(clock - dt.timedelta(milliseconds=t))
+    if pairs:
+        spread = (max(pairs) - min(pairs)).total_seconds()
+        note = "History 內的 TIME: 事件"
+        if spread > 120:
+            note += f"（各事件換算相差 {spread:.0f} 秒，系統時鐘可能被調整，取最後一筆）"
+        return pairs[-1], note
+
+    clock0 = stats_start_clock(text)
+    end_stamp = None
+    if args.battery:
+        try:
+            end_stamp = parse_stamp(args.battery[-1])
+        except Exception:  # noqa: BLE001
+            end_stamp = None
+    battery_ms = _dur_of(text, r"Time on battery:\s*(.*?)\s+\(")
+    base_end = (end_stamp - dt.timedelta(milliseconds=hist_end)) if end_stamp else None
+
+    if clock0 and base_end and abs((base_end - clock0).total_seconds()) > 120:
+        shift = (base_end - clock0).total_seconds()
+        return base_end, (f"電量快照結束時間（History 起點比統計起點晚 {fmt(int(abs(shift) * 1000))}，"
+                          f"較早的 History 事件已被截斷，不用統計起點換算）")
+    if clock0:
+        note = f"統計起點 Start clock time {clock0}"
+        if battery_ms and battery_ms - hist_end > 300000:
+            note += f"；⚠ History 全長 {fmt(hist_end)} 比電池供電時間 {fmt(battery_ms)} 短，起點可能被截斷，偏移不可靠"
+        return clock0, note
+    return None, "無法取得任何時間錨點"
+
+
 def resolve_test_window(args, text, events):
-    """回傳 (lo_ms, hi_ms, 問題說明)；沒有提供起訖時為 (None, None, None)。"""
+    """回傳 (lo_ms, hi_ms, 問題說明)；沒有提供起訖時為 (None, None, None)。錨點說明存於 resolve_test_window.note。"""
+    resolve_test_window.note = ""
     if not (args.test_start or args.test_end):
         return None, None, None
-    clock0 = stats_start_clock(text)
+    base, note = history_clock_base(args, text, events)
+    resolve_test_window.note = note
     start = parse_clock(args.test_start)
     end = parse_clock(args.test_end)
-    if not clock0:
-        return None, None, "無法讀取統計起點（Start clock time）"
+    if not base:
+        return None, None, note
     if not start or not end:
         return None, None, "測試起訖時間不完整或格式錯誤（需要 'YYYY-MM-DD HH:MM:SS'）"
     if end <= start:
         return None, None, "測試結束時間不晚於開始時間"
-    lo = int((start - clock0).total_seconds() * 1000)
-    hi = int((end - clock0).total_seconds() * 1000)
+    lo = int((start - base).total_seconds() * 1000)
+    hi = int((end - base).total_seconds() * 1000)
     hist_end = max((t for t, _l, _r in events), default=0)
     if hi < 0 or lo > hist_end:
         return None, None, (f"測試時段（偏移 {fmt(max(lo, 0))}–{fmt(max(hi, 0))}）不在 History 涵蓋範圍"
                             f"（0–{fmt(hist_end)}）內；時間可能不是本機時間，或統計已重置")
     return lo, hi, None
+
+
+resolve_test_window.note = ""
 
 
 def _black_stretches(points, merged_screens, lo, hi, min_ms=None):
@@ -1692,7 +1755,8 @@ def print_test_window(args, text, events, merged_screens, caps, step, uidmap):
     window_ms = hi_c - lo_c
     hours = window_ms / 3600000.0
     print(f"- [記錄] 測試時段 {args.test_start} – {args.test_end}（{fmt(hi - lo)}），"
-          f"對應 History {fmt(lo_c)}–{fmt(hi_c)}；統計窗起點 {stats_start_clock(text)}。")
+          f"對應 History {fmt(lo_c)}–{fmt(hi_c)}。")
+    print(f"  時間錨點：{resolve_test_window.note}")
     print(f"- [記錄] 統計窗（History）全長 {fmt(hist_end)}：測試前 {fmt(lo_c)}、測試後 {fmt(max(0, hist_end - hi_c))} "
           f"也在其中；上方的整體／黑屏／亮屏速率是整個統計窗平均，不是測試時段。")
     if lo < 0 or hi > hist_end:
@@ -1707,6 +1771,7 @@ def print_test_window(args, text, events, merged_screens, caps, step, uidmap):
         if match:
             all_points.append((t, int(match.group(1))))
     points_ok = len(all_points) >= 2 and all_points[0][1] <= 50000
+    window_drops = None
     if points_ok:
         base = [p for p in all_points if p[0] <= lo_c]
         start_point = base[-1] if base else all_points[0]
@@ -1720,6 +1785,7 @@ def print_test_window(args, text, events, merged_screens, caps, step, uidmap):
                     drops += delta
                 elif delta < 0:
                     rises += -delta
+            window_drops = drops
             first_t, first_c = window_points[0]
             last_t, last_c = window_points[-1]
             print(f"- [電量計差值] 測試時段：{first_c}（{fmt(first_t)}）→ {last_c}（{fmt(last_t)}），下降段加總 {drops} mAh")
@@ -1742,7 +1808,13 @@ def print_test_window(args, text, events, merged_screens, caps, step, uidmap):
         before = [x for x in levels if x[0] <= lo_c]
         inside = [x for x in levels if x[0] <= hi_c]
         if before and inside:
-            print(f"- [記錄] History 電量百分比：{before[-1][1]}% → {inside[-1][1]}%（測試時段首尾）")
+            level_text = f"- [記錄] History 電量百分比：{before[-1][1]}% → {inside[-1][1]}%（測試時段首尾）"
+            if window_drops and cmin:
+                level_change = before[-1][1] - inside[-1][1]
+                if window_drops / cmax * 100.0 - level_change > 0.9:
+                    level_text += (f"；同時段電量計下降 {window_drops} mAh（約 {window_drops / cmax * 100:.1f}–{window_drops / cmin * 100:.1f}%），"
+                                   f"與百分比變化不一致：兩者是不同記帳、百分比解析度較粗，不可互相換算，也不代表 doze 沒有放電")
+            print(level_text)
 
     on_ms = 0
     on_count = 0
@@ -1996,8 +2068,8 @@ def _safe(func, default, *func_args):
 
 def build_parser():
     env = os.environ.get
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.10)")
-    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.10")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.11)")
+    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.11")
     parser.add_argument("full", help="dumpsys batterystats 完整輸出")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
@@ -2013,6 +2085,7 @@ def build_parser():
     parser.add_argument("--charge-limit", default=env("DOZE_CHARGE_LIMIT") or None,
                         help="充電上限，例如 80%%、85%%、100%%、unknown")
     parser.add_argument("--note", default=env("DOZE_NOTE") or None, help="其他測試條件備註")
+    parser.add_argument("--collector", default=env("DOZE_COLLECTOR") or None, help="採集工具與版本，例如 \"doze.sh v1.3.0\"")
     parser.add_argument("--test-start", default=env("DOZE_TEST_START") or None, help="測試開始的本機時間，例如 \"2026-11-20 18:34:22\"")
     parser.add_argument("--test-end", default=env("DOZE_TEST_END") or None, help="測試結束的本機時間")
     parser.add_argument("--section", help="追問模式：capacity／wakeups／kernel／wakelocks／alarms／jobs／uid／window／grep")
@@ -2050,7 +2123,7 @@ def main():
         if args.section:
             run_section(args, stats_text, events, uidmap, pkg_uids)
         else:
-            print("# Android Doze / BatteryStats 摘要 (v5.10)")
+            print("# Android Doze / BatteryStats 摘要 (v5.11)")
             print(f"- 原始檔案：{args.full}")
             print(f"- History 總行數：{h_stats['total']}")
             print(f"  - 成功解析事件行：{h_stats['parsed_events']}")
