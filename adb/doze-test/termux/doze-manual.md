@@ -134,10 +134,6 @@ ln -sf ~/doze/adb.sh "$PREFIX/bin/adb-auto"
 
 ```bash
 doze
-
-or
-
-doze --reset-batterystats
 ```
 
 或單獨測試 ADB 連線：
