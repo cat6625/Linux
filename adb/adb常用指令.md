@@ -21,7 +21,11 @@ sed -E \
   -e 's#你的其他關鍵字#HIDDEN_TEXT#g' \
   full.txt > full_clean.txt
 ```
+**Statistics since last charge:**
 
+```bash
+adb shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^$/ || /^[^[:space:]]/) exit; print }'"
+```
 
 ---
 
