@@ -45,8 +45,6 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 >
 > chmod 700 $PREFIX/bin/battery
 ```py
-mkdir -p ~/doze/
-cat << 'EOF' > ~/doze/battery.py
 import re
 import subprocess
 import sys
@@ -118,7 +116,6 @@ if screen_off is not None and screen_off_hours:
         f"{screen_off_hours:.2f} 小時，"
         f"平均 {screen_off / screen_off_hours:.1f} mAh/小時"
     )
-EOF
 ```
 ---
 **Termux ADB 自動連線工具**
@@ -126,8 +123,6 @@ EOF
 > 
 > ln -sf ~/doze/adb.sh "$PREFIX/bin/adb-auto"
 ```bash
-mkdir -p ~/doze/
-cat << 'EOF' > ~/doze/adb.sh
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
 # Termux ADB 自動連線工具
@@ -325,7 +320,6 @@ adb -s "$ADB_ADDR" shell getprop ro.build.version.release |
     tee -a "$LOG_FILE"
 
 log INFO "ADB 工具執行完成。"
-EOF
 ```
 
 ---
