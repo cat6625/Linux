@@ -36,7 +36,7 @@ adb shell 'dumpsys batterystats | tr -d "\r" | awk '\''/^Statistics since last c
 adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 ```
 ---
-**簡易耗電查詢**
+**Termux簡易耗電查詢**
 > 使用 python3 battery.py
 ```py
 import re
