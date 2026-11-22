@@ -38,7 +38,9 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 ---
 **Termux簡易耗電查詢**
 > 使用 python3 battery.py
+> 
 > chmod 600 ~/doze/battery.py
+> 
 > ln -sf ~/doze/battery.py "$PREFIX/bin/battery"
 ```py
 mkdir -p ~/doze/
@@ -119,6 +121,7 @@ EOF
 ---
 **Termux ADB 自動連線工具**
 > chmod 700 ~/doze/adb.sh
+> 
 > ln -sf ~/doze/adb.sh "$PREFIX/bin/adb-auto"
 ```bash
 mkdir -p ~/doze/
