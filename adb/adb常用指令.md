@@ -26,7 +26,15 @@ sed -E \
 ```bash
 adb shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^$/ || /^[^[:space:]]/) exit; print }'"
 ```
+**Estimated power use取前 40 行明細**
+```bash
+adb shell 'dumpsys batterystats | tr -d "\r" | awk '\''/^Statistics since last charge:/{f=1} f && /Estimated power use/{p=1; c=0} p{print; c++; if(c>40) exit} f && /^[^[:space:]]/ && !/^Statistics since last charge:/{exit}'\'''
+```
 
+**用數字 UID 反查套件名稱（Android 把 u0a 轉成 10000 + 編號)**
+```bash
+adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
+```
 ---
 
 # Android `dumpsys batterystats` 指令與耗電分析筆記
