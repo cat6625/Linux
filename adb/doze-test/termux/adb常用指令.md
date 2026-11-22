@@ -39,11 +39,10 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 **Termux簡易耗電查詢**
 > 使用 python3 battery.py
 > 
-> chmod 700 ~/doze/battery.py
-> 
-> ln -sf ~/doze/battery.py "$PREFIX/bin/battery"
->
-> chmod 700 $PREFIX/bin/battery
+> chmod 600 ~/doze/battery.py
+```bash 
+python3 ~/doze/battery.py
+```
 
 ---
 # Android `dumpsys batterystats` 指令與耗電分析筆記
