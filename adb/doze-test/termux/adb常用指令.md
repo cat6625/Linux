@@ -39,7 +39,7 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 **Termux簡易耗電查詢**
 > 使用 python3 battery.py
 > 
-> chmod 600 ~/doze/battery.py
+> chmod 700 ~/doze/battery.py
 > 
 > ln -sf ~/doze/battery.py "$PREFIX/bin/battery"
 >
