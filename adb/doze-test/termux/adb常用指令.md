@@ -42,6 +42,8 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 > chmod 600 ~/doze/battery.py
 > 
 > ln -sf ~/doze/battery.py "$PREFIX/bin/battery"
+>
+> chmod+x $PREFIX/bin/battery
 ```py
 mkdir -p ~/doze/
 cat << 'EOF' > ~/doze/battery.py
