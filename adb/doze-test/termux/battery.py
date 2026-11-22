@@ -6,14 +6,54 @@ import subprocess
 import sys
 
 
+def run_adb_shell(args: list[str], timeout: int = 15, check: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["adb", "shell", *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=check,
+    )
+
+
+def get_prop(prop_name: str) -> str | None:
+    try:
+        res = run_adb_shell(["getprop", prop_name], timeout=5)
+        val = (res.stdout or "").strip()
+        return val if val else None
+    except Exception:
+        return None
+
+
+def get_device_info() -> dict[str, str | None]:
+    brand = get_prop("ro.product.brand")
+    model = get_prop("ro.product.model")
+    device = get_prop("ro.product.device")
+    android_ver = get_prop("ro.build.version.release")
+    sdk_ver = get_prop("ro.build.version.sdk")
+    build_id = get_prop("ro.build.display.id")
+
+    if brand and model and not model.lower().startswith(brand.lower()):
+        model_display = f"{brand.capitalize()} {model}"
+    else:
+        model_display = model or brand or device
+
+    android_display = None
+    if android_ver and sdk_ver:
+        android_display = f"Android {android_ver} (API {sdk_ver})"
+    elif android_ver:
+        android_display = f"Android {android_ver}"
+
+    return {
+        "model": model_display,
+        "android": android_display,
+        "build": build_id,
+    }
+
+
 def get_stats() -> str:
     try:
-        result = subprocess.run(
-            ["adb", "shell", "dumpsys", "batterystats"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = run_adb_shell(["dumpsys", "batterystats"], timeout=30, check=True)
         return result.stdout.replace("\r", "")
     except FileNotFoundError:
         sys.exit("找不到 adb。請在 Termux 安裝 android-tools。")
@@ -39,9 +79,9 @@ def extract_summary_section(text: str) -> str:
 def extract_uid_token(name: str) -> tuple[str | None, str | None]:
     """
     從項目名稱擷取 UID 資訊。
-    回傳 (raw_token, numeric_uid)，例如 'Uid u0a182' -> ('u0a182', '10182')。
+    回傳 (raw_token, numeric_uid)，例如 'u0a182 ...' -> ('u0a182', '10182')。
     """
-    m = re.search(r"\bUid\s+(u0a(\d+)|(\d+))\b", name, re.IGNORECASE)
+    m = re.search(r"\b(u0a(\d+)|(\d+))\b", name, re.IGNORECASE)
     if not m:
         return None, None
 
@@ -66,20 +106,13 @@ def query_packages_by_uid(num_uid: str | None, raw_token: str | None) -> list[st
 
     for uid_arg in candidates:
         try:
-            res = subprocess.run(
-                ["adb", "shell", "cmd", "package", "list", "packages", "--uid", uid_arg],
-                capture_output=True,
-                text=True,
-                timeout=8,
-            )
+            res = run_adb_shell(["cmd", "package", "list", "packages", "--uid", uid_arg], timeout=8)
             if res.returncode == 0 and res.stdout:
-                pkgs = []
+                pkgs: list[str] = []
                 for line in res.stdout.splitlines():
                     line = line.strip()
                     if line.startswith("package:"):
-                        pkg = line.split(":", 1)[1].strip()
-                        # 有些 ROM 會在後面附帶 uid=...
-                        pkg = pkg.split()[0]
+                        pkg = line.split(":", 1)[1].strip().split()[0]
                         if pkg and pkg not in pkgs:
                             pkgs.append(pkg)
                 if pkgs:
@@ -90,14 +123,8 @@ def query_packages_by_uid(num_uid: str | None, raw_token: str | None) -> list[st
     if not num_uid:
         return []
 
-    # Fallback：從 dumpsys package 掃描符合 userId / appId 的 Package
     try:
-        res = subprocess.run(
-            ["adb", "shell", "dumpsys", "package"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
+        res = run_adb_shell(["dumpsys", "package"], timeout=15)
         if res.returncode != 0 or not res.stdout:
             return []
 
@@ -118,8 +145,8 @@ def query_packages_by_uid(num_uid: str | None, raw_token: str | None) -> list[st
         return []
 
 
-def resolve_top_u0a_packages(rows: list[dict]) -> dict[str, list[str]]:
-    """只針對傳入的前幾名 u0a 項目進行精準反查。"""
+def resolve_uids_packages(rows: list[dict]) -> dict[str, list[str]]:
+    """只針對傳入項目涉及的 UID 進行精準反查。"""
     resolved: dict[str, list[str]] = {}
     for item in rows:
         raw_token, num_uid = extract_uid_token(item["name"])
@@ -141,6 +168,126 @@ def format_uid_label(name: str, uid_pkgs_map: dict[str, list[str]]) -> str:
     return f"{name} [{preview}]"
 
 
+def parse_duration_to_hours(duration_str: str) -> float | None:
+    units = {
+        "d": 86400.0,
+        "h": 3600.0,
+        "m": 60.0,
+        "s": 1.0,
+        "ms": 0.001,
+    }
+    tokens = re.findall(r"([\d.]+)\s*(ms|d|h|m|s)(?=\s|$)", duration_str)
+    if not tokens:
+        return None
+    total_seconds = sum(float(amount) * units[unit] for amount, unit in tokens)
+    return total_seconds / 3600.0
+
+
+def parse_kernel_wakelocks(text: str, top_n: int = 10) -> list[dict]:
+    """
+    解析 'All kernel wake locks:' 區塊中以 'Kernel Wake lock' 開頭的核心喚醒項目。
+    """
+    m = re.search(r"^\s*All kernel wake locks?:\s*$", text, re.MULTILINE | re.IGNORECASE)
+    if not m:
+        return []
+
+    block = text[m.end():]
+    stop_m = re.search(r"^\s*All partial wake locks?:\s*$", block, re.MULTILINE | re.IGNORECASE)
+    if stop_m:
+        block = block[:stop_m.start()]
+    else:
+        stop_top = re.search(r"^\S", block, re.MULTILINE)
+        if stop_top:
+            block = block[:stop_top.start()]
+
+    locks: list[dict] = []
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+        row_m = re.match(
+            r"^\s*Kernel\s+Wake\s+lock\s+(.+?):\s*(.+?)\s*\((\d+)\s*times?\)",
+            line,
+            re.IGNORECASE,
+        )
+        if not row_m:
+            continue
+        name = re.sub(r"\s+", " ", row_m.group(1).strip())
+        dur_part = row_m.group(2).strip()
+        times_int = int(row_m.group(3))
+
+        hours = parse_duration_to_hours(dur_part)
+        if hours is None or hours <= 0:
+            continue
+
+        locks.append({
+            "name": name,
+            "hours": hours,
+            "minutes": hours * 60.0,
+            "count": times_int,
+        })
+
+    locks.sort(key=lambda item: item["hours"], reverse=True)
+    return locks[:top_n]
+
+
+def parse_partial_wakelocks(text: str, top_n: int = 10) -> list[dict]:
+    """
+    嚴格解析 'All partial wake locks:' 區塊中以 'Wake lock ' 開頭的喚醒項目，
+    排除 Sensor / Foreground services 等非 wakelock 行，並自動去除完全重複項目。
+    """
+    m = re.search(r"^\s*All partial wake locks?:\s*$", text, re.MULTILINE | re.IGNORECASE)
+    if not m:
+        return []
+
+    block = text[m.end():]
+    stop_m = re.search(r"^\S", block, re.MULTILINE)
+    if stop_m:
+        block = block[:stop_m.start()]
+
+    raw_locks: list[dict] = []
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+        row_m = re.match(
+            r"^\s*Wake\s+lock\s+(.+?):\s*(.+?)\s*\((\d+)\s*times?\)",
+            line,
+            re.IGNORECASE,
+        )
+        if not row_m:
+            continue
+        name = re.sub(r"\s+", " ", row_m.group(1).strip())
+        dur_part = row_m.group(2).strip()
+        times_int = int(row_m.group(3))
+
+        hours = parse_duration_to_hours(dur_part)
+        if hours is None or hours <= 0:
+            continue
+
+        raw_locks.append({
+            "name": name,
+            "hours": hours,
+            "minutes": hours * 60.0,
+            "count": times_int,
+        })
+
+    raw_locks.sort(key=lambda item: item["hours"], reverse=True)
+
+    deduped: list[dict] = []
+    seen_keys: set[tuple[str, float, int]] = set()
+    for item in raw_locks:
+        # 去除尾端可能附帶的 u0a.../1000 前綴做比對，避免同一筆喚醒出現兩次
+        norm_name = re.sub(r"^(?:u0a\d+|\d+)\s+", "", item["name"], flags=re.IGNORECASE).strip()
+        dedup_key = (norm_name, round(item["minutes"], 2), item["count"])
+        if dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+        deduped.append(item)
+        if len(deduped) >= top_n:
+            break
+
+    return deduped
+
+
 def parse_power_items(
     text: str,
     max_reasonable_mah: float | None = None,
@@ -155,9 +302,9 @@ def parse_power_items(
 
     block = text[start_match.end():]
     stop_match = re.search(
-        r"^(?:Battery History|Per-app |All kernel wakelocks|Wake lock |Kernel |CPU freqs|Total cpu time)\b",
+        r"^(?:Battery History|Per-app |All kernel wake ?locks|Wake lock |Kernel |CPU freqs|Total cpu time)\b",
         block,
-        re.MULTILINE,
+        re.MULTILINE | re.IGNORECASE,
     )
     if stop_match:
         block = block[:stop_match.start()]
@@ -256,21 +403,6 @@ def find_raw_line(text: str, label: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
-def parse_duration_to_hours(duration_str: str) -> float | None:
-    units = {
-        "d": 86400.0,
-        "h": 3600.0,
-        "m": 60.0,
-        "s": 1.0,
-        "ms": 0.001,
-    }
-    tokens = re.findall(r"([\d.]+)\s*(ms|d|h|m|s)(?=\s|$)", duration_str)
-    if not tokens:
-        return None
-    total_seconds = sum(float(amount) * units[unit] for amount, unit in tokens)
-    return total_seconds / 3600.0
-
-
 def find_duration_hours(text: str, label: str) -> float | None:
     raw = find_raw_line(text, label)
     if not raw:
@@ -321,11 +453,32 @@ def print_ranking(
         print(f"{idx:>2}. {label}：{item['mah']:.1f} mAh（佔放電 {share}）{extra_str}")
 
 
+def print_wakelock_ranking(
+    title: str,
+    locks: list[dict],
+    screen_off_hours: float | None,
+    uid_pkgs_map: dict[str, list[str]] | None = None,
+) -> None:
+    print(f"\n{title}")
+    if not locks:
+        print("  查無喚醒明細。")
+        return
+
+    for idx, item in enumerate(locks, start=1):
+        label = format_uid_label(item["name"], uid_pkgs_map) if uid_pkgs_map else item["name"]
+        mins = item["minutes"]
+        dur_str = f"{mins:.1f} 分鐘" if mins >= 1.0 else f"{mins * 60:.1f} 秒"
+        off_share = f"｜佔熄屏 {fmt_pct(item['hours'], screen_off_hours)}" if screen_off_hours else ""
+        cnt_str = f"（{item['count']} 次）" if item["count"] is not None else ""
+        print(f"{idx:>2}. {label}：{dur_str}{cnt_str}{off_share}")
+
+
 def main() -> None:
     top_n = 10
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         top_n = max(1, int(sys.argv[1]))
 
+    device_info = get_device_info()
     raw_text = get_stats()
     summary = extract_summary_section(raw_text)
 
@@ -351,7 +504,15 @@ def main() -> None:
     light_doze_mah = find_value(summary, "Device light doze discharge")
     deep_doze_mah = find_value(summary, "Device deep doze discharge")
 
-    print("=== 電池與統計週期資訊 ===")
+    print("=== 裝置與系統資訊 ===")
+    if device_info["model"]:
+        print(f"機型：{device_info['model']}")
+    if device_info["android"]:
+        print(f"系統版本：{device_info['android']}")
+    if device_info["build"]:
+        print(f"韌體版本：{device_info['build']}")
+
+    print("\n=== 電池與統計週期資訊 ===")
     if start_clock:
         print(f"統計起算時間：{start_clock}")
     if est_cap:
@@ -404,15 +565,28 @@ def main() -> None:
     if partial_wake_hours is not None:
         print(f"Partial wakelock 累計：{partial_wake_hours * 60:.1f} 分鐘")
 
+    top_kernel_locks = parse_kernel_wakelocks(raw_text, top_n=top_n)
+    top_partial_locks = parse_partial_wakelocks(raw_text, top_n=top_n)
+
     max_reasonable_mah = discharge * 1.5 if discharge else None
     all_items = parse_power_items(raw_text, max_reasonable_mah=max_reasonable_mah)
     top_all = all_items[:top_n]
     top_u0a = [item for item in all_items if item["is_user_app"]][:top_n]
 
-    # 只針對總覽前 N 名與 u0a 前 N 名涉及的 UID 做精準反查
-    target_rows = top_all + top_u0a
-    uid_pkgs_map = resolve_top_u0a_packages(target_rows)
+    target_rows = top_all + top_u0a + top_partial_locks
+    uid_pkgs_map = resolve_uids_packages(target_rows)
 
+    print_wakelock_ranking(
+        f"=== 核心喚醒（Kernel Wake Lock）Top {top_n} ===",
+        top_kernel_locks,
+        screen_off_hours,
+    )
+    print_wakelock_ranking(
+        f"=== 背景喚醒（Partial Wake Lock）Top {top_n} ===",
+        top_partial_locks,
+        screen_off_hours,
+        uid_pkgs_map,
+    )
     print_ranking(
         f"=== 最耗電項目 Top {top_n}（總覽估算）===",
         top_all,
@@ -429,4 +603,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-                    
