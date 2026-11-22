@@ -28,13 +28,214 @@ def extract_summary_section(text: str) -> str:
     if start == -1:
         return text
     sub = text[start:]
-    # 常見的下一個段落標記
     for marker in ("\nPer-app mobile", "\nEstimated power use", "\nBattery History"):
         idx = sub.find(marker)
         if idx != -1:
             sub = sub[:idx]
             break
     return sub
+
+
+def extract_uid_token(name: str) -> tuple[str | None, str | None]:
+    """
+    從項目名稱擷取 UID 資訊。
+    回傳 (raw_token, numeric_uid)，例如 'Uid u0a182' -> ('u0a182', '10182')。
+    """
+    m = re.search(r"\bUid\s+(u0a(\d+)|(\d+))\b", name, re.IGNORECASE)
+    if not m:
+        return None, None
+
+    raw_token = m.group(1).lower()
+    if m.group(2) is not None:
+        try:
+            num_uid = str(10000 + int(m.group(2)))
+        except ValueError:
+            num_uid = None
+        return raw_token, num_uid
+
+    return raw_token, m.group(3)
+
+
+def query_packages_by_uid(num_uid: str | None, raw_token: str | None) -> list[str]:
+    """針對單一 UID 精準反查對應的套件名稱。"""
+    candidates: list[str] = []
+    if num_uid:
+        candidates.append(num_uid)
+    if raw_token and raw_token not in candidates:
+        candidates.append(raw_token)
+
+    for uid_arg in candidates:
+        try:
+            res = subprocess.run(
+                ["adb", "shell", "cmd", "package", "list", "packages", "--uid", uid_arg],
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+            if res.returncode == 0 and res.stdout:
+                pkgs = []
+                for line in res.stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith("package:"):
+                        pkg = line.split(":", 1)[1].strip()
+                        # 有些 ROM 會在後面附帶 uid=...
+                        pkg = pkg.split()[0]
+                        if pkg and pkg not in pkgs:
+                            pkgs.append(pkg)
+                if pkgs:
+                    return pkgs
+        except Exception:
+            pass
+
+    if not num_uid:
+        return []
+
+    # Fallback：從 dumpsys package 掃描符合 userId / appId 的 Package
+    try:
+        res = subprocess.run(
+            ["adb", "shell", "dumpsys", "package"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if res.returncode != 0 or not res.stdout:
+            return []
+
+        pkgs: list[str] = []
+        current_pkg: str | None = None
+        target_pattern = re.compile(rf"\b(?:userId|appId)={re.escape(num_uid)}\b")
+
+        for line in res.stdout.splitlines():
+            pkg_m = re.match(r"^\s*Package \[([^\]]+)\]:", line)
+            if pkg_m:
+                current_pkg = pkg_m.group(1).strip()
+                continue
+            if current_pkg and target_pattern.search(line):
+                if current_pkg not in pkgs:
+                    pkgs.append(current_pkg)
+        return pkgs
+    except Exception:
+        return []
+
+
+def resolve_top_u0a_packages(rows: list[dict]) -> dict[str, list[str]]:
+    """只針對傳入的前幾名 u0a 項目進行精準反查。"""
+    resolved: dict[str, list[str]] = {}
+    for item in rows:
+        raw_token, num_uid = extract_uid_token(item["name"])
+        key = (raw_token or num_uid or "").lower()
+        if not key or key in resolved:
+            continue
+        resolved[key] = query_packages_by_uid(num_uid, raw_token)
+    return resolved
+
+
+def format_uid_label(name: str, uid_pkgs_map: dict[str, list[str]]) -> str:
+    """若名稱包含 UID 且已查到套件名稱，則附上套件名稱。"""
+    raw_token, num_uid = extract_uid_token(name)
+    key = (raw_token or num_uid or "").lower()
+    pkgs = uid_pkgs_map.get(key)
+    if not pkgs:
+        return name
+    preview = ", ".join(pkgs[:2]) + (" 等" if len(pkgs) > 2 else "")
+    return f"{name} [{preview}]"
+
+
+def parse_power_items(
+    text: str,
+    max_reasonable_mah: float | None = None,
+) -> list[dict]:
+    """
+    解析 'Estimated power use (mAh):' 區塊中的估算項目，
+    並排除 'Total cpu time per freq'、'CPU freqs' 等非耗電統計行。
+    """
+    start_match = re.search(r"^\s*Estimated power use\s*\(mAh\):\s*$", text, re.MULTILINE)
+    if not start_match:
+        return []
+
+    block = text[start_match.end():]
+    stop_match = re.search(
+        r"^(?:Battery History|Per-app |All kernel wakelocks|Wake lock |Kernel |CPU freqs|Total cpu time)\b",
+        block,
+        re.MULTILINE,
+    )
+    if stop_match:
+        block = block[:stop_match.start()]
+
+    excluded_exact = {
+        "capacity",
+        "computed drain",
+        "actual drain",
+        "unaccounted",
+        "over-counted",
+        "cpu freqs",
+        "total cpu time per freq",
+        "total screen-off cpu time per freq",
+    }
+    excluded_prefixes = (
+        "total cpu time",
+        "total screen-off cpu time",
+        "cpu freqs",
+        "screen brightnesses",
+        "device light",
+        "device full",
+        "idle mode",
+        "connectivity changes",
+        "total full wakelock",
+        "total partial wakelock",
+    )
+
+    items: list[dict] = []
+    number_pattern = r"-?(?:\d+\.?\d*|\.\d+)"
+
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+
+        m = re.match(
+            rf"^\s+([^:\n]+?):\s*({number_pattern})\s*(?:mAh)?(?:\s|,|\(|$)(.*)$",
+            line,
+            re.IGNORECASE,
+        )
+        if not m:
+            continue
+
+        name = re.sub(r"\s+", " ", m.group(1).strip())
+        name_lower = name.lower()
+
+        if name_lower in excluded_exact or any(name_lower.startswith(p) for p in excluded_prefixes):
+            continue
+
+        if "cpu freq" in name_lower or "time per freq" in name_lower:
+            continue
+
+        try:
+            mah = float(m.group(2))
+        except ValueError:
+            continue
+
+        if mah <= 0:
+            continue
+
+        if max_reasonable_mah is not None and mah > max_reasonable_mah:
+            continue
+
+        extra = m.group(3).strip()
+        wake_match = re.search(r"wake lock=([^,)]+)", extra, re.IGNORECASE)
+        cpu_match = re.search(r"cpu=([^,)]+)", extra, re.IGNORECASE)
+
+        is_user_app = bool(re.search(r"\bu0a\d+\b", name, re.IGNORECASE))
+
+        items.append({
+            "name": name,
+            "mah": mah,
+            "wake": wake_match.group(1).strip() if wake_match else None,
+            "cpu": cpu_match.group(1).strip() if cpu_match else None,
+            "is_user_app": is_user_app,
+        })
+
+    items.sort(key=lambda item: item["mah"], reverse=True)
+    return items
 
 
 def find_value(text: str, label: str) -> float | None:
@@ -56,7 +257,6 @@ def find_raw_line(text: str, label: str) -> str | None:
 
 
 def parse_duration_to_hours(duration_str: str) -> float | None:
-    """將 '9h 48m 42s 259ms' 或 '58m 49s 755ms' 等字串轉為小時。"""
     units = {
         "d": 86400.0,
         "h": 3600.0,
@@ -75,7 +275,6 @@ def find_duration_hours(text: str, label: str) -> float | None:
     raw = find_raw_line(text, label)
     if not raw:
         return None
-    # 優先取括號前的時間片段；若無括號則整段解析
     before_paren = raw.split("(", 1)[0].strip()
     hours = parse_duration_to_hours(before_paren)
     if hours is not None:
@@ -99,7 +298,34 @@ def fmt_rate(mah: float | None, hours: float | None, ref_cap: float | None = Non
     return f"{rate:.1f} mAh/h"
 
 
+def print_ranking(
+    title: str,
+    rows: list[dict],
+    total_discharge: float | None,
+    uid_pkgs_map: dict[str, list[str]],
+) -> None:
+    print(f"\n{title}")
+    if not rows:
+        print("  查無符合項目。")
+        return
+
+    for idx, item in enumerate(rows, start=1):
+        label = format_uid_label(item["name"], uid_pkgs_map)
+        share = fmt_pct(item["mah"], total_discharge)
+        details = []
+        if item["cpu"]:
+            details.append(f"cpu={item['cpu']}")
+        if item["wake"]:
+            details.append(f"wake={item['wake']}")
+        extra_str = f"（{', '.join(details)}）" if details else ""
+        print(f"{idx:>2}. {label}：{item['mah']:.1f} mAh（佔放電 {share}）{extra_str}")
+
+
 def main() -> None:
+    top_n = 10
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        top_n = max(1, int(sys.argv[1]))
+
     raw_text = get_stats()
     summary = extract_summary_section(raw_text)
 
@@ -108,7 +334,6 @@ def main() -> None:
     min_learned = find_value(summary, "Min learned battery capacity")
     max_learned = find_value(summary, "Max learned battery capacity")
 
-    # 基準容量優先用 Max learned（若無則退回 Estimated）
     effective_cap = max_learned if (max_learned and max_learned > 0) else est_cap
 
     battery_hours = find_duration_hours(summary, "Time on battery")
@@ -143,8 +368,8 @@ def main() -> None:
     if discharge is not None:
         print(
             f"累計放電：{discharge:.0f} mAh"
-            f"｜以估計容量計：{fmt_pct(discharge, est_cap)}"
-            f"｜以學習容量計：{fmt_pct(discharge, max_learned)}"
+            f"｜估計容量比：{fmt_pct(discharge, est_cap)}"
+            f"｜學習容量比：{fmt_pct(discharge, max_learned)}"
         )
         if screen_on_mah is not None and screen_off_mah is not None:
             diff = discharge - (screen_on_mah + screen_off_mah)
@@ -179,6 +404,29 @@ def main() -> None:
     if partial_wake_hours is not None:
         print(f"Partial wakelock 累計：{partial_wake_hours * 60:.1f} 分鐘")
 
+    max_reasonable_mah = discharge * 1.5 if discharge else None
+    all_items = parse_power_items(raw_text, max_reasonable_mah=max_reasonable_mah)
+    top_all = all_items[:top_n]
+    top_u0a = [item for item in all_items if item["is_user_app"]][:top_n]
+
+    # 只針對總覽前 N 名與 u0a 前 N 名涉及的 UID 做精準反查
+    target_rows = top_all + top_u0a
+    uid_pkgs_map = resolve_top_u0a_packages(target_rows)
+
+    print_ranking(
+        f"=== 最耗電項目 Top {top_n}（總覽估算）===",
+        top_all,
+        discharge,
+        uid_pkgs_map,
+    )
+    print_ranking(
+        f"=== 使用者 App（u0a）Top {top_n}（估算）===",
+        top_u0a,
+        discharge,
+        uid_pkgs_map,
+    )
+
 
 if __name__ == "__main__":
     main()
+                    
