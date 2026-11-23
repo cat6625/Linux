@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Termux Android Doze / BatteryStats 摘要工具 (v5.14.1)
+Termux Android Doze / BatteryStats 摘要工具 (v6.0)
 
 v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計的數字，不同 AI 會給出不同答案）
 1. 新增「AI 讀取規則」與 [記錄]／[估算]／[推測] 標籤，區分事件、模型估算與推論。
@@ -35,8 +35,13 @@ v5.9 重點（含 v5.6–v5.8）：讓摘要抗 AI 誤讀（手機自己估計�
     百分比未變的取整、幾乎全黑屏；Wi-Fi 0B 與 kernel active 並列的註記；快照電壓回升註記。
 16. v5.14：測試時段內偵測純黑屏突發並列出排除突發後的基線；末段無讀數變動時報低耗電上限；亮屏重疊的突發窗只列前 5 段；
     History 被截斷的說明不再以「相近／不相近」下判斷；百分比記帳新增「電量計換算 % 對 History 百分比點數差」。
-17. v5.14.1：末段無讀數變動的註記只在上限明顯低於前段時才印（步進過大時不誤導）；百分比差距不再出現「-0.0」。
-18. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
+17. v6.0：末段無讀數變動的註記只在上限明顯低於前段時才印（步進過大時不誤導）；百分比差距不再出現「-0.0」。
+18. v6.0：新增「紀錄卡」（--card-out）與長期紀錄 CSV（--log-csv，同一紀錄編號會覆蓋更新），以及 --compare 趨勢比較
+    （同機型、同基準來源的最舊 vs 最新，列出兩次之間有變動的版本／容量項目作為查找方向，不判斷原因）。
+    新增 --device-info／--versions／--run-id；測試條件顯示 Build、安全性修補、Play 服務／商店版本。
+    亮屏區段：說明 2 秒合併門檻與合併次數、標示 History 結束時仍未熄滅的亮屏；移除脆弱的字串 replace。
+    標籤新增 [計算]（記錄值的算術，算式同行）；占比類行改標 [計算] 並附算式；AI 讀取規則加入「質疑時請列出算式」。
+19. 保留 v5.5 的亮屏突發過濾、--reset 切片識別與 --mask 隱私遮罩。
 
 用法：
 python3 doze_summary-termux.py full.txt \
@@ -55,6 +60,7 @@ python3 doze_summary-termux.py full.txt --section window --window 1h-2h --top 60
 
 import argparse
 import collections
+import csv
 import datetime as dt
 import io
 import os
@@ -290,6 +296,39 @@ def parse_alarm_events(events):
 # BatteryStats 統計（★ v5.5：動態比對亮屏誤差，避免制式註解矛盾）
 # ============================================================
 
+SCREEN_MERGE_GAP_MS = 2000
+
+
+def compute_screen_intervals(events):
+    """由 History 的 +screen／-screen 事件配對亮屏區段。
+    回傳 (合併後區段, 被合併的空隙 ms 列表, History 結束時仍未熄滅的區段起點或 None)。"""
+    intervals = []
+    current_on = None
+    for timestamp, _level, rest in events:
+        if re.search(r"(^|\s)\+screen", rest) and current_on is None:
+            current_on = timestamp
+        elif re.search(r"(^|\s)-screen", rest) and current_on is not None:
+            if timestamp >= current_on:
+                intervals.append((current_on, timestamp))
+            current_on = None
+    open_start = current_on
+    if current_on is not None and events:
+        intervals.append((current_on, events[-1][0]))
+    merged = []
+    gaps = []
+    for start, end in sorted(intervals):
+        if not merged:
+            merged.append([start, end])
+        else:
+            prev_start, prev_end = merged[-1]
+            if start <= prev_end + SCREEN_MERGE_GAP_MS:
+                gaps.append(max(0, start - prev_end))
+                merged[-1][1] = max(prev_end, end)
+            else:
+                merged.append([start, end])
+    return merged, gaps, open_start
+
+
 def print_battery_stats(text, events):
     print("\n## 電池統計與 CPU 狀態")
 
@@ -301,9 +340,9 @@ def print_battery_stats(text, events):
 
     if match:
         realtime, realtime_pct, uptime, uptime_pct = match.groups()
-        print(f"- 電池使用時間：{realtime}")
-        print(f"- CPU 清醒時間：{uptime}（{uptime_pct}%）")
-        print(f"- CPU suspend 推算比例：{100 - float(uptime_pct):.1f}%")
+        print(f"- [記錄] 電池使用時間：{realtime}")
+        print(f"- [記錄] CPU 清醒時間：{uptime}（{uptime_pct}%）")
+        print(f"- [計算] CPU suspend 比例 = 100% − {uptime_pct}% = {100 - float(uptime_pct):.1f}%")
         if float(realtime_pct) < 99.5:
             print(f"- 注意：統計期間只有 {realtime_pct}% 屬於電池供電時間。")
     else:
@@ -337,7 +376,8 @@ def print_battery_stats(text, events):
     for name, pattern in fields:
         value = grab(text, pattern)
         tag = tags.get(name, "[電量計差值]" if "ischarge" in name else "")
-        print(f"- {tag} {name}：{value or '未知／未提供'}".replace("-  ", "- "))
+        label_text = f"{tag} {name}" if tag else name
+        print(f"- {label_text}：{value or '未知／未提供'}")
     print("- ℹ Device light/full idling 與 Idle mode light/full 是不同統計口徑，"
           "次數不同不代表資料錯誤，也不能直接當成狀態切換總次數。")
 
@@ -356,28 +396,7 @@ def print_battery_stats(text, events):
         except ValueError:
             pass
 
-    screen_intervals = []
-    current_on = None
-    for timestamp, _, rest in events:
-        if re.search(r"(^|\s)\+screen", rest) and current_on is None:
-            current_on = timestamp
-        elif re.search(r"(^|\s)-screen", rest) and current_on is not None:
-            if timestamp >= current_on:
-                screen_intervals.append((current_on, timestamp))
-            current_on = None
-    if current_on is not None and events:
-        screen_intervals.append((current_on, events[-1][0]))
-
-    merged_screens = []
-    for start, end in sorted(screen_intervals):
-        if not merged_screens:
-            merged_screens.append([start, end])
-        else:
-            prev_start, prev_end = merged_screens[-1]
-            if start <= prev_end + 2000:
-                merged_screens[-1][1] = max(prev_end, end)
-            else:
-                merged_screens.append([start, end])
+    merged_screens, merged_gaps, open_screen_start = compute_screen_intervals(events)
 
     total_screen_derived_ms = 0
     effective = []
@@ -389,11 +408,17 @@ def print_battery_stats(text, events):
             short_count += 1
         else:
             effective.append((duration_ms, start, end))
-    print(f"- ℹ 亮屏區段：有效（≥60 秒）{len(effective)} 段、短暫 {short_count} 段；最長 5 段：")
+    print(f"- ℹ [記錄·History 推算] 亮屏區段：有效（≥60 秒）{len(effective)} 段、短暫 {short_count} 段；最長 5 段：")
     for duration_ms, start, end in sorted(effective, reverse=True)[:5]:
         print(f"  - {fmt(start)}–{fmt(end)}（{duration_ms / 1000:.0f} 秒）")
     if len(effective) > 5:
         print("  （其餘區段：--section window --window 0-99h --grep screen --top 100）")
+    if merged_gaps:
+        print(f"  （相鄰亮屏間隔 ≤ {SCREEN_MERGE_GAP_MS / 1000:g} 秒者視為同一段，本次合併 {len(merged_gaps)} 處、"
+              f"合計空隙 {sum(merged_gaps) / 1000:.1f} 秒；單段時長含這些空隙）")
+    if open_screen_start is not None and events:
+        print(f"  （最後一段亮屏自 {fmt(open_screen_start)} 起，在 History 結束（{fmt(events[-1][0])}）時仍未熄滅，"
+              f"算到 History 結束）")
 
     # ★ v5.5：動態計算 History 推算亮屏與原生 Screen on 的差距
     native_screen_str = grab(text, r"^\s+Screen on:\s*(.*?)\s+\(")
@@ -409,7 +434,7 @@ def print_battery_stats(text, events):
     else:
         note = "無法取得原生 Screen on 時間，未比對"
 
-    print(f"- ℹ History 推算亮屏區段總時長：{fmt(total_screen_derived_ms)}（{note}）")
+    print(f"- ℹ [計算] History 推算亮屏區段總時長（各段相加）：{fmt(total_screen_derived_ms)}（{note}）")
 
     return merged_screens
 
@@ -1196,11 +1221,15 @@ def _valid_charge_limit(value):
 
 def print_reading_rules():
     print("\n## AI 讀取規則（請先讀）")
-    print("- [記錄]＝事件與時間，可引用；[電量計差值]＝電量計回報的 mAh 差值，有量化誤差，絕對值取決於電量計自身容量；"
+    print("- 標籤：[記錄]＝系統直接記載的事件與時間，可引用；[電量計差值]＝電量計回報的 mAh 差值，有量化誤差，"
+          "絕對值取決於電量計自身容量；[計算]＝由記錄值做算術，算式寫在同一行，可自行驗算；"
           "[估算]＝系統模型 mAh，僅供相對比較；[推測]＝本摘要推論，需其他證據。")
-    print("- mAh 都不是電流量測；跨裝置或容量矛盾時只比 %/h（含範圍）。Discharge 與 charge= 同源，吻合不算獨立驗證；Amount discharged（%）是另一套記帳，兩者並存時不互相驗證。")
+    print("- mAh 都不是電流量測；跨裝置或容量矛盾時只比 %/h（含範圍）。Discharge 與 charge= 同源，吻合不算獨立驗證；"
+          "Amount discharged（%）是另一套記帳，兩者並存時不互相驗證。")
     print("- 資料不足就回答「資料不足」並從文末追問清單點名；不猜原因，不給一般省電建議。"
           "單一指標（如 Wi-Fi kernel active）不能單獨判定異常。有「測試時段」區塊時，以它為準，不用整個統計窗的平均。")
+    print("- 要質疑某個數字時，請指出是哪一行、哪個算式或哪個輸入有問題，並列出你自己的算式與數值；"
+          "不要只說「可能不準」，也不要提出無法在手機上執行的做法。")
 
 
 def print_test_conditions(args, text):
@@ -1210,6 +1239,15 @@ def print_test_conditions(args, text):
     print(f"- 裝置：{args.device or '未提供'}")
     if args.collector:
         print(f"- 採集工具：{args.collector}")
+    info = read_kv_file(args.device_info)
+    if info:
+        print(f"- [記錄] 系統版本：Build {info.get('ro.build.display.id') or '未知'}"
+              f"（incremental {info.get('ro.build.version.incremental') or '未知'}）、"
+              f"安全性修補 {info.get('ro.build.version.security_patch') or '未知'}")
+    versions = read_kv_file(args.versions)
+    if versions:
+        names = {"com.google.android.gms": "Play 服務", "com.android.vending": "Play 商店", "com.google.android.gsf": "GSF"}
+        print("- [記錄] 套件版本：" + "、".join(f"{names.get(k, k)} {v}" for k, v in versions.items()))
     print(f"- 設計容量（使用者提供）：{args.design_capacity:.0f} mAh"
           if args.design_capacity else "- 設計容量（使用者提供）：未提供")
     limit_text = args.charge_limit or "未提供"
@@ -1692,16 +1730,16 @@ def print_headroom(text, res):
             low = max(0.0, off - half) / (total + half) * 100
             high = min(100.0, (off + half) / max(total - half, 1e-9) * 100)
             extra = f"（量化範圍 {low:.1f}–{high:.1f}%）"
-        print(f"- [推測] 黑屏放電約占總記錄放電 {share:.1f}%{extra}（全窗參考，不是測試時段結論）；"
+        print(f"- [計算] 黑屏放電占總記錄放電 = {off:.0f} ÷ {total:.0f} mAh = {share:.1f}%{extra}（全窗參考，不是測試時段結論）；"
               f"僅表示占比，不代表可實際消除的耗電量。")
         if on is not None:
-            print(f"- [推測] 亮屏放電約占總記錄放電 {on / total * 100:.1f}%（全窗參考）。")
+            print(f"- [計算] 亮屏放電占總記錄放電 = {on:.0f} ÷ {total:.0f} mAh = {on / total * 100:.1f}%（全窗參考）。")
     light = fields.get("Light doze discharge")
     deep = fields.get("Deep doze discharge")
     if off and light is not None and deep is not None:
         doze_share = (light + deep) / off * 100
         note = "" if doze_share <= 105 else "（超過 100%，doze 放電並非黑屏放電的子集）"
-        print(f"- [推測] Light + Deep doze 期間放電合計約為黑屏放電的 {doze_share:.0f}%{note}"
+        print(f"- [計算] Light + Deep doze 期間放電合計占黑屏放電 = ({light:.0f} + {deep:.0f}) ÷ {off:.0f} mAh = {doze_share:.0f}%{note}"
               f"（兩者分類口徑不同，是否為子集未確認）。")
 
     computed = grab(text, r"Computed drain:\s*([\d.]+)")
@@ -2279,6 +2317,343 @@ def run_section(args, stats_text, events, uidmap, pkg_uids):
 # 主程式
 # ============================================================
 
+CARD_COLUMNS = [
+    "run_id", "test_start", "test_end", "device", "build", "incremental", "android", "patch", "gms", "vending",
+    "test_type", "charge_limit", "design_cap", "capacity_used", "cap_eff", "window_kind", "window_h",
+    "screen_on_min", "drop_mah", "level_start", "level_end", "rate_low", "rate_high", "rate_note",
+    "idle_rate_low", "idle_rate_high", "idle_rate_src", "deep_idle_pct", "wifi_active_pct",
+    "bursts", "burst_mah", "flags", "tool", "collector",
+]
+
+
+def read_kv_file(path):
+    data = collections.OrderedDict()
+    if not path or not os.path.isfile(path):
+        return data
+    for line in read_text(path).splitlines():
+        match = re.match(r"\s*([A-Za-z0-9_.]+)=(.*)$", line)
+        if match:
+            data[match.group(1)] = match.group(2).strip()
+    return data
+
+
+def _num_text(value, digits=3):
+    return "" if value is None else f"{value:.{digits}f}"
+
+
+def build_card(args, text, events):
+    card = collections.OrderedDict((c, "") for c in CARD_COLUMNS)
+    info = read_kv_file(args.device_info)
+    versions = read_kv_file(args.versions)
+    hist_end = max((t for t, _l, _r in events), default=0)
+    battery_ms = _dur_of(text, r"Time on battery:\s*(.*?)\s+\(")
+    merged_screens, _gaps, _open = compute_screen_intervals(events)
+    caps = read_capacities(text, args.design_capacity)
+    step = counter_step(events)
+    ledger = ledger_capacity_match(text, caps)
+    rate_caps = caps
+    if ledger and ledger["matched"] and len(ledger["matched"]) < len(caps):
+        rate_caps = ledger["matched"]
+    values = [v for v in rate_caps.values() if v > 0]
+    cmin, cmax = (min(values), max(values)) if values else (None, None)
+    flags = []
+
+    lo, hi, problem = resolve_test_window(args, text, events)
+    if lo is not None:
+        kind = "測試時段"
+        lo_c, hi_c = max(lo, 0), min(hi, hist_end)
+        if lo < 0 or hi > hist_end:
+            flags.append("測試時段超出 History 範圍")
+    else:
+        kind = "整個統計窗"
+        lo_c, hi_c = 0, hist_end
+        flags.append("非測試時段（整窗平均）")
+        if problem:
+            flags.append("測試時段無法換算")
+    window_ms = max(hi_c - lo_c, 0)
+    hours = window_ms / 3600000.0
+
+    points = []
+    for t, _lv, rest in events:
+        match = RE_CHARGE.search(rest)
+        if match:
+            points.append((t, int(match.group(1))))
+    points_ok = len(points) >= 2 and points[0][1] <= 50000
+    drops = None
+    rises = 0
+    if points_ok:
+        base = [p for p in points if p[0] <= lo_c]
+        start_point = base[-1] if base else points[0]
+        window_points = [p for p in points if start_point[0] <= p[0] <= hi_c]
+        if len(window_points) >= 2:
+            drops = 0
+            for (_t1, c1), (_t2, c2) in zip(window_points, window_points[1:]):
+                delta = c1 - c2
+                if delta > 0:
+                    drops += delta
+                elif delta < 0:
+                    rises += -delta
+    if rises:
+        flags.append("含充電")
+
+    rate_low = rate_high = None
+    rate_note = ""
+    if drops is not None and drops > 0 and hours >= 10 / 60.0 and cmin:
+        err = step or 0
+        if step and step / drops > MAX_REL_ERR:
+            rate_high = (drops + err) / hours / cmin * 100.0
+            rate_note = "只有上限"
+            flags.append("量化誤差大")
+        else:
+            rate_low = max(0.0, drops - err) / hours / cmax * 100.0
+            rate_high = (drops + err) / hours / cmin * 100.0
+
+    on_ms = 0
+    for start, end in merged_screens:
+        overlap = min(end, hi_c) - max(start, lo_c)
+        if overlap > 0:
+            on_ms += overlap
+
+    idle_low = idle_high = None
+    idle_src = ""
+    if points_ok and cmin:
+        stretches = _black_stretches(points, merged_screens, lo_c, hi_c)
+        usable = [s for s in stretches if not step or step * 3 <= s[3]]
+        if usable:
+            duration, _ts, _te, drop = usable[0]
+            h = duration / 3600000.0
+            err = step or 0
+            idle_low = max(0, drop - err) / h / cmax * 100.0
+            idle_high = (drop + err) / h / cmin * 100.0
+            idle_src = "連續黑屏≥1h"
+    if idle_src == "" and rate_low is not None and on_ms < 300000:
+        idle_low, idle_high = rate_low, rate_high
+        idle_src = "近全黑屏整段"
+
+    burst_count = 0
+    burst_mah = 0.0
+    if points_ok:
+        merged_bursts, filtered_points = find_bursts(points)
+        for b_start, b_end in merged_bursts:
+            if b_start < lo_c or b_end > hi_c or _overlaps_screen_on(b_start, b_end, merged_screens):
+                continue
+            level_a = _level_at(filtered_points, b_start)
+            level_b = _level_at(filtered_points, b_end)
+            if level_a is None or level_b is None:
+                continue
+            burst_count += 1
+            burst_mah += level_a - level_b
+
+    deep_pct = None
+    idle_states = parse_idle(events)
+    if idle_states and window_ms > 0:
+        full_ms = 0
+        for index, (t, state) in enumerate(idle_states):
+            nxt = idle_states[index + 1][0] if index + 1 < len(idle_states) else hist_end
+            overlap = min(nxt, hi_c) - max(t, lo_c)
+            if overlap > 0 and state == "full":
+                full_ms += overlap
+        deep_pct = full_ms / window_ms * 100.0
+
+    levels = [(t, lv) for t, lv, _r in events if isinstance(lv, int) and lv >= 0]
+    level_start = level_end = None
+    if levels:
+        before = [x for x in levels if x[0] <= lo_c]
+        inside = [x for x in levels if x[0] <= hi_c]
+        if before and inside:
+            level_start, level_end = before[-1][1], inside[-1][1]
+
+    wifi = grab(text, r"Wifi kernel active time:\s*.*?\(([\d.]+)%\)")
+
+    rounded = sorted(set(round(v) for v in caps.values())) if caps else []
+    if rounded and rounded[-1] / rounded[0] > 1.15:
+        flags.append("容量欄位矛盾")
+    if ledger and not ledger["matched"]:
+        flags.append("兩套記帳對不上")
+    if battery_ms and hist_end < battery_ms * 0.95:
+        flags.append("History 被截斷")
+    if args.test_type == "screen-off" and on_ms > 300000:
+        flags.append("宣告黑屏但含亮屏")
+
+    version_name = lambda key: (versions.get(key) or "")
+    card.update({
+        "run_id": args.run_id or (grab(text, r"Start clock time:\s*(\S+)") or ""),
+        "test_start": args.test_start or "", "test_end": args.test_end or "",
+        "device": args.device or "", "build": info.get("ro.build.display.id", ""),
+        "incremental": info.get("ro.build.version.incremental", ""),
+        "android": info.get("ro.build.version.release", ""), "patch": info.get("ro.build.version.security_patch", ""),
+        "gms": version_name("com.google.android.gms"), "vending": version_name("com.android.vending"),
+        "test_type": args.test_type or "", "charge_limit": args.charge_limit or "",
+        "design_cap": f"{args.design_capacity:.0f}" if args.design_capacity else "",
+        "capacity_used": _cap_groups(rate_caps) if rate_caps else "",
+        "cap_eff": f"{sum(values) / len(values):.0f}" if values else "",
+        "window_kind": kind, "window_h": _num_text(hours, 2),
+        "screen_on_min": _num_text(on_ms / 60000.0, 1), "drop_mah": "" if drops is None else str(drops),
+        "level_start": "" if level_start is None else str(level_start),
+        "level_end": "" if level_end is None else str(level_end),
+        "rate_low": _num_text(rate_low), "rate_high": _num_text(rate_high), "rate_note": rate_note,
+        "idle_rate_low": _num_text(idle_low), "idle_rate_high": _num_text(idle_high), "idle_rate_src": idle_src,
+        "deep_idle_pct": _num_text(deep_pct, 1), "wifi_active_pct": wifi or "",
+        "bursts": str(burst_count), "burst_mah": f"{burst_mah:.0f}",
+        "flags": "；".join(flags), "tool": "doze_summary-termux.py v6.0", "collector": args.collector or "",
+    })
+    return card
+
+
+def card_text(card):
+    def rate_text(low, high):
+        if low and high:
+            return _rng(float(low), float(high))
+        if high:
+            return f"≤ {float(high):.2f}"
+        return "—"
+
+    lines = ["# 紀錄卡（doze_summary-termux.py v6.0）"]
+    lines.append(f"- 紀錄編號：{card['run_id'] or '未提供'}　{('採集工具：' + card['collector']) if card['collector'] else ''}".rstrip())
+    lines.append(f"- 裝置：{card['device'] or '未提供'}")
+    lines.append(f"- [記錄] 系統：Build {card['build'] or '未知'}、Android {card['android'] or '?'}、修補 {card['patch'] or '?'}；"
+                 f"Play 服務 {card['gms'] or '未知'}；Play 商店 {card['vending'] or '未知'}")
+    lines.append(f"- 條件：類型 {card['test_type'] or '未提供'}；設計容量 {card['design_cap'] or '未提供'} mAh；"
+                 f"充電上限 {card['charge_limit'] or '未提供'}；換算用容量 {card['capacity_used'] or '未知'}")
+    lines.append(f"- [記錄] 範圍：{card['window_kind']}"
+                 + (f" {card['test_start']} – {card['test_end']}" if card['window_kind'] == '測試時段' else "")
+                 + f"，時長 {card['window_h']} h，其中亮屏 {card['screen_on_min']} 分鐘")
+    lines.append(f"- [電量計差值] 範圍內下降 {card['drop_mah'] or '—'} mAh；[記錄] History 電量 "
+                 f"{card['level_start'] or '?'}% → {card['level_end'] or '?'}%")
+    lines.append(f"- [推測] 範圍內平均耗電 {rate_text(card['rate_low'], card['rate_high'])} %/h"
+                 + (f"（{card['rate_note']}）" if card['rate_note'] else "") + "（含亮屏時不是待機速率）")
+    lines.append(f"- [推測] 待機基準 {rate_text(card['idle_rate_low'], card['idle_rate_high'])} %/h"
+                 + (f"（來源：{card['idle_rate_src']}）" if card['idle_rate_src'] else "（沒有可用的黑屏區段）"))
+    lines.append(f"- [記錄] Deep idle 占範圍 {card['deep_idle_pct'] or '—'}%；Wi-Fi kernel active（全窗）{card['wifi_active_pct'] or '—'}%")
+    lines.append(f"- [電量計差值] 範圍內純黑屏突發 {card['bursts']} 段，合計約 {card['burst_mah']} mAh")
+    lines.append(f"- 旗標：{card['flags'] or '無'}")
+    lines.append("- 提醒：每小時耗電是由電量計與容量換算的估算值，只能和「同一支手機、同樣測試條件」的紀錄比較；"
+                 "不同機型、不同容量、含亮屏與否都不可直接比。")
+    return "\n".join(lines) + "\n"
+
+
+def upsert_log_csv(path, card):
+    rows = []
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    replaced = False
+    keep_if_blank = ("test_start", "test_end", "device", "build", "incremental", "android", "patch", "gms", "vending",
+                     "test_type", "charge_limit", "design_cap", "collector")
+    for index, row in enumerate(rows):
+        if row.get("run_id") and row.get("run_id") == card["run_id"]:
+            merged_row = dict(card)
+            for key in keep_if_blank:          # 重算時缺少描述欄位，不要覆蓋掉先前已記錄的內容
+                if not merged_row.get(key) and row.get(key):
+                    merged_row[key] = row[key]
+            rows[index] = merged_row
+            replaced = True
+    if not replaced:
+        rows.append(dict(card))
+    extra = []
+    for row in rows:
+        for key in row:
+            if key not in CARD_COLUMNS and key not in extra and key is not None:
+                extra.append(key)
+    with open(path, "w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CARD_COLUMNS + extra, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in CARD_COLUMNS + extra})
+    return replaced
+
+
+def _to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def run_compare(args):
+    path = args.compare
+    if not os.path.isfile(path):
+        print(f"找不到紀錄檔：{path}")
+        return 2
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    needle = (args.device_filter or "").strip().lower()
+    if needle:
+        rows = [r for r in rows if needle in f"{r.get('device', '')} {r.get('build', '')}".lower()]
+    rows.sort(key=lambda r: r.get("test_start") or r.get("run_id") or "")
+    print(f"# 趨勢比較（{os.path.basename(path)}" + (f"；篩選：{args.device_filter}" if needle else "") + f"；共 {len(rows)} 筆）")
+    if not rows:
+        print("- 沒有符合的紀錄。")
+        return 0
+
+    def rate_text(low, high):
+        low, high = _to_float(low), _to_float(high)
+        if low is not None and high is not None:
+            return _rng(low, high)
+        if high is not None:
+            return f"≤ {high:.2f}"
+        return "—"
+
+    print("\n## 紀錄清單（待機基準／範圍平均皆為 %/h 的估算範圍）")
+    for r in rows:
+        when = (r.get("test_start") or r.get("run_id") or "?")[:16]
+        print(f"- {when} | {r.get('device', '')} | {r.get('test_type') or '類型未填'} | {r.get('window_kind', '')} {r.get('window_h', '?')}h"
+              f" | 待機基準 {rate_text(r.get('idle_rate_low'), r.get('idle_rate_high'))}（{r.get('idle_rate_src') or '無'}）"
+              f" | 範圍平均 {rate_text(r.get('rate_low'), r.get('rate_high'))}"
+              f" | Deep idle {r.get('deep_idle_pct') or '—'}%"
+              f" | Build {r.get('build') or '?'} | Play 服務 {r.get('gms') or '?'}"
+              + (f" | ⚠ {r.get('flags')}" if r.get("flags") else ""))
+
+    print("\n## 最舊 vs 最新（同裝置、同基準來源才比；範圍重疊代表無法判定有差異）")
+    groups = collections.OrderedDict()
+    for r in rows:
+        if _to_float(r.get("idle_rate_high")) is None or not r.get("idle_rate_src"):
+            continue
+        groups.setdefault((r.get("device", ""), r.get("idle_rate_src")), []).append(r)
+    printed = False
+    watch = [("build", "Build"), ("incremental", "incremental"), ("android", "Android"), ("patch", "安全性修補"),
+             ("gms", "Play 服務"), ("vending", "Play 商店")]
+    for (device, src_name), group in groups.items():
+        if len(group) < 2:
+            continue
+        printed = True
+        old, new = group[0], group[-1]
+        print(f"- {device}（基準來源：{src_name}）：{(old.get('test_start') or old.get('run_id') or '?')[:16]} → "
+              f"{(new.get('test_start') or new.get('run_id') or '?')[:16]}")
+        l1, h1 = _to_float(old.get("idle_rate_low")), _to_float(old.get("idle_rate_high"))
+        l2, h2 = _to_float(new.get("idle_rate_low")), _to_float(new.get("idle_rate_high"))
+        if None in (l1, h1, l2, h2):
+            print(f"  待機基準：{rate_text(old.get('idle_rate_low'), old.get('idle_rate_high'))} → "
+                  f"{rate_text(new.get('idle_rate_low'), new.get('idle_rate_high'))}（其中一筆只有上限，無法判定差異）")
+        elif l2 <= h1 and l1 <= h2:
+            print(f"  待機基準：{_rng(l1, h1)} → {_rng(l2, h2)} %/h：兩次範圍重疊，無法判定有差異。")
+        else:
+            ratio_low, ratio_high = l2 / h1, h2 / l1
+            direction = "較高" if l2 > h1 else "較低"
+            ratio_low, ratio_high = (min(ratio_low, ratio_high), max(ratio_low, ratio_high))
+            print(f"  待機基準：{_rng(l1, h1)} → {_rng(l2, h2)} %/h：兩次範圍不重疊，後者{direction}，"
+                  f"約為前者的 {_rng(ratio_low, ratio_high)} 倍（算式：新範圍 ÷ 舊範圍）。")
+        changes = []
+        for key, name in watch:
+            a, b = (old.get(key) or "").strip(), (new.get(key) or "").strip()
+            if a and b and a != b:
+                changes.append(f"{name}：{a} → {b}")
+        cap_a, cap_b = _to_float(old.get("cap_eff")), _to_float(new.get("cap_eff"))
+        if cap_a and cap_b and abs(cap_b - cap_a) / cap_a >= 0.03:
+            changes.append(f"換算用容量：{cap_a:.0f} → {cap_b:.0f} mAh（{(cap_b / cap_a - 1) * 100:+.0f}%）")
+        print("  兩次之間有變動的項目（只是查找方向，不代表就是原因）：" + ("；".join(changes) if changes else "紀錄中沒有版本或容量變動"))
+        if old.get("test_type") and new.get("test_type") and old.get("test_type") != new.get("test_type"):
+            print(f"  ⚠ 測試類型不同（{old.get('test_type')} vs {new.get('test_type')}），比較時要留意。")
+        for flag_row, name in ((old, "舊"), (new, "新")):
+            if flag_row.get("flags"):
+                print(f"  ⚠ {name}紀錄旗標：{flag_row.get('flags')}")
+    if not printed:
+        print("- 同一裝置、同一基準來源的紀錄還不到 2 筆，暫時無法比較。")
+    print("\n- 提醒：%/h 是電量計 mAh 與容量換算的估算；一次紀錄的差異可能只是當天使用、網路或背景活動不同，"
+          "有兩三次同條件紀錄才看得出趨勢。")
+    return 0
+
+
 def _safe(func, default, *func_args):
     """單一區塊出錯時只標示該區塊失敗，其餘區塊照常輸出。"""
     try:
@@ -2290,9 +2665,9 @@ def _safe(func, default, *func_args):
 
 def build_parser():
     env = os.environ.get
-    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v5.14.1)")
-    parser.add_argument("--version", action="version", version="doze_summary-termux.py v5.14.1")
-    parser.add_argument("full", help="dumpsys batterystats 完整輸出")
+    parser = argparse.ArgumentParser(description="Android Doze / BatteryStats 摘要工具 (v6.0)")
+    parser.add_argument("--version", action="version", version="doze_summary-termux.py v6.0")
+    parser.add_argument("full", nargs="?", help="dumpsys batterystats 完整輸出（使用 --compare 時可省略）")
     parser.add_argument("--pkg", default="")
     parser.add_argument("--checkin")
     parser.add_argument("--deviceidle")
@@ -2308,6 +2683,14 @@ def build_parser():
                         help="充電上限，例如 80%%、85%%、100%%、unknown")
     parser.add_argument("--note", default=env("DOZE_NOTE") or None, help="其他測試條件備註")
     parser.add_argument("--collector", default=env("DOZE_COLLECTOR") or None, help="採集工具與版本，例如 \"doze.sh v1.3.0\"")
+    parser.add_argument("--device-info", default=None, help="doze.sh 擷取的 device_info.txt（Build、修補等）")
+    parser.add_argument("--versions", default=None, help="doze.sh 擷取的 versions.txt（Play 服務等版本）")
+    parser.add_argument("--run-id", default=None, help="紀錄編號（doze.sh 傳入資料夾時間戳）")
+    parser.add_argument("--card-out", default=None, help="把紀錄卡寫到此檔")
+    parser.add_argument("--card-only", action="store_true", help="只輸出紀錄卡，不輸出完整摘要")
+    parser.add_argument("--log-csv", default=None, help="把紀錄卡的關鍵數字寫入／更新到這個 CSV（同紀錄編號覆蓋）")
+    parser.add_argument("--compare", default=None, help="讀取紀錄 CSV，輸出趨勢比較（不需要 full.txt）")
+    parser.add_argument("--device-filter", default=None, help="--compare 時只比對裝置或 Build 含此文字的紀錄")
     parser.add_argument("--test-start", default=env("DOZE_TEST_START") or None, help="測試開始的本機時間，例如 \"2026-11-20 18:34:22\"")
     parser.add_argument("--test-end", default=env("DOZE_TEST_END") or None, help="測試結束的本機時間")
     parser.add_argument("--section", help="追問模式：capacity／wakeups／kernel／wakelocks／alarms／jobs／uid／window／grep")
@@ -2319,6 +2702,12 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
+
+    if args.compare:
+        return run_compare(args)
+    if not args.full:
+        print("錯誤：需要 full.txt 路徑，或使用 --compare 紀錄檔.csv", file=sys.stderr)
+        return 2
 
     if not os.path.isfile(args.full):
         print(f"錯誤：找不到檔案 {args.full}", file=sys.stderr)
@@ -2342,10 +2731,18 @@ def main():
         uidmap = load_uidmap(args.checkin)
         pkg_uids = resolve_pkg_uids(args.pkg, uidmap)
 
+        card = None
+        if args.card_only or args.card_out or args.log_csv:
+            if not args.section:
+                card = _safe(build_card, None, args, stats_text, events)
+
         if args.section:
             run_section(args, stats_text, events, uidmap, pkg_uids)
+        elif args.card_only:
+            if card:
+                print(card_text(card), end="")
         else:
-            print("# Android Doze / BatteryStats 摘要 (v5.14.1)")
+            print("# Android Doze / BatteryStats 摘要 (v6.0)")
             print(f"- 原始檔案：{args.full}")
             print(f"- History 總行數：{h_stats['total']}")
             print(f"  - 成功解析事件行：{h_stats['parsed_events']}")
@@ -2392,6 +2789,16 @@ def main():
 
             _safe(print_followups, None, args)
             print("\n摘要分析完成。")
+
+        if card:
+            card_out = card_text(card)
+            if args.mask:
+                card_out = mask_sensitive_info(card_out)
+            if args.card_out:
+                with open(args.card_out, "w", encoding="utf-8") as handle:
+                    handle.write(card_out)
+            if args.log_csv:
+                _safe(upsert_log_csv, None, args.log_csv, card)
     finally:
         sys.stdout = old_stdout
 

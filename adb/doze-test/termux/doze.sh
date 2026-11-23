@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # -------------------------------------------------------------
-# Termux Doze 測試工具  v1.3.2（2026-11-21）
+# Termux Doze 測試工具  v1.4.0（2026-11-22）
 #
 # 用法：
 #   doze
@@ -12,6 +12,7 @@
 #   doze --resume 20261120_183359   接續既有測試資料夾，只補擷取測試後資料與摘要
 #   doze 40887 --resume 20261120_183359   同上，並指定新的無線偵錯 Port
 #   doze --summary-only 20261120_183359   不連 ADB，用既有資料夾重新產生摘要
+#   doze --trend [機型或 Build 關鍵字]   讀取紀錄表，比較同一支手機最舊與最新的待機基準
 #   doze --version
 #
 # 測試條件（可選；未提供時摘要標示「未提供」，不會被猜測）：
@@ -30,6 +31,14 @@
 # BatteryStats 預設不重置。
 #
 # 修改內容：
+#   v1.4.0（2026-11-22）
+#     - 每次測試產生「紀錄卡」card-<時間>.txt（短，約 15 行），並把關鍵數字寫入
+#       doze-test/doze-log.csv（同一紀錄編號重算時更新，不重複）；長期保存、一年後比較用。
+#     - 新增 versions.txt：記錄 Play 服務、Play 商店、GSF 與目標包的版本；device_info.txt
+#       新增 incremental 與安全性修補。紀錄卡與摘要的「測試條件」會顯示這些版本。
+#     - 新增 --trend：讀取 doze-log.csv，比較同一支手機最舊與最新的待機基準，
+#       並列出兩次之間有變動的 Build／Play 服務／容量項目（只是查找方向，不判斷原因）。
+#     - 需要摘要程式 v6.0 以上。
 #   v1.3.2（2026-11-21）
 #     - --charge-limit 輸入檢查：接受 50–100 的數字（可加 %，自動補成 80%）或 unknown，
 #       其他值（例如誤打成 8 或 10）直接報錯，避免把錯誤條件寫進摘要。
@@ -97,10 +106,12 @@ SCAN_RANGE="30000-65535"
 
 RESET_BATTERYSTATS=0
 
-DOZE_SH_VERSION="1.3.2"
+DOZE_SH_VERSION="1.4.0"
 
 RESUME_DIR=""
 SUMMARY_ONLY=0
+TREND_MODE=0
+TREND_FILTER=""
 TEST_START=""
 TEST_END=""
 
@@ -128,6 +139,7 @@ SCRIPT_DIR="$(cd -P -- "$(dirname -- "$SOURCE_PATH")" && pwd)"
 PYTHON_SCRIPT="${SCRIPT_DIR}/doze_summary-termux.py"
 
 DOWNLOAD_DIR="${HOME}/storage/downloads"
+LOG_CSV="${DOWNLOAD_DIR}/doze-test/doze-log.csv"
 
 PORT=""
 ADB_ADDR=""
@@ -151,7 +163,8 @@ adb shell dumpsys batterystats --enable full-wake-history
 adb shell dumpsys batterystats > full.txt
 adb shell dumpsys batterystats --checkin > checkin.txt
 adb shell dumpsys deviceidle > deviceidle.txt
-for k in ro.product.manufacturer ro.product.model ro.build.version.release; do adb shell getprop $k; done
+for k in ro.product.manufacturer ro.product.model ro.build.version.release ro.build.display.id ro.build.version.security_patch; do adb shell getprop $k; done
+adb shell dumpsys package com.google.android.gms | grep -m2 -E "versionName|versionCode"
 # 4) 摘要（測試條件請依實際填寫；不確定的項目可省略）
 python3 doze_summary-termux.py full.txt --checkin checkin.txt --deviceidle deviceidle.txt   --battery battery_start.txt battery_end.txt   --test-type screen-off --design-capacity 5000 --charge-limit 80% --device "機型" --mask
 MANUAL
@@ -189,6 +202,12 @@ while (( $# > 0 )); do
             ;;
         --summary-only)
             need_value "$@"; RESUME_DIR="$2"; SUMMARY_ONLY=1; shift
+            ;;
+        --trend)
+            TREND_MODE=1
+            if [[ $# -ge 2 && "$2" != -* ]]; then
+                TREND_FILTER="$2"; shift
+            fi
             ;;
         --manual)
             print_manual
@@ -258,6 +277,9 @@ REQUIRED_CMDS=(adb python3 awk grep sed date timeout)
 if (( SUMMARY_ONLY )); then
     REQUIRED_CMDS=(python3 awk grep sed date)
 fi
+if (( TREND_MODE )); then
+    REQUIRED_CMDS=(python3)
+fi
 
 for cmd in "${REQUIRED_CMDS[@]}"; do
     command -v "$cmd" >/dev/null 2>&1 || {
@@ -288,6 +310,19 @@ python3 -c 'import sys; assert sys.version_info >= (3, 8)' || {
 # ------------------------------------------------
 # 輸出目錄及日誌
 # ------------------------------------------------
+
+if (( TREND_MODE )); then
+    if [[ ! -f "$LOG_CSV" ]]; then
+        echo "找不到紀錄表：${LOG_CSV}（完成至少一次測試後才會產生）" >&2
+        exit 1
+    fi
+    if [[ -n "$TREND_FILTER" ]]; then
+        python3 "$PYTHON_SCRIPT" --compare "$LOG_CSV" --device-filter "$TREND_FILTER"
+    else
+        python3 "$PYTHON_SCRIPT" --compare "$LOG_CSV"
+    fi
+    exit 0
+fi
 
 if [[ -n "$RESUME_DIR" ]]; then
     if [[ -d "$RESUME_DIR" ]]; then
@@ -358,7 +393,7 @@ log "輸出目錄：${OUT_DIR}"
 
 PY_VERSION_TEXT="$(python3 "$PYTHON_SCRIPT" --version 2>&1 | head -n 1 || true)"
 if [[ ! "$PY_VERSION_TEXT" =~ v5\.[0-9]+ ]]; then
-    PY_VERSION_TEXT="未知（建議更新摘要程式至 v5.12 以上）"
+    PY_VERSION_TEXT="未知（建議更新摘要程式至 v6.0 以上）"
 fi
 log "doze.sh v${DOZE_SH_VERSION}；摘要程式：${PY_VERSION_TEXT}"
 
@@ -431,6 +466,9 @@ run_summary() {
     fi
 
     SUMMARY_ERR="${OUT_DIR}/summary-error.txt"
+    CARD_FILE="${OUT_DIR}/card-${TIMESTAMP}.txt"
+    CARD_ARGS=(--device-info "$OUT_DIR/device_info.txt" --versions "$OUT_DIR/versions.txt"
+               --run-id "$TIMESTAMP" --card-out "$CARD_FILE" --log-csv "$LOG_CSV")
 
     python3 "$PYTHON_SCRIPT" "$OUT_DIR/full.txt" \
         --checkin "$OUT_DIR/checkin.txt" \
@@ -438,6 +476,7 @@ run_summary() {
         "${COND_ARGS[@]}" \
         --deviceidle "$OUT_DIR/deviceidle.txt" \
         "${EXTRA_ARGS[@]}" \
+        "${CARD_ARGS[@]}" \
         --mask \
         > "$SUMMARY" 2> "$SUMMARY_ERR" || {
             log "⚠ Python 摘要產生失敗，錯誤訊息見 ${SUMMARY_ERR}"
@@ -447,6 +486,11 @@ run_summary() {
 
     if [[ -s "$SUMMARY" ]]; then
         cat "$SUMMARY"
+    fi
+    if [[ -s "$CARD_FILE" ]]; then
+        echo
+        cat "$CARD_FILE"
+        log "紀錄卡：${CARD_FILE}；紀錄表：${LOG_CSV}"
     fi
 }
 
@@ -717,7 +761,28 @@ DEV_RELEASE="$(get_prop ro.build.version.release)"
     echo "ro.build.version.release=${DEV_RELEASE}"
     echo "ro.build.version.sdk=$(get_prop ro.build.version.sdk)"
     echo "ro.build.display.id=$(get_prop ro.build.display.id)"
+    echo "ro.build.version.incremental=$(get_prop ro.build.version.incremental)"
+    echo "ro.build.version.security_patch=$(get_prop ro.build.version.security_patch)"
 } > "$OUT_DIR/device_info.txt" 2>&1 || true
+
+# 套件版本（Play 服務、Play 商店、GSF 與目標包）；接續模式不覆蓋測試前已擷取的版本
+pkg_version() {
+    local pkg="$1" dump vn vc
+    dump="$(adb -s "$ADB_ADDR" shell dumpsys package "$pkg" 2>/dev/null | tr -d '\r' || true)"
+    vn="$(printf '%s\n' "$dump" | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -n 1)"
+    vc="$(printf '%s\n' "$dump" | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -n 1)"
+    printf '%s=%s (%s)\n' "$pkg" "${vn:-未知}" "${vc:-未知}"
+}
+
+if [[ -z "$RESUME_DIR" || ! -s "$OUT_DIR/versions.txt" ]]; then
+    {
+        stamp
+        for version_pkg in com.google.android.gms com.android.vending com.google.android.gsf "${PKGS[@]:-}"; do
+            [[ -n "$version_pkg" ]] || continue
+            pkg_version "$version_pkg"
+        done
+    } > "$OUT_DIR/versions.txt" 2>&1 || true
+fi
 
 if [[ -z "$DEVICE_NAME" && -n "${DEV_MODEL}${DEV_MANUFACTURER}" ]]; then
     DEVICE_NAME="${DEV_MANUFACTURER} ${DEV_MODEL} (Android ${DEV_RELEASE:-?})"
