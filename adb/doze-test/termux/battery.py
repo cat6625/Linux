@@ -76,6 +76,27 @@ def extract_summary_section(text: str) -> str:
     return sub
 
 
+def mask_email_match(match: re.Match) -> str:
+    local = match.group(1)
+    domain = match.group(2)
+    if not local:
+        masked_local = "***"
+    elif len(local) == 1:
+        masked_local = f"{local}***"
+    else:
+        masked_local = f"{local[0]}***{local[-1]}"
+    return f"{masked_local}@{domain}"
+
+
+def mask_emails(text: str) -> str:
+    """將字串中的電子信箱去識別化，例如 alice@gmail.com -> a***e@gmail.com。"""
+    return re.sub(
+        r"\b([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        mask_email_match,
+        text,
+    )
+
+
 def extract_uid_token(name: str) -> tuple[str | None, str | None]:
     """
     從項目名稱擷取 UID 資訊。
@@ -275,7 +296,6 @@ def parse_partial_wakelocks(text: str, top_n: int = 10) -> list[dict]:
     deduped: list[dict] = []
     seen_keys: set[tuple[str, float, int]] = set()
     for item in raw_locks:
-        # 去除尾端可能附帶的 u0a.../1000 前綴做比對，避免同一筆喚醒出現兩次
         norm_name = re.sub(r"^(?:u0a\d+|\d+)\s+", "", item["name"], flags=re.IGNORECASE).strip()
         dedup_key = (norm_name, round(item["minutes"], 2), item["count"])
         if dedup_key in seen_keys:
@@ -442,7 +462,7 @@ def print_ranking(
         return
 
     for idx, item in enumerate(rows, start=1):
-        label = format_uid_label(item["name"], uid_pkgs_map)
+        label = mask_emails(format_uid_label(item["name"], uid_pkgs_map))
         share = fmt_pct(item["mah"], total_discharge)
         details = []
         if item["cpu"]:
@@ -465,7 +485,8 @@ def print_wakelock_ranking(
         return
 
     for idx, item in enumerate(locks, start=1):
-        label = format_uid_label(item["name"], uid_pkgs_map) if uid_pkgs_map else item["name"]
+        raw_label = format_uid_label(item["name"], uid_pkgs_map) if uid_pkgs_map else item["name"]
+        label = mask_emails(raw_label)
         mins = item["minutes"]
         dur_str = f"{mins:.1f} 分鐘" if mins >= 1.0 else f"{mins * 60:.1f} 秒"
         off_share = f"｜佔熄屏 {fmt_pct(item['hours'], screen_off_hours)}" if screen_off_hours else ""
