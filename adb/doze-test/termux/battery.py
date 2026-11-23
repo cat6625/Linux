@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.5
+版本：v1.1.6
 日期：2026-11-23
+
+v1.1.6：背景喚醒排行新增「單次最長」（取自 max=，30 秒以上才顯示）
 
 v1.1.5 修正（對照 battery_extract 原始內容後）：
 - UID 明細改列出佔比最大的前 4 項元件（screen / cpu / audio / video / mobile_radio / sensors / gnss ...），
@@ -40,7 +42,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.5"
+__version__ = "v1.1.6"
 __date__ = "2026-11-23"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -368,11 +370,13 @@ def _row_to_lock(row_m: re.Match) -> dict | None:
     hours = parse_duration_to_hours(row_m.group(2).strip())
     if hours is None or hours <= 0:
         return None
+    mx = re.search(r"\bmax=(\d+)", row_m.string)
     return {
         "name": name,
         "hours": hours,
         "minutes": hours * 60.0,
         "count": int(row_m.group(3)),
+        "max_ms": int(mx.group(1)) if mx else None,
         "merged_count": 1,
     }
 
@@ -428,6 +432,8 @@ def parse_partial_wakelocks(
                 acc["hours"] += item["hours"]
                 acc["minutes"] += item["minutes"]
                 acc["count"] += item["count"]
+                if item.get("max_ms") is not None:
+                    acc["max_ms"] = max(acc.get("max_ms") or 0, item["max_ms"])
                 acc["merged_count"] += 1
         deduped = list(merged_map.values())
 
@@ -696,7 +702,12 @@ def print_wakelock_ranking(
         mins = item["minutes"]
         dur_str = f"{mins:.1f} 分鐘" if mins >= 1.0 else f"{mins * 60:.1f} 秒"
         share = f"｜佔使用時長 {fmt_pct(item['hours'], total_hours)}" if total_hours else ""
-        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次）{share}")
+        mx_ms = item.get("max_ms")
+        mx_str = ""
+        if mx_ms is not None and mx_ms >= 30000:
+            sec = mx_ms / 1000.0
+            mx_str = f"，單次最長 {sec / 60:.1f} 分鐘" if sec >= 60 else f"，單次最長 {sec:.0f} 秒"
+        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次{mx_str}）{share}")
 
 
 def parse_args() -> argparse.Namespace:
