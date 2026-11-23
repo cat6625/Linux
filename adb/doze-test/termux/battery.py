@@ -2,8 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.4
+版本：v1.1.5
 日期：2026-11-23
+
+v1.1.5 修正（對照 battery_extract 原始內容後）：
+- UID 明細改列出佔比最大的前 4 項元件（screen / cpu / audio / video / mobile_radio / sensors / gnss ...），
+  不再只看 screen / cpu / wake，避免 u0a366 這類 audio+video 約 200 mAh 被漏掉
+- 功耗模型只解釋實際放電的 80% 以下（或高估 120% 以上）時加註警示
+- 新增 --strict-mask：信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）
 
 v1.1.4 修正（依 v1.1.3 重跑結果）：
 - 總覽排行拆成「UID / 系統項目」與「元件耗電」兩份，避免 [全域] cpu/screen 與各 UID 重疊混排
@@ -34,7 +40,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.4"
+__version__ = "v1.1.5"
 __date__ = "2026-11-23"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -188,7 +194,12 @@ def extract_summary_section(text: str) -> str:
     return sub[:idx] if idx != -1 else sub
 
 
+STRICT_MASK = False
+
+
 def mask_email_match(match: re.Match) -> str:
+    if STRICT_MASK:
+        return "[EMAIL]"
     local = match.group(1)
     domain = match.group(2)
     if not local:
@@ -506,6 +517,13 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
         if raw_mah <= 0:
             continue
 
+        parts: dict[str, float] = {}
+        for k, v in re.findall(r"(?<![:\w])([a-z_]+)=(-?\d+(?:\.\d+)?)", extra):
+            if k in ("proportional", "reattributed"):
+                continue
+            k = {"wake": "wakelock", "sensor": "sensors", "gps": "gnss", "radio": "mobile_radio"}.get(k, k)
+            parts.setdefault(k, float(v))
+
         smeared = _num(r"Including smearing:\s*(-?[\d.]+)", extra)
         mah = smeared if (smeared is not None and smeared > 0) else raw_mah
 
@@ -517,6 +535,7 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
             "cpu_num": _num(r"\bcpu=(-?[\d.]+)", extra),
             "wake_num": _num(r"\bwake(?:\s?lock)?=(-?[\d.]+)", extra),
             "screen_num": _num(r"\bscreen=(-?[\d.]+)", extra),
+            "parts": parts,
             "is_user_app": bool(USER_APP_RE.search(name)),
             "is_global": name.startswith("[全域]"),
             "merged_count": 1,
@@ -536,6 +555,10 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
                 for k in ("cpu_num", "wake_num", "screen_num"):
                     if item[k] is not None:
                         acc[k] = (acc[k] or 0.0) + item[k]
+                merged_parts = dict(acc.get("parts", {}))
+                for pk, pv in item.get("parts", {}).items():
+                    merged_parts[pk] = merged_parts.get(pk, 0.0) + pv
+                acc["parts"] = merged_parts
         items = list(merged_map.values())
 
     items.sort(key=lambda item: item["mah"], reverse=True)
@@ -638,12 +661,11 @@ def print_ranking(
             label = f"{label} [合併 {item['merged_count']} 筆]"
         share = fmt_pct(item["mah"], total_discharge)
         details = []
-        if item.get("screen_num") is not None:
-            details.append(f"screen={_format_num(item['screen_num'])}")
-        if item.get("cpu_num") is not None:
-            details.append(f"cpu={_format_num(item['cpu_num'])}")
-        if item.get("wake_num") is not None:
-            details.append(f"wake={_format_num(item['wake_num'])}")
+        parts = item.get("parts") or {}
+        floor = max(0.05, item["mah"] * 0.01)
+        for k, v in sorted(parts.items(), key=lambda kv: kv[1], reverse=True):
+            if v >= floor and len(details) < 4:
+                details.append(f"{k}={_format_num(v)}")
         if item.get("smeared"):
             details.append(f"分攤前 {item['raw']:.1f}")
         extra_str = f"（{', '.join(details)}）" if details else ""
@@ -685,12 +707,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-m", "--merge", action="store_true", help="合併估算排行榜中的同名項目")
     parser.add_argument("--merge-wl", action="store_true", help="合併背景喚醒（Partial Wake Lock）中的同名項目")
     parser.add_argument("--hide-wm", action="store_true", help="背景喚醒排行隱藏 WindowManager 項目")
+    parser.add_argument("--strict-mask", action="store_true", help="信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）")
     parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__} ({__date__})")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    global STRICT_MASK
+    STRICT_MASK = args.strict_mask
     top_n = max(1, args.top_n_pos if args.top_n_pos is not None else args.top)
 
     offline = bool(args.file)
@@ -768,6 +793,13 @@ def main() -> None:
             computed, act_lo, act_hi = model
             act_s = f"{act_lo:.0f}" if act_lo == act_hi else f"{act_lo:.0f}–{act_hi:.0f}"
             print(f"功耗模型估算：{computed:.0f} mAh｜系統實際：{act_s} mAh")
+            act_mid = (act_lo + act_hi) / 2
+            if computed > 0 and act_mid > 0:
+                ratio = computed / act_mid
+                if ratio < 0.8:
+                    print(f"※ 功耗模型只解釋實際放電的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
+                elif ratio > 1.2:
+                    print(f"※ 功耗模型約為實際放電的 {ratio * 100:.0f}%，估算偏高，只適合看相對排名。")
         if discharge == 0:
             print("※ 累計放電為 0：此檔沒有放電計數，mAh/h 與佔比皆不具意義，只能看時間分布與相對排名。")
         if screen_on_mah is not None and screen_off_mah is not None:
