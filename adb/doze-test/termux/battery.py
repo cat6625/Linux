@@ -2,8 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.3
+版本：v1.1.4
 日期：2026-11-23
+
+v1.1.4 修正（依 v1.1.3 重跑結果）：
+- 總覽排行拆成「UID / 系統項目」與「元件耗電」兩份，避免 [全域] cpu/screen 與各 UID 重疊混排
+- 新增「功耗模型估算 vs 系統實際」一行；Unaccounted / Over-counted 標示為模型差額
+- 舊格式分攤後數值加註「不可與 Screen 等元件相加」
+- 學習容量略高於估計容量（>100.5%）即不顯示健康度
+- 信箱遮蔽不再誤改 @SyncManager@com.xxx 這類同步標籤
 
 v1.1.3 修正（依 4 份實機輸出）：
 - 耗電排行不再誤抓 per-UID 區段（Cpu times per freq / Starts / WiFi AP wakeups / Wakeup reason / User activity）
@@ -27,7 +34,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.3"
+__version__ = "v1.1.4"
 __date__ = "2026-11-23"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -196,7 +203,7 @@ def mask_email_match(match: re.Match) -> str:
 def mask_emails(text: str) -> str:
     """將電子信箱去識別化，例如 alice@gmail.com -> a***e@gmail.com。"""
     return re.sub(
-        r"\b([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        r"(?<![@\w.%+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
         mask_email_match,
         text,
     )
@@ -569,6 +576,24 @@ def find_screen_off_uptime_hours(summary: str) -> float | None:
     return parse_duration_to_hours(m.group(1).strip())
 
 
+def find_power_model(text: str) -> tuple[float, float, float] | None:
+    """從 Capacity 列取 (computed drain, actual 下限, actual 上限)。"""
+    m = re.search(
+        r"Computed drain:\s*([\d.]+),\s*actual drain:\s*([\d.]+)(?:\s*-\s*([\d.]+))?",
+        text,
+    )
+    if not m:
+        return None
+    lo = float(m.group(2))
+    hi = float(m.group(3)) if m.group(3) else lo
+    return float(m.group(1)), lo, hi
+
+
+def is_component(item: dict) -> bool:
+    """非 UID 列（Screen / Idle / Cell standby / Unaccounted / [全域] ...）視為元件。"""
+    return item.get("is_global", False) or not re.match(r"^(?:UID|Uid)\s", item["name"])
+
+
 def fmt_pct(part: float | None, whole: float | None) -> str:
     if part is None or whole is None or whole <= 0:
         return "N/A"
@@ -625,6 +650,8 @@ def print_ranking(
         flag = ""
         if total_discharge and total_discharge > 0 and item["mah"] > total_discharge:
             flag = " ⚠ 超過累計放電，請確認原始統計"
+        if item["name"].lower() in ("unaccounted", "over-counted"):
+            flag += "（功耗模型與實際放電的差額，不是某個 App）"
         print(f"{idx:>2}. {label}：{item['mah']:.1f} mAh（佔放電 {share}）{extra_str}{flag}")
 
 
@@ -718,10 +745,10 @@ def main() -> None:
         ratio_s = ""
         if max_learned and est_cap:
             ratio = max_learned / est_cap
-            if ratio > 1.05:
+            if ratio > 1.005:
                 ratio_s = (
                     f"（學習/估計 = {ratio * 100:.1f}%，高於估計容量，"
-                    "學習值可能是預設值，不代表電池健康度）"
+                    "學習值可能是預設值或僅供參考，不代表電池健康度）"
                 )
             else:
                 ratio_s = f"（健康度約 {ratio * 100:.1f}%）"
@@ -736,6 +763,11 @@ def main() -> None:
             f"｜估計容量比：{fmt_pct(discharge, est_cap)}"
             f"｜學習容量比：{fmt_pct(discharge, max_learned)}"
         )
+        model = find_power_model(summary)
+        if model and (model[0] > 0 or model[2] > 0):
+            computed, act_lo, act_hi = model
+            act_s = f"{act_lo:.0f}" if act_lo == act_hi else f"{act_lo:.0f}–{act_hi:.0f}"
+            print(f"功耗模型估算：{computed:.0f} mAh｜系統實際：{act_s} mAh")
         if discharge == 0:
             print("※ 累計放電為 0：此檔沒有放電計數，mAh/h 與佔比皆不具意義，只能看時間分布與相對排名。")
         if screen_on_mah is not None and screen_off_mah is not None:
@@ -787,10 +819,12 @@ def main() -> None:
     )
 
     all_items = parse_power_items(summary, merge_same_name=args.merge)
-    top_all = all_items[:top_n]
+    top_uid = [item for item in all_items if not is_component(item)][:top_n]
+    top_comp = [item for item in all_items if is_component(item)][:top_n]
     top_u0a = [item for item in all_items if item["is_user_app"]][:top_n]
+    any_smeared = any(item["smeared"] for item in all_items)
 
-    uid_pkgs_map = resolve_uids_packages(top_all + top_u0a + top_partial_locks, offline=offline)
+    uid_pkgs_map = resolve_uids_packages(top_uid + top_u0a + top_partial_locks, offline=offline)
 
     print_wakelock_ranking(
         f"=== 核心喚醒（Kernel Wake Lock）Top {top_n} ===",
@@ -804,11 +838,21 @@ def main() -> None:
         uid_pkgs_map,
     )
     print_ranking(
-        f"=== 最耗電項目 Top {top_n}（總覽估算）===",
-        top_all,
+        f"=== 最耗電 UID / 系統項目 Top {top_n}（估算）===",
+        top_uid,
         discharge,
         uid_pkgs_map,
     )
+    print_ranking(
+        f"=== 元件耗電 Top {top_n}（估算）===",
+        top_comp,
+        discharge,
+        uid_pkgs_map,
+    )
+    if any(item["is_global"] for item in top_comp):
+        print("※ [全域] 各列是各 App 與系統的分攤合計，與上方 UID 排名重疊，且估算加總可能超過實際放電，請只看相對大小。")
+    if any_smeared:
+        print("※ 舊版輸出的 App 數值已含 Screen 等分攤，不可與 Screen / Cell standby 等元件相加。")
     print_ranking(
         f"=== 使用者 App（u0a）Top {top_n}（估算）===",
         top_u0a,
