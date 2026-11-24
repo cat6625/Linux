@@ -35,6 +35,10 @@ adb shell 'dumpsys batterystats | tr -d "\r" | awk '\''/^Statistics since last c
 ```bash
 adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 ```
+**用 grep 只抓關鍵欄位**
+```bash
+ grep -E "^  (Estimated battery|Last learned|Min learned|Max learned|Time on battery|Discharge:|Screen off discharge|Screen on discharge|Screen doze discharge|Device |Start clock|Screen on:)" "檔名_raw.txt"
+```
 ---
 # Batterystats 分析腳本 (`battery.py` & `battery_extract.py`) 用法指南
 
