@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
+版本：v1.2.0 (新增精準信箱遮蔽與 --strict-mask，支援無參數直接透過 adb 讀取)
 版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
 """
 
@@ -13,13 +14,38 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.0"
+__version__ = "v1.2.0"
+
+STRICT_MASK = False
 
 HIST_RE = re.compile(
     r"^\s*-(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms\s+(START-P|START|STOP-P|STOP):\s+#(\S+)\s+(\S+)(?:\s+(.*))?$"
 )
 TIMER_RE = re.compile(r"Timer\{<(\d+)>([\w.]+)\}")
 SESSION_RE = re.compile(r"^\s*(\d+)\s*->\s*(\d+)\s*\((\d+)\),\s*(\d+)\s*bg jobs")
+
+
+def mask_email_match(match: re.Match) -> str:
+    if STRICT_MASK:
+        return "[EMAIL]"
+    local = match.group(1)
+    domain = match.group(2)
+    if not local:
+        masked_local = "***"
+    elif len(local) == 1:
+        masked_local = f"{local}***"
+    else:
+        masked_local = f"{local[0]}***{local[-1]}"
+    return f"{masked_local}@{domain}"
+
+
+def mask_emails(text: str) -> str:
+    """將電子信箱去識別化，例如 alice@gmail.com -> a***e@gmail.com，且不誤傷 @SyncManager@com.xxx。"""
+    return re.sub(
+        r"(?<![@\w.%+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        mask_email_match,
+        text,
+    )
 
 
 def offset_ms(h: str | None, m: str | None, s: str | None, ms: str) -> int:
@@ -58,13 +84,19 @@ def parse_history(lines: list[str]) -> list[dict]:
                 s_off, s_svc = open_starts.pop(key)
                 runs.append({
                     "key": key,
-                    "service": s_svc,
+                    "service": mask_emails(s_svc),
                     "start_ago_ms": s_off,
                     "duration_ms": max(0, s_off - off),
-                    "reason": reason or "(無)",
+                    "reason": mask_emails(reason) if reason else "(無)",
                 })
     for key, (s_off, svc) in open_starts.items():
-        runs.append({"key": key, "service": svc, "start_ago_ms": s_off, "duration_ms": None, "reason": "（尚未看到 STOP：可能仍在執行）"})
+        runs.append({
+            "key": key,
+            "service": mask_emails(svc),
+            "start_ago_ms": s_off,
+            "duration_ms": None,
+            "reason": "（尚未看到 STOP：可能仍在執行）",
+        })
     return runs
 
 
@@ -89,13 +121,17 @@ def parse_sessions(lines: list[str]) -> list[dict]:
 
 
 def main() -> None:
+    global STRICT_MASK
     ap = argparse.ArgumentParser(description="分析 dumpsys jobscheduler 的 job 執行時間與配額 session")
     ap.add_argument("file", nargs="?", default=None, help="dumpsys jobscheduler 的輸出檔；省略則透過 adb 直接讀取")
     ap.add_argument("--pkg", default=None, help="只列名稱含此字串的 job / 套件（不分大小寫）")
     ap.add_argument("--min", type=float, default=0.0, help="只列執行時間 >= N 秒的項目（預設全部）")
     ap.add_argument("--top", type=int, default=20, help="每一節最多列幾筆（預設 20）")
+    ap.add_argument("--strict-mask", action="store_true", help="信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）")
     ap.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     args = ap.parse_args()
+
+    STRICT_MASK = args.strict_mask
 
     if args.file:
         p = Path(args.file)
