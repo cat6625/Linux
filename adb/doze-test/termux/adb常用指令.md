@@ -36,13 +36,74 @@ adb shell 'dumpsys batterystats | tr -d "\r" | awk '\''/^Statistics since last c
 adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
 ```
 ---
-**Termux簡易耗電查詢**
-> 使用 python3 battery.py
-> 
-> chmod 600 ~/doze/battery.py
-```bash 
-python3 ~/doze/battery.py
+# Batterystats 分析腳本 (`battery.py` & `battery_extract.py`) 用法指南
+
+## 1. `battery.py`（耗電與喚醒排行榜分析）
+直接透過 ADB 讀取手機當下狀態，或解析已存檔的 `batterystats.txt`。
+
+### 常用指令範例
+```bash
+# 預設模式：透過 ADB 讀取，顯示前 10 名耗電與喚醒項目
+python battery.py
+
+# 顯示前 20 名，並合併同名耗電與背景喚醒鎖項目（推薦排查用）
+python battery.py -n 20 -m --merge-wl
+
+# 隱藏 WindowManager 項目，並嚴格遮蔽所有信箱資訊（適合分享 log）
+python battery.py --hide-wm --strict-mask
+
+# 改從本機已匯出的 batterystats 文字檔讀取分析
+python battery.py -f batterystats_20261124.txt -n 15 -m
 ```
+
+### 轉向輸出到含「目前日期時間」的檔案
+```bash
+# 輸出到 battery_report_YYYYMMDD_HHMMSS.txt
+python battery.py -n 20 -m --merge-wl > "battery_report_\$(date +%Y%m%d_%H%M%S).txt"
+
+# 同時在終端機畫面顯示，並寫入時間戳記檔案 (使用 tee)
+python battery.py -n 20 -m --merge-wl | tee "battery_report_\$(date +%Y%m%d_%H%M%S).txt"
+```
+
+---
+
+## 2. `battery_extract.py`（擷取精華與隱私遮蔽）
+用於精簡龐大的 `batterystats` 輸出並自動遮蔽個人識別資訊（PII），內建 `-o` 參數可直接指定輸出檔名。
+
+### 常用指令範例
+```bash
+# 透過 ADB 讀取並直接印在畫面上（預設遮蔽隱私、保留前 25 項耗電 / 35 筆喚醒鎖）
+python battery_extract.py
+
+# 讀取本機 batterystats 檔案，且不遮蔽隱私資訊（僅供自己本地排查）
+python battery_extract.py batterystats.txt --raw
+
+# 自訂保留筆數（例如：前 30 項耗電、前 50 筆 Partial & Kernel WakeLock）
+python battery_extract.py --top-power 30 --top-wl 50 --top-kernel 50
+```
+
+### 輸出到含「目前日期時間」的檔案
+```bash
+# 使用內建的 -o 參數直接輸出到 extract_YYYYMMDD_HHMMSS.txt
+python battery_extract.py -o "extract_\$(date +%Y%m%d_%H%M%S).txt"
+
+# 讀取本機檔並加上時間戳記匯出（保留完整前 50 筆喚醒鎖）
+python battery_extract.py raw_dump.txt --top-wl 50 -o "extract_\$(date +%Y%m%d_%H%M%S).txt"
+```
+
+---
+
+## 3. 一鍵打包完整測試流程（Ubuntu Bash）
+將 `timestamp` 存成變數，確保同一次測試產出的「原始 dump」、「精華檔」與「分析報告」檔名時間完全一致：
+
+```bash
+TS=\$(date +%Y%m%d_%H%M%S)
+adb shell dumpsys batterystats > "raw_batterystats_\${TS}.txt"
+python battery_extract.py "raw_batterystats_\({TS}.txt" -o "extract_\){TS}.txt"
+python battery.py -f "raw_batterystats_\({TS}.txt" -n 20 -m --merge-wl > "report_\){TS}.txt"
+echo "已完成匯出，時間戳記：\${TS}"
+```
+
 
 ---
 
