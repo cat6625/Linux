@@ -96,15 +96,56 @@ python battery_extract.py raw_dump.txt --top-wl 50 -o "extract_\$(date +%Y%m%d_%
 ## 3. 一鍵打包完整測試流程（Ubuntu Bash）
 將 `timestamp` 存成變數，確保同一次測試產出的「原始 dump」、「精華檔」與「分析報告」檔名時間完全一致：
 
+**1. 基本版（僅時間戳記）**
 ```bash
-TS=\$(date +%Y%m%d_%H%M%S)
-adb shell dumpsys batterystats > "raw_batterystats_\${TS}.txt"
-python battery_extract.py "raw_batterystats_\({TS}.txt" -o "extract_\){TS}.txt"
-python battery.py -f "raw_batterystats_\({TS}.txt" -n 20 -m --merge-wl > "report_\){TS}.txt"
-echo "已完成匯出，時間戳記：\${TS}"
+TS=$(date +%Y%m%d_%H%M%S)
+adb shell dumpsys batterystats > "raw_batterystats_${TS}.txt"
+python battery_extract.py "raw_batterystats_${TS}.txt" -o "extract_${TS}.txt"
+python battery.py -f "raw_batterystats_${TS}.txt" -n 20 -m --merge-wl > "report_${TS}.txt"
+echo "已完成匯出，時間戳記：${TS}"
+```
+**2. 進階版（自動帶入「手機型號 + 時間戳記」）**
+```bash
+MODEL=$(adb shell getprop ro.product.model | tr -d '\r' | tr ' /' '_')
+TS=$(date +%Y%m%d_%H%M%S)
+PREFIX="${MODEL}_${TS}"
+
+adb shell dumpsys batterystats > "${PREFIX}_raw.txt"
+python battery_extract.py "${PREFIX}_raw.txt" -o "${PREFIX}_extract.txt"
+python battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt"
+
+echo "匯出完成！產生檔案前綴：${PREFIX}"
+ls -lh "${PREFIX}"*
 ```
 
+**3. 存成 dump_battery.sh 腳本（一勞永逸）**
+```bash
+cat << 'EOF' > dump_battery.sh
+#!/bin/bash
 
+if ! adb get-state 1>/dev/null 2>&1; then
+  echo "錯誤：未偵測到 ADB 裝置，請確認 USB 連線或偵錯權限。"
+  exit 1
+fi
+
+MODEL=$(adb shell getprop ro.product.model | tr -d '\r' | tr ' /' '_')
+TS=$(date +%Y%m%d_%H%M%S)
+PREFIX="${MODEL}_${TS}"
+
+echo "正在從 [${MODEL}] 擷取 batterystats..."
+adb shell dumpsys batterystats > "${PREFIX}_raw.txt"
+
+echo "正在產生精華檔與分析報告..."
+python battery_extract.py "${PREFIX}_raw.txt" -o "${PREFIX}_extract.txt"
+python battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt"
+
+echo "全部完成！輸出檔案："
+ls -lh "${PREFIX}"*
+EOF
+
+chmod +x dump_battery.sh
+
+```
 ---
 
 # Android Doze & User 10 (壺中界) 背景喚醒排查指令集
