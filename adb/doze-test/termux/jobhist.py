@@ -2,29 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
-版本：v1.0.0
-日期：2026-11-24
-
-用法：
-    adb shell dumpsys jobscheduler > js.txt
-    python3 jobhist.py js.txt                    # 全部，依執行時間排序
-    python3 jobhist.py js.txt --pkg vending      # 只看名稱含 vending 的
-    python3 jobhist.py js.txt --min 10 --top 30  # 只列 >=10 秒、最多 30 筆
-
-輸出兩份：
-  1. Job history：每個 START 與對應 STOP 的時間差、停止原因（canceled / jobFinished / preempt / timeout ...）
-  2. Quota 的 Saved sessions：每個套件的 session 長度（毫秒，≥ --min 秒才列）。
-     長度恰為 600000 ms 左右的 session，等於 JobScheduler 的 10 分鐘執行逾時。
+版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.0.0"
+__version__ = "v1.1.0"
 
 HIST_RE = re.compile(
     r"^\s*-(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms\s+(START-P|START|STOP-P|STOP):\s+#(\S+)\s+(\S+)(?:\s+(.*))?$"
@@ -57,7 +46,6 @@ def parse_history(lines: list[str]) -> list[dict]:
             continue
         m = HIST_RE.match(l)
         if not m:
-            # 離開 Job history 區段（遇到非歷史行的非空行就結束）
             if not l.startswith(" "):
                 break
             continue
@@ -102,17 +90,25 @@ def parse_sessions(lines: list[str]) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="分析 dumpsys jobscheduler 的 job 執行時間與配額 session")
-    ap.add_argument("file", help="dumpsys jobscheduler 的輸出檔")
+    ap.add_argument("file", nargs="?", default=None, help="dumpsys jobscheduler 的輸出檔；省略則透過 adb 直接讀取")
     ap.add_argument("--pkg", default=None, help="只列名稱含此字串的 job / 套件（不分大小寫）")
     ap.add_argument("--min", type=float, default=0.0, help="只列執行時間 >= N 秒的項目（預設全部）")
     ap.add_argument("--top", type=int, default=20, help="每一節最多列幾筆（預設 20）")
     ap.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     args = ap.parse_args()
 
-    p = Path(args.file)
-    if not p.is_file():
-        sys.exit(f"找不到檔案：{args.file}")
-    lines = p.read_text(encoding="utf-8", errors="replace").replace("\r", "").splitlines()
+    if args.file:
+        p = Path(args.file)
+        if not p.exists():
+            sys.exit(f"找不到檔案：{args.file}")
+        raw_text = p.read_text(encoding="utf-8", errors="replace")
+    else:
+        res = subprocess.run(["adb", "shell", "dumpsys", "jobscheduler"], capture_output=True, text=True, errors="replace")
+        if res.returncode != 0 or not res.stdout.strip():
+            sys.exit(f"ADB 讀取失敗：{res.stderr.strip() or '無輸出（多裝置時請指定 ANDROID_SERIAL）'}")
+        raw_text = res.stdout
+
+    lines = raw_text.replace("\r", "").splitlines()
     needle = args.pkg.lower() if args.pkg else None
     min_ms = int(args.min * 1000)
 
