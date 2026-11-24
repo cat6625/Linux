@@ -40,6 +40,12 @@ adb shell 'pm list packages -U | grep -E "10182|10194|10181|101178"'
  grep -E "^  (Estimated battery|Last learned|Min learned|Max learned|Time on battery|Discharge:|Screen off discharge|Screen on discharge|Screen doze discharge|Device |Start clock|Screen on:)" "檔名_raw.txt"
 ```
 ---
+# jobhist 分析腳本
+**jobhist.py : --min 10 會自動過濾掉 10 秒以下的短任務，只印出真正卡住或跑很久的長任務與 10 分鐘逾時紀錄**
+```bash
+for s in $(adb devices | awk '$2=="device"{print $1}'); do m=$(adb -s "$s" shell getprop ro.product.model | tr -d '\r'); echo "=========================================="; echo "📱 裝置：[$m] ($s)"; ANDROID_SERIAL="$s" python3 jobhist.py --min 10 --top 10; done
+```
+---
 # Batterystats 分析腳本 (`battery.py` & `battery_extract.py`) 用法指南
 
 ## 1. `battery.py`（耗電與喚醒排行榜分析）
