@@ -175,21 +175,20 @@ for SERIAL in $DEVICES; do
 
   echo "=========================================="
   echo "正在處理裝置: [$MODEL] ($SERIAL)"
-  
-  adb -s "$SERIAL" shell dumpsys batterystats > "${PREFIX}_raw.txt"
-  python battery_extract.py "${PREFIX}_raw.txt" -o "${PREFIX}_extract.txt"
-  python battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt"
+  mkdir -p reports
+  adb -s "$SERIAL" shell dumpsys batterystats > "reports/${PREFIX}_raw.txt"
+  python battery_extract.py "reports/${PREFIX}_raw.txt" -o "reports/${PREFIX}_extract.txt"
+  python battery.py -f "reports/${PREFIX}_raw.txt" -n 20 -m --merge-wl > "reports/${PREFIX}_report.txt"
 
-  echo "完成輸出前綴: ${PREFIX}"
+  echo "完成輸出前綴: reports/${PREFIX}"
 done
 
 echo "=========================================="
 echo "所有裝置匯出完畢！本次產出檔案："
-ls -lh *"_${TS}_"*
+ls -lh reports/*"_${TS}_"*
 EOF
 
 chmod +x dump_all_devices.sh
-
 ```
 ---
 
