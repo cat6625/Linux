@@ -2,8 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.7
+版本：v1.1.8
 日期：2026-11-24
+
+v1.1.8（對照四機 v1.1.7 輸出後）：
+- 新增 Wi‑Fi 統計區段（Wifi kernel active / Rx / Tx / 流量 / 封包 / 訊號 / 連線狀態）
+- 喚醒鎖若仍在持有（"running for"），標示「⚠ 目前仍在持有」
+- 功耗模型說明改寫：Android 13+ 的 Discharge 與模型估算相同，不再誤判為「模型只解釋 74%」；
+  改列「估計 / 學習 / 設定檔」三種容量對照
+- actual drain 為 0 時顯示「無資料」，不再印「0 mAh」
+- 亮屏或熄屏樣本不足、放電以 1% 級距換算時加註可信度說明
+- 小於 1 mAh 的項目改用較多小數顯示（不再顯示 0.0）
 
 v1.1.7：Android 15（如 SM-M146B）UID 明細位於下一行，原本讀不到 → 補上延續行解析
 
@@ -44,7 +53,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.7"
+__version__ = "v1.1.8"
 __date__ = "2026-11-24"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -373,12 +382,14 @@ def _row_to_lock(row_m: re.Match) -> dict | None:
     if hours is None or hours <= 0:
         return None
     mx = re.search(r"\bmax=(\d+)", row_m.string)
+    rn = re.search(r"\(running for (\d+)ms\)", row_m.string)
     return {
         "name": name,
         "hours": hours,
         "minutes": hours * 60.0,
         "count": int(row_m.group(3)),
         "max_ms": int(mx.group(1)) if mx else None,
+        "running_ms": int(rn.group(1)) if rn else None,
         "merged_count": 1,
     }
 
@@ -436,6 +447,8 @@ def parse_partial_wakelocks(
                 acc["count"] += item["count"]
                 if item.get("max_ms") is not None:
                     acc["max_ms"] = max(acc.get("max_ms") or 0, item["max_ms"])
+                if item.get("running_ms") is not None:
+                    acc["running_ms"] = max(acc.get("running_ms") or 0, item["running_ms"])
                 acc["merged_count"] += 1
         deduped = list(merged_map.values())
 
@@ -639,6 +652,30 @@ def is_component(item: dict) -> bool:
     return item.get("is_global", False) or not re.match(r"^(?:UID|Uid)\s", item["name"])
 
 
+def fmt_mah(v: float) -> str:
+    """小於 1 mAh 時多顯示小數，避免出現 0.0。"""
+    if v >= 1.0:
+        return f"{v:.1f}"
+    if v >= 0.01:
+        return f"{v:.2f}"
+    return "<0.01"
+
+
+def find_profile_capacity(text: str) -> tuple[float, float | None, float | None] | None:
+    """Capacity 列：'Capacity: 6000, Rated: 5830, Typical: 6000, ...'（電源設定檔容量）。"""
+    m = re.search(
+        r"Capacity:\s*([\d.]+)(?:,\s*Rated:\s*([\d.]+))?(?:,\s*Typical:\s*([\d.]+))?",
+        text,
+    )
+    if not m:
+        return None
+    return (
+        float(m.group(1)),
+        float(m.group(2)) if m.group(2) else None,
+        float(m.group(3)) if m.group(3) else None,
+    )
+
+
 def fmt_pct(part: float | None, whole: float | None) -> str:
     if part is None or whole is None or whole <= 0:
         return "N/A"
@@ -666,6 +703,107 @@ def fmt_rate(
 
 # ------------------------------------------------------------- 輸出 ----
 
+def _size_to_bytes(num: str, unit: str) -> float:
+    mult = {"B": 1.0, "KB": 1024.0, "MB": 1024.0**2, "GB": 1024.0**3}
+    return float(num) * mult.get(unit.upper(), 1.0)
+
+
+def _fmt_bytes(b: float) -> str:
+    for unit, div in (("GB", 1024.0**3), ("MB", 1024.0**2), ("KB", 1024.0)):
+        if b >= div:
+            return f"{b / div:.2f} {unit}"
+    return f"{b:.0f} B"
+
+
+def parse_wifi_stats(text: str) -> dict | None:
+    """解析 'Wifi Statistics:' 區塊（時間、流量、封包、狀態、RSSI）。"""
+    lines = text.splitlines()
+    idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Wifi Statistics:\s*$", l, re.IGNORECASE)), None)
+    if idx is None:
+        return None
+    base = indent_of(lines[idx])
+    block: list[str] = []
+    for l in lines[idx + 1:]:
+        if not l.strip():
+            continue
+        if indent_of(l) <= base:
+            break
+        block.append(l.strip())
+
+    dur = rf"({DUR_PATTERN})\s*\(([\d.]+)%\)"
+    d: dict = {"states": [], "supplicant": [], "rssi": []}
+    section = None
+    for l in block:
+        m = re.match(rf"(?i)wifi kernel active time:\s*{dur}", l)
+        if m:
+            d["active_h"] = parse_duration_to_hours(m.group(1)); d["active_pct"] = float(m.group(2)); continue
+        m = re.match(rf"(?i)wifi (scan|sleep|idle|rx|tx) time:\s*{dur}", l)
+        if m:
+            k = m.group(1).lower()
+            d[f"{k}_h"] = parse_duration_to_hours(m.group(2)); d[f"{k}_pct"] = float(m.group(3)); continue
+        m = re.match(r"(?i)wifi (?:battery|power) drain:\s*([\d.]+)\s*mAh", l)
+        if m:
+            d["drain_mah"] = float(m.group(1)); continue
+        m = re.match(r"(?i)wifi data (received|sent):\s*([\d.]+)\s*(B|KB|MB|GB)", l)
+        if m:
+            d["data_" + m.group(1).lower()] = _size_to_bytes(m.group(2), m.group(3)); continue
+        m = re.match(r"(?i)wifi packets (received|sent):\s*(\d+)", l)
+        if m:
+            d["pkts_" + m.group(1).lower()] = int(m.group(2)); continue
+        if re.match(r"(?i)wifi states:", l):
+            section = "states"; continue
+        if re.match(r"(?i)wifi supplicant states:", l):
+            section = "supplicant"; continue
+        if re.match(r"(?i)wifi rx signal strength", l):
+            section = "rssi"; continue
+        if section in ("states", "supplicant"):
+            m = re.match(rf"([\w-]+)\s+{dur}", l)
+            if m:
+                d[section].append((m.group(1), parse_duration_to_hours(m.group(2)), float(m.group(3))))
+        elif section == "rssi":
+            m = re.match(rf"(\w+)\s*\([^)]*\):\s*{dur}", l)
+            if m:
+                d["rssi"].append((m.group(1), parse_duration_to_hours(m.group(2)), float(m.group(3))))
+    return d if len(d) > 3 else None
+
+
+def print_wifi_stats(w: dict, battery_hours: float | None, discharge: float | None) -> None:
+    print("\n=== Wi‑Fi 統計 ===")
+    if "active_h" in w:
+        print(f"Wi‑Fi 核心活躍（kernel active）：{w['active_h']:.2f} h（{w['active_pct']:.1f}%）")
+    ctl = []
+    for k, label in (("sleep", "睡眠"), ("idle", "閒置"), ("rx", "接收"), ("tx", "傳送"), ("scan", "掃描")):
+        if f"{k}_h" in w:
+            h = w[f"{k}_h"]
+            t = f"{h * 60:.1f} 分" if h >= 1 / 60 else f"{h * 3600:.1f} 秒"
+            ctl.append(f"{label} {t}（{w[f'{k}_pct']:.1f}%）")
+    if ctl:
+        print("控制器時間：" + "｜".join(ctl))
+    rx, tx = w.get("data_received"), w.get("data_sent")
+    if rx is not None and tx is not None:
+        per_h = ""
+        if battery_hours and battery_hours > 0:
+            per_h = f"｜平均每小時 收 {_fmt_bytes(rx / battery_hours)} / 送 {_fmt_bytes(tx / battery_hours)}"
+        print(f"流量：收 {_fmt_bytes(rx)} / 送 {_fmt_bytes(tx)}{per_h}")
+    if "pkts_received" in w and "pkts_sent" in w:
+        print(f"封包：收 {w['pkts_received']:,} / 送 {w['pkts_sent']:,}")
+    if "drain_mah" in w:
+        print(f"Wi‑Fi 耗電（驅動回報）：{w['drain_mah']:g} mAh（佔放電 {fmt_pct(w['drain_mah'], discharge)}）")
+    def _dur(h: float) -> str:
+        sec = h * 3600
+        return f"{sec:.1f} 秒" if sec < 90 else (f"{sec / 60:.1f} 分" if sec < 5400 else f"{h:.2f} h")
+
+    odd = [f"state {n} {_dur(h)}" for n, h, p in w["states"] if n.lower() != "sta" and h > 0]
+    odd += [f"supplicant {n} {_dur(h)}" for n, h, p in w["supplicant"] if n.lower() != "completed" and h > 0]
+    if odd:
+        print("非穩定連線狀態：" + "｜".join(odd))
+    if w["rssi"]:
+        print("訊號分布：" + "｜".join(f"{n} {p:.1f}%" for n, _, p in w["rssi"] if p > 0))
+    zero_ctl = all(w.get(k, 0) in (0, 0.0) for k in ("rx_h", "tx_h", "data_received", "data_sent"))
+    if zero_ctl and "sleep_h" in w:
+        print("※ Rx/Tx 時間與流量皆為 0：此機型驅動未回報控制器計數，只有 kernel active 可參考。")
+
+
 def print_ranking(
     title: str,
     rows: list[dict],
@@ -689,14 +827,14 @@ def print_ranking(
             if v >= floor and len(details) < 4:
                 details.append(f"{k}={_format_num(v)}")
         if item.get("smeared"):
-            details.append(f"分攤前 {item['raw']:.1f}")
+            details.append(f"分攤前 {fmt_mah(item['raw'])}")
         extra_str = f"（{', '.join(details)}）" if details else ""
         flag = ""
         if total_discharge and total_discharge > 0 and item["mah"] > total_discharge:
             flag = " ⚠ 超過累計放電，請確認原始統計"
         if item["name"].lower() in ("unaccounted", "over-counted"):
             flag += "（功耗模型與實際放電的差額，不是某個 App）"
-        print(f"{idx:>2}. {label}：{item['mah']:.1f} mAh（佔放電 {share}）{extra_str}{flag}")
+        print(f"{idx:>2}. {label}：{fmt_mah(item['mah'])} mAh（佔放電 {share}）{extra_str}{flag}")
 
 
 def print_wakelock_ranking(
@@ -723,7 +861,11 @@ def print_wakelock_ranking(
         if mx_ms is not None and mx_ms >= 30000:
             sec = mx_ms / 1000.0
             mx_str = f"，單次最長 {sec / 60:.1f} 分鐘" if sec >= 60 else f"，單次最長 {sec:.0f} 秒"
-        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次{mx_str}）{share}")
+        run_ms = item.get("running_ms")
+        run_str = ""
+        if run_ms is not None and run_ms >= 30000:
+            run_str = f" ⚠ 目前仍在持有（已 {run_ms / 60000:.1f} 分鐘）"
+        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次{mx_str}）{share}{run_str}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -799,12 +941,18 @@ def main() -> None:
             ratio = max_learned / est_cap
             if ratio > 1.005:
                 ratio_s = (
-                    f"（學習/估計 = {ratio * 100:.1f}%，高於估計容量，"
-                    "學習值可能是預設值或僅供參考，不代表電池健康度）"
+                    f"（學習/估計 = {ratio * 100:.1f}%，兩者不一致，"
+                    "不代表電池健康度；容量需以實測確認）"
                 )
             else:
                 ratio_s = f"（健康度約 {ratio * 100:.1f}%）"
         print(f"學習容量範圍：{min_s} ~ {max_s} mAh{ratio_s}")
+    prof = find_profile_capacity(summary)
+    if prof:
+        extra_cap = "".join(
+            [f"｜Rated {prof[1]:.0f}" if prof[1] else "", f"｜Typical {prof[2]:.0f}" if prof[2] else ""]
+        )
+        print(f"電源設定檔容量：{prof[0]:.0f} mAh{extra_cap}")
     if battery_hours is not None:
         print(f"電池使用總時長：{battery_hours:.2f} 小時")
 
@@ -818,15 +966,39 @@ def main() -> None:
         model = find_power_model(summary)
         if model and (model[0] > 0 or model[2] > 0):
             computed, act_lo, act_hi = model
-            act_s = f"{act_lo:.0f}" if act_lo == act_hi else f"{act_lo:.0f}–{act_hi:.0f}"
-            print(f"功耗模型估算：{computed:.0f} mAh｜系統實際：{act_s} mAh")
+            if act_hi <= 0:
+                act_s = "無資料（電量級距尚未下降）"
+            elif act_lo == act_hi:
+                act_s = f"{act_lo:.0f} mAh"
+            else:
+                act_s = f"{act_lo:.0f}–{act_hi:.0f} mAh"
+            print(f"功耗模型估算：{computed:.0f} mAh｜系統實際（電量級距 × 設定檔容量）：{act_s}")
             act_mid = (act_lo + act_hi) / 2
+            aligned = discharge > 0 and abs(computed - discharge) <= max(1.0, discharge * 0.01)
+            if aligned:
+                print("※ Discharge 與功耗模型估算相同（Android 13+ 的放電值已與模型對齊，不是獨立量測）。")
             if computed > 0 and act_mid > 0:
                 ratio = computed / act_mid
-                if ratio < 0.8:
+                if aligned and (ratio < 0.9 or ratio > 1.1):
+                    cap_note = ""
+                    if prof and est_cap and prof[0] > 0:
+                        cap_note = (
+                            f"估計容量 {est_cap:.0f} 與設定檔容量 {prof[0]:.0f} 的比值為 "
+                            f"{est_cap / prof[0] * 100:.0f}%，"
+                        )
+                    print(
+                        f"※ 與電量級距換算值相差 {abs(ratio - 1) * 100:.0f}%：{cap_note}"
+                        "這通常是容量來源不一致，不是模型誤差；絕對 mAh 可能整體偏低或偏高，相對排名不受影響。"
+                    )
+                elif not aligned and ratio < 0.8:
                     print(f"※ 功耗模型只解釋實際放電的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
-                elif ratio > 1.2:
+                elif not aligned and ratio > 1.2:
                     print(f"※ 功耗模型約為實際放電的 {ratio * 100:.0f}%，估算偏高，只適合看相對排名。")
+        if est_cap and discharge > 0:
+            step = est_cap / 100.0
+            q = discharge / step
+            if abs(q - round(q)) < 0.02 and round(q) >= 1:
+                print(f"※ 放電值恰為 1% 級距的整數倍（每級約 {step:.1f} mAh，共 {round(q)} 級），短時間內的 mAh/h 誤差很大。")
         if discharge == 0:
             print("※ 累計放電為 0：此檔沒有放電計數，mAh/h 與佔比皆不具意義，只能看時間分布與相對排名。")
         if screen_on_mah is not None and screen_off_mah is not None:
@@ -846,6 +1018,10 @@ def main() -> None:
             f"熄屏（Screen off）：{screen_off_mah:.0f} mAh / {screen_off_hours:.2f} h"
             f" -> {fmt_rate(screen_off_mah, screen_off_hours, est_cap, max_learned)}"
         )
+    if screen_on_hours is not None and screen_on_hours < 0.5:
+        print(f"※ 亮屏時間只有 {screen_on_hours * 60:.0f} 分鐘，亮屏耗電率不具代表性。")
+    if screen_off_hours is not None and screen_off_hours < 1.0:
+        print(f"※ 熄屏時間只有 {screen_off_hours * 60:.0f} 分鐘，熄屏耗電率不具代表性。")
     if screen_off_hours and screen_off_uptime_hours is not None:
         print(
             f"熄屏期間 CPU 醒來（uptime）：{screen_off_uptime_hours:.2f} h"
@@ -868,6 +1044,10 @@ def main() -> None:
         print(f"Full wakelock 累計：{full_wake_hours * 60:.1f} 分鐘")
     if partial_wake_hours is not None:
         print(f"Partial wakelock 累計：{partial_wake_hours * 60:.1f} 分鐘")
+
+    wifi = parse_wifi_stats(summary)
+    if wifi:
+        print_wifi_stats(wifi, battery_hours, discharge)
 
     top_kernel_locks = parse_kernel_wakelocks(summary, top_n=top_n)
     top_partial_locks = parse_partial_wakelocks(

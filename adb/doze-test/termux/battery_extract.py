@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 battery_extract.py - 從 dumpsys batterystats 擷取精華並遮蔽識別資訊，方便分享給 AI 分析
-版本：v2.1.0
-日期：2026-11-23
+版本：v2.2.0
+日期：2026-11-24
+
+v2.2.0：新增第 5 節 Wi‑Fi 統計（Wifi Statistics：kernel active / Rx / Tx / 流量 / 封包 / 狀態 / RSSI）
 
 用法：
     python battery_extract.py m12.txt                 # 讀檔，安全分享模式
@@ -21,8 +23,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-__version__ = "v2.1.0"
-__date__ = "2026-11-23"
+__version__ = "v2.2.0"
+__date__ = "2026-11-24"
 
 STATS_HEADER = "Statistics since last charge:"
 STATS_END_MARKERS = ("Statistics since last unplugged:",)
@@ -230,6 +232,26 @@ def extract_power(lines: list[str], top_n: int) -> tuple[list[str], int, int]:
     return out, omitted_items, omitted_lines
 
 
+def extract_wifi(lines: list[str]) -> list[str]:
+    """擷取 'Wifi Statistics:' 區塊，保留相對縮排。"""
+    idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Wifi Statistics:\s*$", l, re.IGNORECASE)), None)
+    if idx is None:
+        return []
+    base = indent_of(lines[idx])
+    out: list[str] = []
+    first: int | None = None
+    for l in lines[idx + 1:]:
+        if not l.strip():
+            continue
+        ind = indent_of(l)
+        if ind <= base:
+            break
+        if first is None:
+            first = ind
+        out.append("  " + " " * max(0, ind - first) + l.strip())
+    return out
+
+
 def extract_wakelocks(
     lines: list[str], header_re: re.Pattern, line_re: re.Pattern, top_n: int
 ) -> tuple[list[str], int]:
@@ -263,6 +285,7 @@ def build_report(text: str, source: str, mask: Masker, args: argparse.Namespace)
     power, power_omit_items, power_omit_lines = extract_power(lines, args.top_power)
     partial, partial_omit = extract_wakelocks(lines, PARTIAL_HEADER_RE, PARTIAL_LINE_RE, args.top_wl)
     kernel, kernel_omit = extract_wakelocks(lines, KERNEL_HEADER_RE, KERNEL_LINE_RE, args.top_kernel)
+    wifi = extract_wifi(lines)
 
     mode = (
         "安全分享模式（已隱藏 App 名稱並遮蔽部分識別資訊，仍須人工確認）"
@@ -291,6 +314,7 @@ def build_report(text: str, source: str, mask: Masker, args: argparse.Namespace)
     section("## 2. 各硬體與 App 耗電排名 (Estimated power use)", power, power_omit_items)
     section("## 3. 背景程式喚醒鎖排名 (All partial wake locks)", partial, partial_omit)
     section("## 4. 底層硬體驅動喚醒鎖 (All kernel wake locks)", kernel, kernel_omit)
+    section("## 5. Wi‑Fi 統計 (Wifi Statistics)", wifi, 0, "  （查無 Wi‑Fi 統計）")
 
     total_omit_lines = power_omit_lines + partial_omit + kernel_omit
     out.append("")
