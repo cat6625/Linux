@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.6
-日期：2026-11-23
+版本：v1.1.7
+日期：2026-11-24
+
+v1.1.7：Android 15（如 SM-M146B）UID 明細位於下一行，原本讀不到 → 補上延續行解析
 
 v1.1.6：背景喚醒排行新增「單次最長」（取自 max=，30 秒以上才顯示）
 
@@ -42,8 +44,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.6"
-__date__ = "2026-11-23"
+__version__ = "v1.1.7"
+__date__ = "2026-11-24"
 
 STATS_HEADER = "Statistics since last charge:"
 STATS_NEXT_HEADER = "Statistics since last unplugged:"
@@ -502,23 +504,37 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
     """解析 'Estimated power use' 區塊。舊版輸出以「Including smearing」後的數值為排序依據。"""
     items: list[dict] = []
 
+    # 第一階段：把「項目起始行 + 其縮排更深的延續行」合併成一筆
+    # （Android 15 的 UID 明細在下一行，例如 "      cpu=185 mobile_radio=25.9 ..."）
+    entries: list[dict] = []
+    last: dict | None = None
     for line, is_start in _power_block_lines(text):
         g = POWER_GLOBAL_ROW_RE.match(line)
         if g:
-            name = f"[全域] {g.group(1).strip()}"
-            raw_mah = float(g.group(2))
-            extra = g.group(4)
-        elif is_start:
+            entries.append({
+                "name": f"[全域] {g.group(1).strip()}",
+                "raw": float(g.group(2)),
+                "extra": g.group(4),
+            })
+            last = None
+            continue
+        if is_start:
             m = POWER_ITEM_RE.match(line)
+            last = None
             if not m:
                 continue
             name = re.sub(r"\s+", " ", m.group(1).strip())
             if name.lower() in EXCLUDED_POWER_NAMES:
                 continue
-            raw_mah = float(m.group(2))
-            extra = m.group(3)
-        else:
-            continue
+            last = {"name": name, "raw": float(m.group(2)), "extra": m.group(3)}
+            entries.append(last)
+        elif last is not None:
+            last["extra"] += " " + line.strip()
+
+    for ent in entries:
+        name = ent["name"]
+        raw_mah = ent["raw"]
+        extra = ent["extra"]
 
         if raw_mah <= 0:
             continue
