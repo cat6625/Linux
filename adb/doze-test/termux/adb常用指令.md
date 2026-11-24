@@ -95,6 +95,16 @@ python battery_extract.py -o "extract_\$(date +%Y%m%d_%H%M%S).txt"
 python battery_extract.py raw_dump.txt --top-wl 50 -o "extract_\$(date +%Y%m%d_%H%M%S).txt"
 ```
 
+# 多裝置直接產報告寫成一個簡短的 Bash 迴圈
+```bash
+mkdir -p reports
+TS=$(date +%Y%m%d_%H%M%S)
+for s in $(adb devices | awk '$2=="device"{print $1}'); do
+  m=$(adb -s "$s" shell getprop ro.product.model | tr -d '\r' | tr ' /' '_')
+  ANDROID_SERIAL="$s" python battery.py --merge-wl --hide-wm --strict-mask > "reports/${m}_${TS}.txt"
+  echo "已產生：reports/${m}_${TS}.txt"
+done
+```
 ---
 
 ## 3. 一鍵打包完整測試流程（Ubuntu Bash）
