@@ -2,8 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.8
-日期：2026-11-24
+版本：v1.1.9
+日期：2026-11-25
+
+v1.1.9：
+- 修正「估計容量 = 設定檔容量（比值 100%）卻說容量來源不一致」的自相矛盾說明；
+  容量一致時改說明差距約為幾個 1% 級距，並提示可能是『放電計數與顯示電量起點不同』
+- 背景喚醒新增「實際持有」（actual=，牆上時間）：累計時間在多個鎖同時持有時會被攤分，
+  所以累計可以小於單次最長，兩者不是同一種時間
 
 v1.1.8（對照四機 v1.1.7 輸出後）：
 - 新增 Wi‑Fi 統計區段（Wifi kernel active / Rx / Tx / 流量 / 封包 / 訊號 / 連線狀態）
@@ -53,8 +59,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.8"
-__date__ = "2026-11-24"
+__version__ = "v1.1.9"
+__date__ = "2026-11-25"
 
 STATS_HEADER = "Statistics since last charge:"
 STATS_NEXT_HEADER = "Statistics since last unplugged:"
@@ -383,6 +389,7 @@ def _row_to_lock(row_m: re.Match) -> dict | None:
         return None
     mx = re.search(r"\bmax=(\d+)", row_m.string)
     rn = re.search(r"\(running for (\d+)ms\)", row_m.string)
+    ac = re.search(r"\bactual=(\d+)", row_m.string)
     return {
         "name": name,
         "hours": hours,
@@ -390,6 +397,7 @@ def _row_to_lock(row_m: re.Match) -> dict | None:
         "count": int(row_m.group(3)),
         "max_ms": int(mx.group(1)) if mx else None,
         "running_ms": int(rn.group(1)) if rn else None,
+        "actual_ms": int(ac.group(1)) if ac else None,
         "merged_count": 1,
     }
 
@@ -449,6 +457,8 @@ def parse_partial_wakelocks(
                     acc["max_ms"] = max(acc.get("max_ms") or 0, item["max_ms"])
                 if item.get("running_ms") is not None:
                     acc["running_ms"] = max(acc.get("running_ms") or 0, item["running_ms"])
+                if item.get("actual_ms") is not None:
+                    acc["actual_ms"] = (acc.get("actual_ms") or 0) + item["actual_ms"]
                 acc["merged_count"] += 1
         deduped = list(merged_map.values())
 
@@ -847,6 +857,7 @@ def print_wakelock_ranking(
     if not locks:
         print("  查無喚醒明細。")
         return
+    shared_note = [False]
 
     for idx, item in enumerate(locks, start=1):
         raw_label = format_uid_label(item["name"], uid_pkgs_map) if uid_pkgs_map else item["name"]
@@ -861,11 +872,18 @@ def print_wakelock_ranking(
         if mx_ms is not None and mx_ms >= 30000:
             sec = mx_ms / 1000.0
             mx_str = f"，單次最長 {sec / 60:.1f} 分鐘" if sec >= 60 else f"，單次最長 {sec:.0f} 秒"
+        act_ms = item.get("actual_ms")
+        act_str = ""
+        if act_ms is not None and act_ms >= 30000 and act_ms >= item["hours"] * 3600000 * 1.2:
+            act_str = f"｜實際持有 {act_ms / 60000:.1f} 分鐘" if act_ms >= 90000 else f"｜實際持有 {act_ms / 1000:.0f} 秒"
+            shared_note[0] = True
         run_ms = item.get("running_ms")
         run_str = ""
         if run_ms is not None and run_ms >= 30000:
             run_str = f" ⚠ 目前仍在持有（已 {run_ms / 60000:.1f} 分鐘）"
-        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次{mx_str}）{share}{run_str}")
+        print(f"{idx:>2}. {label}：{dur_str}（{item['count']} 次{mx_str}）{act_str}{share}{run_str}")
+    if shared_note[0]:
+        print("※ 累計時間在多個鎖同時持有時會被攤分；『實際持有』與『單次最長』是牆上時間，所以累計可以小於單次最長。")
 
 
 def parse_args() -> argparse.Namespace:
@@ -980,16 +998,31 @@ def main() -> None:
             if computed > 0 and act_mid > 0:
                 ratio = computed / act_mid
                 if aligned and (ratio < 0.9 or ratio > 1.1):
-                    cap_note = ""
-                    if prof and est_cap and prof[0] > 0:
-                        cap_note = (
-                            f"估計容量 {est_cap:.0f} 與設定檔容量 {prof[0]:.0f} 的比值為 "
-                            f"{est_cap / prof[0] * 100:.0f}%，"
+                    gap_pct = abs(ratio - 1) * 100
+                    gap_mah = abs(computed - act_mid)
+                    cap_ratio = (est_cap / prof[0]) if (prof and est_cap and prof[0] > 0) else None
+                    if cap_ratio is not None and abs(cap_ratio - 1) > 0.05:
+                        print(
+                            f"※ 與電量級距換算值相差 {gap_pct:.0f}%：估計容量 {est_cap:.0f} 與設定檔容量 {prof[0]:.0f} 的比值為 "
+                            f"{cap_ratio * 100:.0f}%，這通常是容量來源不一致；絕對 mAh 可能整體偏低或偏高，相對排名不受影響。"
                         )
-                    print(
-                        f"※ 與電量級距換算值相差 {abs(ratio - 1) * 100:.0f}%：{cap_note}"
-                        "這通常是容量來源不一致，不是模型誤差；絕對 mAh 可能整體偏低或偏高，相對排名不受影響。"
-                    )
+                    else:
+                        cap_ref = est_cap or (prof[0] if prof else None)
+                        step = cap_ref / 100.0 if cap_ref else None
+                        steps = gap_mah / step if step else None
+                        cap_txt = "估計容量與設定檔容量一致，" if cap_ratio is not None else ""
+                        if steps is not None and steps <= 2.0:
+                            print(
+                                f"※ 與電量級距換算值相差 {gap_pct:.0f}%（約 {gap_mah:.0f} mAh）：{cap_txt}"
+                                f"差距在 2 個 1% 級距以內，可能只是級距粒度。"
+                            )
+                        else:
+                            steps_txt = f"，約 {steps:.1f} 個 1% 級距" if steps is not None else ""
+                            print(
+                                f"※ 與電量級距換算值相差 {gap_pct:.0f}%（約 {gap_mah:.0f} mAh{steps_txt}）：{cap_txt}"
+                                f"所以不是容量來源問題，也不是單純的級距粒度；較可能是『放電計數』與『顯示電量』的起點不同"
+                                f"（例如顯示 100% 時已先耗電），需要同時記錄起訖電量才能確認。"
+                            )
                 elif not aligned and ratio < 0.8:
                     print(f"※ 功耗模型只解釋實際放電的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
                 elif not aligned and ratio > 1.2:

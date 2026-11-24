@@ -4,6 +4,18 @@
 jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
 版本：v1.2.0 (新增精準信箱遮蔽與 --strict-mask，支援無參數直接透過 adb 讀取)
 版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
+版本：v1.0.0 初版
+
+用法：
+    adb shell dumpsys jobscheduler > js.txt
+    python3 jobhist.py js.txt                    # 全部，依執行時間排序
+    python3 jobhist.py js.txt --pkg vending      # 只看名稱含 vending 的
+    python3 jobhist.py js.txt --min 10 --top 30  # 只列 >=10 秒、最多 30 筆
+
+輸出兩份：
+  1. Job history：每個 START 與對應 STOP 的時間差、停止原因（canceled / jobFinished / preempt / timeout ...）
+  2. Quota 的 Saved sessions：每個套件的 session 長度（毫秒，≥ --min 秒才列）。
+     長度恰為 600000 ms 左右的 session，等於 JobScheduler 的 10 分鐘執行逾時。
 """
 
 from __future__ import annotations
