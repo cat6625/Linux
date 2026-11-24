@@ -45,6 +45,101 @@ python3 ~/doze/battery.py
 ```
 
 ---
+
+# Android Doze & User 10 (壺中界) 背景喚醒排查指令集
+
+## 1. 使用者與套件確認
+```bash
+# 列出裝置上所有使用者與狀態 (確認 User 10 名稱與 running 狀態)
+adb shell pm list users
+
+# 列出 User 10 底下安裝的第三方 App
+adb shell pm list packages --user 10 -3
+```
+
+---
+
+## 2. Doze (DeviceIdle) 狀態查詢與控制
+```bash
+# 查看目前 Light Doze 與 Deep Doze 狀態
+adb shell dumpsys deviceidle | grep -E "mState=|mLightState="
+
+# 查看 Deep Doze 進入與離開的歷史紀錄
+adb shell dumpsys deviceidle | grep -A 25 "Idling history:"
+
+# 手動逐步推進 Doze 狀態 (模擬時間經過，直到進入 deep: IDLE)
+adb shell dumpsys deviceidle step
+
+# 直接強制進入 Deep Doze
+adb shell dumpsys deviceidle force-idle
+
+# 解除強制 Doze 狀態 (測試結束後務必執行以恢復正常)
+adb shell dumpsys deviceidle unforce
+```
+
+---
+
+## 3. 電源與 WakeLock 狀態檢查
+```bash
+# 查看所有活躍的 WakeLock 與核心休眠阻擋器 (Suspend Blockers)
+adb shell dumpsys power | grep -A 15 "Wake Locks:"
+
+# 檢查是否有阻止 CPU 休眠的 PARTIAL_WAKE_LOCK (前 10 筆)
+adb shell dumpsys power | grep -n "PARTIAL_WAKE_LOCK" | head
+
+# 只過濾出 User 10 底下 App 持有的 PARTIAL_WAKE_LOCK
+adb shell dumpsys power | grep -E "PARTIAL_WAKE_LOCK.*(uid=10[0-9]{5}|u10)"
+```
+
+---
+
+## 4. User 10 Play 商店 JobScheduler 查詢與觸發
+```bash
+# 抓出 User 10 Play 商店的完整 Job 區塊 (含前後 35 行)
+adb shell dumpsys jobscheduler | grep -A 35 -E "JOB #u10.*com\.android\.vending"
+
+# 只列出 User 10 Play 商店的 Job 標題與 ID
+adb shell dumpsys jobscheduler | grep -E "#u10.*com\.android\.vending"
+
+# 強制立即執行特定 Job (將最後的數字替換為目標 Job ID)
+adb shell cmd jobscheduler run -u 10 -f com.android.vending 9909
+```
+
+---
+
+## 5. 控制變因實驗 (限制 User 10 Play 商店背景執行)
+```bash
+# 1. 關閉 User 10 Play 商店的背景執行豁免權
+adb shell cmd appops set --user 10 com.android.vending RUN_ANY_IN_BACKGROUND ignore
+
+# 2. 確認設定是否已生效 (預期輸出: ignore)
+adb shell cmd appops get --user 10 com.android.vending RUN_ANY_IN_BACKGROUND
+
+# 3. 清空系統電池統計數據，重新開始計時測試 (執行後請拔除 USB 線靜置)
+adb shell dumpsys batterystats --reset
+
+# 4. 實驗結束後還原預設權限
+adb shell cmd appops set --user 10 com.android.vending RUN_ANY_IN_BACKGROUND allow
+```
+
+---
+
+## 6. 進階：長持有喚醒鎖自動抓取腳本 (Ubuntu Bash)
+```bash
+# 每 60 秒檢查一次 uid=1010204 是否持有超過分鐘/小時等級的鎖，抓到即存檔並結束
+while true; do
+  adb shell dumpsys power | grep "uid=1010204" | grep -qE "ACQ=-([0-9]+h|[0-9]+m)" && {
+    t=\$(date +%H%M%S)
+    adb shell dumpsys power        > pw_\$t.txt
+    adb shell dumpsys jobscheduler > js_\$t.txt
+    adb shell dumpsys deviceidle   > idle_\$t.txt
+    echo "captured \$t"; break
+  }
+  sleep 60
+done
+```
+
+---
 # Android `dumpsys batterystats` 指令與耗電分析筆記
 
 ## 1. 重置電池統計數據 (`--reset`)
