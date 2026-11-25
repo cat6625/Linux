@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
+版本：v1.2.1 (新增 adb 讀取 timeout=60 與逾時處理，支援無參數直接透過 adb 讀取)
 版本：v1.2.0 (新增精準信箱遮蔽與 --strict-mask，支援無參數直接透過 adb 讀取)
 版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
 版本：v1.0.0 初版
@@ -26,7 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.2.0"
+__version__ = "v1.2.1"
 
 STRICT_MASK = False
 
@@ -151,7 +152,18 @@ def main() -> None:
             sys.exit(f"找不到檔案：{args.file}")
         raw_text = p.read_text(encoding="utf-8", errors="replace")
     else:
-        res = subprocess.run(["adb", "shell", "dumpsys", "jobscheduler"], capture_output=True, text=True, errors="replace")
+        try:
+            res = subprocess.run(
+                ["adb", "shell", "dumpsys", "jobscheduler"],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=60,
+            )
+        except FileNotFoundError:
+            sys.exit("找不到 adb；請指定檔案或確認已安裝 adb。")
+        except subprocess.TimeoutExpired:
+            sys.exit("ADB 讀取 dumpsys jobscheduler 逾時（60 秒）。")
         if res.returncode != 0 or not res.stdout.strip():
             sys.exit(f"ADB 讀取失敗：{res.stderr.strip() or '無輸出（多裝置時請指定 ANDROID_SERIAL）'}")
         raw_text = res.stdout
