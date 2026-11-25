@@ -2,8 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.9
+版本：v1.1.10
 日期：2026-11-25
+
+v1.1.10：
+- 新增「統計結束（約）」＝ 起算時間 + 電池使用時長，可當作每台 dump 的實際擷取時間
+  （批次檔名的時間只是腳本開始時間，各裝置之間可差數分鐘）
+- UID 明細的元件加總遠小於該 UID 總耗電時，補「未列明 X mAh」（例如 GNSS 前台服務的分攤）
+- Wi‑Fi 非穩定狀態只列 ≥1 秒的項目，不再列出毫秒級的握手狀態
+- Android 13+ 差距提示補充：若差距在不同統計時間點維持固定，就是起點偏移
 
 v1.1.9：
 - 修正「估計容量 = 設定檔容量（比值 100%）卻說容量來源不一致」的自相矛盾說明；
@@ -55,11 +62,12 @@ from __future__ import annotations
 
 import argparse
 import re
+from datetime import datetime, timedelta
 import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.9"
+__version__ = "v1.1.10"
 __date__ = "2026-11-25"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -571,6 +579,10 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
 
         smeared = _num(r"Including smearing:\s*(-?[\d.]+)", extra)
         mah = smeared if (smeared is not None and smeared > 0) else raw_mah
+        is_smeared = smeared is not None and smeared > 0
+        unlisted = 0.0
+        if parts and not is_smeared and re.match(r"(?i)uid\s", name):
+            unlisted = max(0.0, mah - sum(parts.values()))
 
         items.append({
             "name": name,
@@ -581,6 +593,7 @@ def parse_power_items(text: str, merge_same_name: bool = False) -> list[dict]:
             "wake_num": _num(r"\bwake(?:\s?lock)?=(-?[\d.]+)", extra),
             "screen_num": _num(r"\bscreen=(-?[\d.]+)", extra),
             "parts": parts,
+            "unlisted": unlisted,
             "is_user_app": bool(USER_APP_RE.search(name)),
             "is_global": name.startswith("[全域]"),
             "merged_count": 1,
@@ -803,8 +816,8 @@ def print_wifi_stats(w: dict, battery_hours: float | None, discharge: float | No
         sec = h * 3600
         return f"{sec:.1f} 秒" if sec < 90 else (f"{sec / 60:.1f} 分" if sec < 5400 else f"{h:.2f} h")
 
-    odd = [f"state {n} {_dur(h)}" for n, h, p in w["states"] if n.lower() != "sta" and h > 0]
-    odd += [f"supplicant {n} {_dur(h)}" for n, h, p in w["supplicant"] if n.lower() != "completed" and h > 0]
+    odd = [f"state {n} {_dur(h)}" for n, h, p in w["states"] if n.lower() != "sta" and h * 3600 >= 1.0]
+    odd += [f"supplicant {n} {_dur(h)}" for n, h, p in w["supplicant"] if n.lower() != "completed" and h * 3600 >= 1.0]
     if odd:
         print("非穩定連線狀態：" + "｜".join(odd))
     if w["rssi"]:
@@ -836,6 +849,9 @@ def print_ranking(
         for k, v in sorted(parts.items(), key=lambda kv: kv[1], reverse=True):
             if v >= floor and len(details) < 4:
                 details.append(f"{k}={_format_num(v)}")
+        unl = item.get("unlisted") or 0.0
+        if unl >= max(5.0, item["mah"] * 0.2):
+            details.append(f"未列明 {unl:.0f}")
         if item.get("smeared"):
             details.append(f"分攤前 {fmt_mah(item['raw'])}")
         extra_str = f"（{', '.join(details)}）" if details else ""
@@ -949,6 +965,13 @@ def main() -> None:
     print("\n=== 電池與統計週期資訊 ===")
     if start_clock:
         print(f"統計起算時間：{start_clock}")
+        mt = re.match(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})", start_clock)
+        if mt and battery_hours:
+            try:
+                t1 = datetime(*[int(x) for x in mt.groups()]) + timedelta(hours=battery_hours)
+                print(f"統計結束（約）：{t1:%Y-%m-%d %H:%M:%S}（起算時間 + 電池使用時長，可當作這份 dump 的擷取時間）")
+            except ValueError:
+                pass
     if est_cap:
         print(f"估計電池容量：{est_cap:.0f} mAh")
     if min_learned or max_learned:
@@ -1021,7 +1044,8 @@ def main() -> None:
                             print(
                                 f"※ 與電量級距換算值相差 {gap_pct:.0f}%（約 {gap_mah:.0f} mAh{steps_txt}）：{cap_txt}"
                                 f"所以不是容量來源問題，也不是單純的級距粒度；較可能是『放電計數』與『顯示電量』的起點不同"
-                                f"（例如顯示 100% 時已先耗電），需要同時記錄起訖電量才能確認。"
+                                f"（例如顯示 100% 時已先耗電）；若不同統計時間點的差距維持固定，就是起點偏移。"
+                                f"需要同時記錄起訖電量才能確認。"
                             )
                 elif not aligned and ratio < 0.8:
                     print(f"※ 功耗模型只解釋實際放電的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
