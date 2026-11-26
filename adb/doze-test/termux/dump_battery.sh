@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.4
-# 更新日期：2026-11-27
+# 版本資訊：v1.9.3
+# 更新日期：2026-11-26
 #
 # 用法說明：
 #   1. 批次抓取 batterystats 報告（預設模式）：
@@ -19,21 +19,21 @@
 # 環境變數（可選）：
 #   DEFAULT_IPS="192.168.1.112 192.168.1.167"  # 常用裝置固定 IP（按 c 時可直接選或一鍵全掃）
 #   SCAN_RANGES="5555 30000-49999"             # 裝置重連時掃描的 port 範圍
-#   SCAN_TIMEOUT=0.4                           # 單一 port 連線逾時秒數（預設 0.4s 避免漏掃）
-#   SCAN_WORKERS=60                            # Python 併發掃描執行緒數（預設 60 避免手機丟包）
+#   SCAN_TIMEOUT=0.15                          # 單一 port 連線逾時秒數
+#   SCAN_WORKERS=200                           # Python 併發掃描執行緒數
 #   SKIP_PORT_SCAN=0                           # 設為 1 可跳過掃描（僅嘗試原 port）
 #   OUT_DIR="reports"                          # 報告輸出資料夾
 # ==============================================================================
 
 set -u
 
-SCRIPT_VERSION="v1.9.4"
-SCRIPT_DATE="2026-11-27"
+SCRIPT_VERSION="v1.9.3"
+SCRIPT_DATE="2026-11-26"
 OUT_DIR="${OUT_DIR:-reports}"
-DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.167 192.168.1.142 192.168.1.113}"
+DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
 SCAN_RANGES="${SCAN_RANGES:-5555 30000-49999}"
-SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.4}"
-SCAN_WORKERS="${SCAN_WORKERS:-60}"
+SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.15}"
+SCAN_WORKERS="${SCAN_WORKERS:-200}"
 SKIP_PORT_SCAN="${SKIP_PORT_SCAN:-0}"
 TMP_BSTATS=""
 CREATED_FILES=()
@@ -183,7 +183,6 @@ connect_by_ip() {
     return 1
   fi
 
-  # 1. 若有指定 port，先直接嘗試該 port
   if [ -n "$hint_port" ]; then
     adb disconnect "${ip}:${hint_port}" >/dev/null 2>&1
     if check_tcp_port "$ip" "$hint_port"; then
@@ -194,29 +193,15 @@ connect_by_ip() {
     fi
   fi
 
-  # 2. 優先查詢 adb mdns services（若有廣播則免掃描直接連線）
-  local mdns_target
-  mdns_target=$(adb mdns services 2>/dev/null | grep -oE "${ip}:[0-9]+" | head -n 1)
-  if [ -n "$mdns_target" ]; then
-    echo "📡 透過 mDNS 發現服務：${mdns_target}，嘗試連線..."
-    if adb connect "$mdns_target" 2>/dev/null | grep -q "connected"; then
-      echo "✅ mDNS 連線成功！已連線至 ${mdns_target}"
-      return 0
-    fi
-  fi
-
   if [ "$SKIP_PORT_SCAN" = "1" ] && [ "$force_scan" != "1" ]; then
     echo "⏭️  已設定 SKIP_PORT_SCAN=1，略過 port 掃描。"
     return 1
   fi
 
-  # 3. 進行 TCP Port 併發掃描
-  local found_port="" p scanned_any=0
-  echo "🔍 正在掃描 ${ip} 的 ADB port (${SCAN_RANGES} | timeout=${SCAN_TIMEOUT}s, workers=${SCAN_WORKERS})..."
+  local found_port="" p
+  echo "🔍 正在快速掃描 ${ip} 的 ADB port (${SCAN_RANGES})..."
   while read -r p; do
     [ -z "$p" ] && continue
-    scanned_any=1
-    echo "   -> 偵測到開放 port: ${p}，嘗試 adb connect..."
     if adb connect "${ip}:${p}" 2>/dev/null | grep -q "connected"; then
       found_port="$p"
       break
@@ -226,11 +211,8 @@ connect_by_ip() {
   if [ -n "$found_port" ]; then
     echo "✅ 掃描成功！已連線至 ${ip}:${found_port}"
     return 0
-  elif [ "$scanned_any" -eq 0 ]; then
-    echo "❌ 無法自動連上 ${ip}（未掃描到任何開放 port，請確認無線偵錯已開啟，或嘗試提高 SCAN_TIMEOUT）"
-    return 1
   else
-    echo "❌ 無法自動連上 ${ip}（有偵測到開放 port，但 adb connect 均失敗，請確認已與此電腦配對）"
+    echo "❌ 無法自動連上 ${ip}（請確認手機已開啟「無線偵錯」，且螢幕處於喚醒狀態）"
     return 1
   fi
 }
