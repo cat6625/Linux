@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.8.0
-# 更新日期：2026-11-25
+# 版本資訊：v1.9.2
+# 更新日期：2026-11-26
 #
 # 用法說明：
 #   1. 批次抓取 batterystats 報告（預設模式）：
 #        ./dump_battery.sh [all|a|<IP或Port關鍵字>]
-#   2. 互動式裝置選單與單機下達 ADB 指令模式（含快捷指令選單）：
+#   2. 互動式裝置選單與單機下達 ADB 指令模式（秒開，不自動慢速掃 port）：
 #        ./dump_battery.sh -i | --interactive
 #   3. 批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）：
 #        ./dump_battery.sh -q | --quick-report
@@ -17,18 +17,24 @@
 #        ./dump_battery.sh -h | --help
 #
 # 環境變數（可選）：
-#   SCAN_RANGES="5555 30000-49999"   # offline 裝置重連時掃描的 port 範圍
-#   SCAN_TIMEOUT=0.2                # 單一 port 連線逾時秒數
-#   OUT_DIR="reports"               # 報告輸出資料夾
+#   DEFAULT_IPS="192.168.1.112 192.168.1.167"  # 常用紅米裝置固定 IP（按 c 時可直接選或一鍵全掃）
+#   SCAN_RANGES="5555 30000-49999"             # 裝置重連時掃描的 port 範圍
+#   SCAN_TIMEOUT=0.15                          # 單一 port 連線逾時秒數
+#   SCAN_WORKERS=200                           # Python 併發掃描執行緒數
+#   SKIP_PORT_SCAN=0                           # 設為 1 可跳過掃描（僅嘗試原 port）
+#   OUT_DIR="reports"                          # 報告輸出資料夾
 # ==============================================================================
 
 set -u
 
-SCRIPT_VERSION="v1.8.0"
-SCRIPT_DATE="2026-11-25"
+SCRIPT_VERSION="v1.9.2"
+SCRIPT_DATE="2026-11-26"
 OUT_DIR="${OUT_DIR:-reports}"
+DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.167}"
 SCAN_RANGES="${SCAN_RANGES:-5555 30000-49999}"
-SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.2}"
+SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.15}"
+SCAN_WORKERS="${SCAN_WORKERS:-200}"
+SKIP_PORT_SCAN="${SKIP_PORT_SCAN:-0}"
 TMP_BSTATS=""
 
 cleanup() {
@@ -54,11 +60,11 @@ ADB Doze 測試與裝置管理工具 (${SCRIPT_VERSION} | 更新日期: ${SCRIPT
   <關鍵字>            批次抓取符合 IP 或 Port 關鍵字的單一裝置
 
 範例：
-  $0                  互動選擇抓取 batterystats（若 offline 會嘗試掃 port 重連）
+  $0                  互動選擇抓取 batterystats（若 offline 會快速掃 port 重連）
   $0 all              一次抓取所有連線裝置的 batterystats（raw + extract + report + js/jobhist/power）
   $0 -q               批次輸出所有連線裝置的 battery.py 精簡報告
   $0 -j               批次輸出所有連線裝置的 jobhist.py 分析
-  $0 -i               進入互動式裝置選擇與 ADB 指令模式
+  $0 -i               進入互動式裝置選擇與 ADB 指令模式（秒開，支援預設 IP 與指定 IP 掃描連線）
 EOF
 }
 
@@ -94,55 +100,175 @@ expand_ports() {
   done
 }
 
+# 快速併發掃描指定 IP 的開放 TCP port（優先使用 Python socket，無 Python 則退回 bash）
+scan_open_ports() {
+  local ip="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$ip" "$SCAN_RANGES" "$SCAN_TIMEOUT" "$SCAN_WORKERS" <<'PY'
+import socket
+import sys
+from concurrent.futures import ThreadPoolExecutor
+
+ip = sys.argv[1]
+ranges = sys.argv[2].split()
+timeout = float(sys.argv[3])
+workers = int(sys.argv[4])
+
+ports = []
+for tok in ranges:
+    if "-" in tok:
+        a, b = tok.split("-", 1)
+        if a.isdigit() and b.isdigit():
+            s, e = int(a), int(b)
+            if s <= e:
+                ports.extend(range(s, e + 1))
+    elif tok.isdigit():
+        ports.append(int(tok))
+
+def probe(p: int):
+    try:
+        with socket.create_connection((ip, p), timeout=timeout):
+            return p
+    except OSError:
+        return None
+
+with ThreadPoolExecutor(max_workers=workers) as ex:
+    for res in ex.map(probe, ports, chunksize=64):
+        if res is not None:
+            print(res)
+PY
+    return 0
+  fi
+
+  local count=0 p
+  while read -r p; do
+    count=$((count + 1))
+    if (( count % 2000 == 0 )); then
+      echo "   ...已掃描 ${count} 個 port (目前: ${p})" >&2
+    fi
+    if check_tcp_port "$ip" "$p"; then
+      echo "$p"
+    fi
+  done < <(expand_ports)
+}
+
+# 針對指定 IP（或 IP:Port）進行掃描並嘗試 ADB 連線
+connect_by_ip() {
+  local target_input="$1"
+  local force_scan="${2:-0}"
+  local ip="${target_input%%:*}"
+  local hint_port="${target_input##*:}"
+  [ "$hint_port" = "$target_input" ] && hint_port=""
+
+  if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    echo "❌ IP 格式不正確：$ip"
+    return 1
+  fi
+
+  if [ -n "$hint_port" ]; then
+    adb disconnect "${ip}:${hint_port}" >/dev/null 2>&1
+    if check_tcp_port "$ip" "$hint_port"; then
+      if adb connect "${ip}:${hint_port}" 2>/dev/null | grep -q "connected"; then
+        echo "✅ 已直接連線至 ${ip}:${hint_port}"
+        return 0
+      fi
+    fi
+  fi
+
+  if [ "$SKIP_PORT_SCAN" = "1" ] && [ "$force_scan" != "1" ]; then
+    echo "⏭️  已設定 SKIP_PORT_SCAN=1，略過 port 掃描。"
+    return 1
+  fi
+
+  local found_port="" p
+  echo "🔍 正在快速掃描 ${ip} 的 ADB port (${SCAN_RANGES})..."
+  while read -r p; do
+    [ -z "$p" ] && continue
+    if adb connect "${ip}:${p}" 2>/dev/null | grep -q "connected"; then
+      found_port="$p"
+      break
+    fi
+  done < <(scan_open_ports "$ip")
+
+  if [ -n "$found_port" ]; then
+    echo "✅ 掃描成功！已連線至 ${ip}:${found_port}"
+    return 0
+  else
+    echo "❌ 無法自動連上 ${ip}（請確認手機已開啟「無線偵錯」，且螢幕處於喚醒狀態）"
+    return 1
+  fi
+}
+
+# 互動式選擇預設紅米 IP 或手動輸入 IP 並掃描連線
+prompt_manual_ip_connect() {
+  local def_arr=()
+  read -ra def_arr <<< "$DEFAULT_IPS"
+
+  echo "------------------------------------------"
+  if [ ${#def_arr[@]} -gt 0 ]; then
+    echo "預設紅米 IP 清單："
+    local idx
+    for idx in "${!def_arr[@]}"; do
+      echo "  $((idx+1))) ${def_arr[$idx]}"
+    done
+    echo "  a) 全部掃描並重連上述預設 IP（直接按 Enter 預設執行此項）"
+    echo "  或直接輸入其他 IP / IP:Port（輸入 q 取消）"
+    local choice
+    read -rp "請選擇或輸入 IP: " choice
+    choice=$(echo "$choice" | xargs)
+
+    if [[ "$choice" == "q" || "$choice" == "Q" ]]; then
+      echo "已取消。"
+      return 1
+    elif [[ -z "$choice" || "$choice" == "a" || "$choice" == "A" ]]; then
+      local dip
+      for dip in "${def_arr[@]}"; do
+        echo "------------------------------------------"
+        connect_by_ip "$dip" 1
+      done
+      return 0
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#def_arr[@]} ]; then
+      connect_by_ip "${def_arr[$((choice-1))]}" 1
+      return $?
+    else
+      connect_by_ip "$choice" 1
+      return $?
+    fi
+  else
+    local manual_ip
+    read -rp "請輸入手機區網 IP（例如 192.168.1.112，直接按 Enter 取消）: " manual_ip
+    manual_ip=$(echo "$manual_ip" | xargs)
+    if [ -z "$manual_ip" ]; then
+      echo "已取消。"
+      return 1
+    fi
+    connect_by_ip "$manual_ip" 1
+  fi
+}
+
 recover_offline_devices() {
   local offline_list=()
   mapfile -t offline_list < <(adb devices | awk '$2 == "offline" {print $1}')
 
   if [ ${#offline_list[@]} -eq 0 ]; then
+    echo "ℹ️  目前清單中沒有 offline 裝置（若手機剛重開無線偵錯，請按 c 掃描預設 IP）。"
     return 0
   fi
 
   echo "⚠️  偵測到 ${#offline_list[@]} 台裝置處於 offline 狀態，開始嘗試重連..."
-  local dev ip old_port found_port p
+  local dev
 
   for dev in "${offline_list[@]}"; do
-    ip="${dev%%:*}"
-    old_port="${dev##*:}"
-    [ "$old_port" = "$dev" ] && old_port=""
-
     echo "------------------------------------------"
-    echo "處理 offline 裝置：$dev (IP: $ip)"
-    adb disconnect "$dev" >/dev/null 2>&1
-
-    if [ -n "$old_port" ] && check_tcp_port "$ip" "$old_port"; then
-      if adb connect "${ip}:${old_port}" 2>/dev/null | grep -q "connected"; then
-        echo "✅ 原 port ${old_port} 可連通，已重新連線：${ip}:${old_port}"
-        continue
-      fi
-    fi
-
-    found_port=""
-    echo "🔍 正在掃描 ${ip} 的 ADB port (${SCAN_RANGES})..."
-    while read -r p; do
-      if check_tcp_port "$ip" "$p"; then
-        if adb connect "${ip}:${p}" 2>/dev/null | grep -q "connected"; then
-          found_port="$p"
-          break
-        fi
-      fi
-    done < <(expand_ports)
-
-    if [ -n "$found_port" ]; then
-      echo "✅ 掃描成功！已連線至 ${ip}:${found_port}"
-    else
-      echo "❌ 無法自動連上 ${ip}（請確認手機無線偵錯/TCPADB 已開啟，或螢幕已喚醒）"
-    fi
+    echo "處理 offline 裝置：$dev"
+    connect_by_ip "$dev" 0
   done
   echo ""
 }
 
 refresh_online_devices() {
   mapfile -t DEVICES < <(adb devices | awk '$2 == "device" {print $1}')
+  mapfile -t OFFLINE_DEVICES < <(adb devices | awk '$2 == "offline" {print $1}')
 }
 
 print_device_table() {
@@ -153,6 +279,10 @@ print_device_table() {
     model=$(get_model "${DEVICES[$i]}")
     printf "  %-4d %-22s %-24s\n" "$((i+1))" "${DEVICES[$i]}" "${model:-無回應}"
   done
+  if [ ${#OFFLINE_DEVICES[@]} -gt 0 ]; then
+    echo "  --------------------------------------------------------"
+    echo "  ⚠️  目前 offline 裝置：${OFFLINE_DEVICES[*]}（按 r 可嘗試重連）"
+  fi
 }
 
 prepare_batch_devices() {
@@ -447,29 +577,59 @@ run_quick_command() {
 }
 
 interactive_adb_loop() {
-  while true; do
-    recover_offline_devices
-    refresh_online_devices
+  # 互動模式首次進入直接列出線上裝置，不主動進行耗時的 port 掃描
+  refresh_online_devices
 
+  while true; do
     if [ ${#DEVICES[@]} -eq 0 ]; then
+      echo "=========================================="
       echo "❌ 目前沒有任何狀態為 device 的 ADB 裝置。"
-      read -rp "按 Enter 重新掃描，或輸入 q 離開: " retry_ans
-      [[ "$retry_ans" == "q" || "$retry_ans" == "Q" ]] && exit 0
+      if [ ${#OFFLINE_DEVICES[@]} -gt 0 ]; then
+        echo "⚠️  偵測到 offline 裝置：${OFFLINE_DEVICES[*]}"
+      fi
+      echo "  c) 掃描預設紅米 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+      echo "  r) 重新掃描並嘗試重連 offline 裝置"
+      echo "  q) 離開程式"
+      read -rp "請輸入選項 (c/r/q 或直接按 Enter 重新整理): " retry_ans
+      if [[ "$retry_ans" == "q" || "$retry_ans" == "Q" ]]; then
+        exit 0
+      elif [[ "$retry_ans" == "c" || "$retry_ans" == "C" ]]; then
+        prompt_manual_ip_connect
+      elif [[ "$retry_ans" == "r" || "$retry_ans" == "R" ]]; then
+        recover_offline_devices
+      fi
+      refresh_online_devices
       continue
     fi
 
     echo "=========================================="
     echo "請選擇要下達 ADB 指令的裝置（${SCRIPT_VERSION}）："
     print_device_table
-    echo "  r) 重新掃描 offline/連線裝置"
+    echo "  c) 掃描預設紅米 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+    echo "  r) 重新掃描並嘗試重連 offline 裝置"
     echo "  q) 離開程式"
     echo "------------------------------------------"
-    read -rp "請輸入選項: " dev_choice
+
+    local dev_choice=""
+    while true; do
+      read -rp "請輸入選項: " dev_choice
+      # 忽略誤按的空白 Enter
+      if [[ -z "$dev_choice" ]]; then
+        continue
+      fi
+      break
+    done
 
     if [[ "$dev_choice" == "q" || "$dev_choice" == "Q" ]]; then
       echo "已離開。"
       exit 0
+    elif [[ "$dev_choice" == "c" || "$dev_choice" == "C" ]]; then
+      prompt_manual_ip_connect
+      refresh_online_devices
+      continue
     elif [[ "$dev_choice" == "r" || "$dev_choice" == "R" ]]; then
+      recover_offline_devices
+      refresh_online_devices
       continue
     elif ! [[ "$dev_choice" =~ ^[0-9]+$ ]] || [ "$dev_choice" -lt 1 ] || [ "$dev_choice" -gt ${#DEVICES[@]} ]; then
       echo "❌ 無效的選項，請重新輸入。"
@@ -498,6 +658,7 @@ interactive_adb_loop() {
       elif [[ "$cmd_input" == "b" || "$cmd_input" == "B" || "$cmd_input" == "back" ]]; then
         echo "↩️  返回裝置選單..."
         echo ""
+        refresh_online_devices
         break
       elif [[ "$cmd_input" == "q" || "$cmd_input" == "Q" || "$cmd_input" == "exit" ]]; then
         echo "已離開。"
@@ -604,7 +765,12 @@ else
   print_device_table
   echo "  a) 全部抓取 (共 ${#DEVICES[@]} 台裝置)"
 
-  read -rp "請輸入編號 (1-${#DEVICES[@]}) 或 a: " CHOICE
+  while true; do
+    read -rp "請輸入編號 (1-${#DEVICES[@]}) 或 a: " CHOICE
+    [[ -z "$CHOICE" ]] && continue
+    break
+  done
+
   if [[ "$CHOICE" == "a" || "$CHOICE" == "A" ]]; then
     TARGETS=("${DEVICES[@]}")
   elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le ${#DEVICES[@]} ]; then
