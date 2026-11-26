@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.2
+# 版本資訊：v1.9.3
 # 更新日期：2026-11-26
 #
 # 用法說明：
@@ -27,7 +27,7 @@
 
 set -u
 
-SCRIPT_VERSION="v1.9.2"
+SCRIPT_VERSION="v1.9.3"
 SCRIPT_DATE="2026-11-26"
 OUT_DIR="${OUT_DIR:-reports}"
 DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.167}"
@@ -36,6 +36,16 @@ SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.15}"
 SCAN_WORKERS="${SCAN_WORKERS:-200}"
 SKIP_PORT_SCAN="${SKIP_PORT_SCAN:-0}"
 TMP_BSTATS=""
+CREATED_FILES=()
+
+# 統一偵測 Python 執行檔（優先使用 python3，避免新版 Ubuntu 無 python 軟連結）
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  PYTHON_BIN=""
+fi
 
 cleanup() {
   if [ -n "${TMP_BSTATS:-}" ] && [ -f "$TMP_BSTATS" ]; then
@@ -66,6 +76,14 @@ ADB Doze 測試與裝置管理工具 (${SCRIPT_VERSION} | 更新日期: ${SCRIPT
   $0 -j               批次輸出所有連線裝置的 jobhist.py 分析
   $0 -i               進入互動式裝置選擇與 ADB 指令模式（秒開，支援預設 IP 與指定 IP 掃描連線）
 EOF
+}
+
+require_python() {
+  if [ -z "$PYTHON_BIN" ]; then
+    echo "❌ 錯誤：找不到 python3 或 python 執行檔，無法執行分析腳本。"
+    return 1
+  fi
+  return 0
 }
 
 get_model() {
@@ -103,8 +121,8 @@ expand_ports() {
 # 快速併發掃描指定 IP 的開放 TCP port（優先使用 Python socket，無 Python 則退回 bash）
 scan_open_ports() {
   local ip="$1"
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$ip" "$SCAN_RANGES" "$SCAN_TIMEOUT" "$SCAN_WORKERS" <<'PY'
+  if [ -n "$PYTHON_BIN" ]; then
+    "$PYTHON_BIN" - "$ip" "$SCAN_RANGES" "$SCAN_TIMEOUT" "$SCAN_WORKERS" <<'PY'
 import socket
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -298,6 +316,7 @@ prepare_batch_devices() {
 }
 
 batch_quick_report() {
+  require_python || exit 1
   prepare_batch_devices || exit 1
   local ts model safe_model safe_id out_file dev
   ts=$(date +%Y%m%d_%H%M%S)
@@ -315,7 +334,7 @@ batch_quick_report() {
 
     echo "=========================================="
     echo "📱 裝置：[$model] ($dev)"
-    if ANDROID_SERIAL="$dev" python battery.py --merge-wl --hide-wm --strict-mask > "$out_file"; then
+    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" battery.py --merge-wl --hide-wm --strict-mask > "$out_file"; then
       echo "✅ 已產生：$out_file"
     else
       echo "❌ 產生失敗：$out_file"
@@ -325,6 +344,7 @@ batch_quick_report() {
 }
 
 batch_jobhist() {
+  require_python || exit 1
   prepare_batch_devices || exit 1
   local ts model safe_model safe_id out_file dev
   ts=$(date +%Y%m%d_%H%M%S)
@@ -338,11 +358,13 @@ batch_jobhist() {
 
     echo "=========================================="
     echo "📱 裝置：[$model] ($dev)"
-    if ANDROID_SERIAL="$dev" python3 jobhist.py --min 10 --top 10 | tee "$out_file"; then
-      echo "✅ 已存檔：$out_file"
-    else
-      echo "❌ 執行失敗：$out_file"
-      rm -f "$out_file"
+    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" jobhist.py --min 10 --top 10 | tee "$out_file"; then
+      if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+        echo "✅ 已存檔：$out_file"
+      else
+        echo "❌ 執行失敗：$out_file"
+        rm -f "$out_file"
+      fi
     fi
   done
 }
@@ -368,12 +390,26 @@ fetch_batterystats_cache() {
 # 解析 WakeLock 總覽與排行（委派 battery.py，避免重複實作時間解析）
 show_wakelock_ranking() {
   local file="$1"
+  require_python || return 1
+  if [ ! -f "battery.py" ]; then
+    echo "❌ 錯誤：目前目錄找不到 battery.py。"
+    return 1
+  fi
+
   echo "--- 1. WakeLock 總覽與排行 (Top 20) ---"
-  python battery.py -f "$file" -n 20 --merge-wl | awk '
+  local output
+  if ! output=$("$PYTHON_BIN" battery.py -f "$file" -n 20 --merge-wl 2>&1); then
+    echo "❌ battery.py 執行失敗："
+    echo "$output"
+    return 1
+  fi
+
+  echo "$output" | awk '
     /^=== 電池與統計週期資訊 ===/ { show=1 }
     /^=== 最耗電 UID \/ 系統項目/ { exit }
     show { print }
   '
+  return 0
 }
 
 # 解析 Wakeup Alarm 喚醒次數排行（依 Apk package 彙總，無 Apk 則退回 UID）
@@ -438,8 +474,9 @@ show_alarm_ranking() {
 
 run_jobhist_check() {
   local target_dev="$1"
+  require_python || return 1
   echo "▶ 執行：jobhist.py --min 10 --top 10"
-  ANDROID_SERIAL="$target_dev" python3 jobhist.py --min 10 --top 10
+  ANDROID_SERIAL="$target_dev" "$PYTHON_BIN" jobhist.py --min 10 --top 10
   echo "(exit code: $?)"
 }
 
@@ -448,6 +485,7 @@ confirm_action() {
   local ans
   echo "$prompt_msg"
   read -rp "確定要執行嗎？輸入 y 確認，其他鍵取消: " ans
+  ans=$(echo "$ans" | xargs)
   [[ "$ans" == "y" || "$ans" == "Y" ]]
 }
 
@@ -479,7 +517,7 @@ run_quick_command() {
     1)
       echo "▶ 執行：Statistics since last charge 摘要"
       adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^$/ || /^[^[:space:]]/) exit; print }'" 2>/dev/null
-      echo "(exit code: 0)"
+      echo "(exit code: ${PIPESTATUS[0]})"
       ;;
     2)
       echo "▶ 執行：dumpsys battery"
@@ -500,15 +538,19 @@ run_quick_command() {
       echo "▶ 執行：WakeLock 排行"
       if fetch_batterystats_cache "$target_dev"; then
         show_wakelock_ranking "$TMP_BSTATS"
+        echo "(exit code: $?)"
+      else
+        echo "(exit code: 1)"
       fi
-      echo "(exit code: 0)"
       ;;
     6)
       echo "▶ 執行：Alarm 排行"
       if fetch_batterystats_cache "$target_dev"; then
         show_alarm_ranking "$TMP_BSTATS"
+        echo "(exit code: $?)"
+      else
+        echo "(exit code: 1)"
       fi
-      echo "(exit code: 0)"
       ;;
     7)
       run_jobhist_check "$target_dev"
@@ -701,15 +743,44 @@ dump_device() {
     rm -f "${PREFIX}_raw.txt"
     return 1
   fi
+  CREATED_FILES+=("${PREFIX}_raw.txt")
 
   echo "正在同步擷取 jobscheduler 與 power 狀態..."
-  adb -s "$SERIAL" shell dumpsys jobscheduler > "${PREFIX}_js.txt" 2>/dev/null
-  python3 jobhist.py "${PREFIX}_js.txt" --min 10 --top 15 > "${PREFIX}_jobhist.txt" 2>/dev/null || true
-  adb -s "$SERIAL" shell dumpsys power > "${PREFIX}_power.txt" 2>/dev/null
+  if adb -s "$SERIAL" shell dumpsys jobscheduler > "${PREFIX}_js.txt" 2>/dev/null && [ -s "${PREFIX}_js.txt" ]; then
+    CREATED_FILES+=("${PREFIX}_js.txt")
+    if [ -n "$PYTHON_BIN" ] && [ -f "jobhist.py" ]; then
+      if "$PYTHON_BIN" jobhist.py "${PREFIX}_js.txt" --min 10 --top 15 > "${PREFIX}_jobhist.txt" 2>/dev/null && [ -s "${PREFIX}_jobhist.txt" ]; then
+        CREATED_FILES+=("${PREFIX}_jobhist.txt")
+      else
+        rm -f "${PREFIX}_jobhist.txt"
+      fi
+    fi
+  else
+    rm -f "${PREFIX}_js.txt"
+  fi
+
+  if adb -s "$SERIAL" shell dumpsys power > "${PREFIX}_power.txt" 2>/dev/null && [ -s "${PREFIX}_power.txt" ]; then
+    CREATED_FILES+=("${PREFIX}_power.txt")
+  else
+    rm -f "${PREFIX}_power.txt"
+  fi
 
   echo "正在產生精華檔與分析報告..."
-  python battery_extract.py "${PREFIX}_raw.txt" -o "${PREFIX}_extract.txt"
-  python battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt"
+  if [ -n "$PYTHON_BIN" ] && [ -f "battery_extract.py" ]; then
+    if "$PYTHON_BIN" battery_extract.py "${PREFIX}_raw.txt" -o "${PREFIX}_extract.txt" && [ -s "${PREFIX}_extract.txt" ]; then
+      CREATED_FILES+=("${PREFIX}_extract.txt")
+    else
+      rm -f "${PREFIX}_extract.txt"
+    fi
+  fi
+
+  if [ -n "$PYTHON_BIN" ] && [ -f "battery.py" ]; then
+    if "$PYTHON_BIN" battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt" && [ -s "${PREFIX}_report.txt" ]; then
+      CREATED_FILES+=("${PREFIX}_report.txt")
+    else
+      rm -f "${PREFIX}_report.txt"
+    fi
+  fi
 
   echo "✅ 完成輸出：${PREFIX}_*"
 }
@@ -788,4 +859,8 @@ done
 
 echo "=========================================="
 echo "作業結束！本次成功產出的檔案："
-ls -lh "${OUT_DIR}/"*"_${BATCH_TS}_"* 2>/dev/null || echo "(無產出檔案)"
+if [ ${#CREATED_FILES[@]} -gt 0 ]; then
+  ls -lh "${CREATED_FILES[@]}"
+else
+  echo "(無產出檔案)"
+fi
