@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
+版本：v1.3.0 (adb 讀取明確使用 UTF-8；事件依時間排序後再配對 START/STOP；Quota 只解析最後一個 QuotaController 區段；新增停止原因統計；標題標示 --min 篩選)
+版本：v1.2.1 (新增 adb 讀取 timeout=60 與逾時處理，支援無參數直接透過 adb 讀取)
+版本：v1.2.0 (新增精準信箱遮蔽與 --strict-mask，支援無參數直接透過 adb 讀取)
+版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
+版本：v1.0.0 初版
+
+用法：
+    adb shell dumpsys jobscheduler > js.txt
+    python3 jobhist.py js.txt                    # 全部，依執行時間排序
+    python3 jobhist.py js.txt --pkg vending      # 只看名稱含 vending 的
+    python3 jobhist.py js.txt --min 10 --top 30  # 只列 >=10 秒、最多 30 筆
+
+輸出兩份：
+  1. Job history：每個 START 與對應 STOP 的時間差、停止原因（canceled / jobFinished / preempt / timeout ...）
+  2. Quota 的 Saved sessions：每個套件的 session 長度（毫秒，≥ --min 秒才列）。
+     長度恰為 600000 ms 左右的 session，等於 JobScheduler 的 10 分鐘執行逾時。
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+__version__ = "v1.3.0"
+
+STRICT_MASK = False
+
+HIST_RE = re.compile(
+    r"^\s*-(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms\s+(START-P|START|STOP-P|STOP):\s+#(\S+)\s+(\S+)(?:\s+(.*))?$"
+)
+TIMER_RE = re.compile(r"Timer\{<(\d+)>([\w.]+)\}")
+SESSION_RE = re.compile(r"^\s*(\d+)\s*->\s*(\d+)\s*\((\d+)\),\s*(\d+)\s*bg jobs")
+
+
+def mask_email_match(match: re.Match) -> str:
+    if STRICT_MASK:
+        return "[EMAIL]"
+    local = match.group(1)
+    domain = match.group(2)
+    if not local:
+        masked_local = "***"
+    elif len(local) == 1:
+        masked_local = f"{local}***"
+    else:
+        masked_local = f"{local[0]}***{local[-1]}"
+    return f"{masked_local}@{domain}"
+
+
+def mask_emails(text: str) -> str:
+    """將電子信箱去識別化，例如 alice@gmail.com -> a***e@gmail.com，且不誤傷 @SyncManager@com.xxx。"""
+    return re.sub(
+        r"(?<![@\w.%+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        mask_email_match,
+        text,
+    )
+
+
+def offset_ms(h: str | None, m: str | None, s: str | None, ms: str) -> int:
+    return (int(h or 0) * 3600 + int(m or 0) * 60 + int(s or 0)) * 1000 + int(ms)
+
+
+def fmt_ms(ms: int) -> str:
+    if ms < 1000:
+        return f"{ms} ms"
+    sec = ms / 1000.0
+    if sec < 90:
+        return f"{sec:.1f} 秒"
+    return f"{sec / 60:.1f} 分鐘"
+
+
+def parse_history(lines: list[str]) -> list[dict]:
+    start_idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Job history:\s*$", l)), None)
+    if start_idx is None:
+        return []
+    open_starts: dict[str, tuple[int, str]] = {}
+    runs: list[dict] = []
+    events: list[tuple[int, re.Match]] = []
+    for l in lines[start_idx + 1:]:
+        if not l.strip():
+            continue
+        m = HIST_RE.match(l)
+        if not m:
+            if not l.startswith(" "):
+                break
+            continue
+        events.append((offset_ms(m.group(1), m.group(2), m.group(3), m.group(4)), m))
+    # offset 是「距 dump 多久以前」：越大越舊。排序後由舊到新配對，不依賴檔案列印順序
+    events.sort(key=lambda e: -e[0])
+    for off, m in events:
+        kind, key, svc, reason = m.group(5), m.group(6), m.group(7), (m.group(8) or "").strip()
+        if kind.startswith("START"):
+            open_starts[key] = (off, svc)
+        else:
+            if key in open_starts:
+                s_off, s_svc = open_starts.pop(key)
+                runs.append({
+                    "key": key,
+                    "service": mask_emails(s_svc),
+                    "start_ago_ms": s_off,
+                    "duration_ms": max(0, s_off - off),
+                    "reason": mask_emails(reason) if reason else "(無)",
+                })
+    for key, (s_off, svc) in open_starts.items():
+        runs.append({
+            "key": key,
+            "service": mask_emails(svc),
+            "start_ago_ms": s_off,
+            "duration_ms": None,
+            "reason": "（尚未看到 STOP：可能仍在執行）",
+        })
+    return runs
+
+
+def parse_sessions(lines: list[str]) -> list[dict]:
+    out: list[dict] = []
+    cur: str | None = None
+    # 只解析最後一個頂層 QuotaController 區段（前面的 QuotaController 是 Settings 設定值）
+    q_start = max((i for i, l in enumerate(lines) if re.match(r"^QuotaController:\s*$", l)), default=0)
+    for l in lines[q_start:]:
+        t = TIMER_RE.search(l)
+        if t:
+            cur = f"<{t.group(1)}>{t.group(2)}"
+            continue
+        m = SESSION_RE.match(l)
+        if m and cur:
+            out.append({
+                "pkg": cur,
+                "start": int(m.group(1)),
+                "end": int(m.group(2)),
+                "duration_ms": int(m.group(3)),
+                "jobs": int(m.group(4)),
+            })
+    return out
+
+
+def main() -> None:
+    global STRICT_MASK
+    ap = argparse.ArgumentParser(description="分析 dumpsys jobscheduler 的 job 執行時間與配額 session")
+    ap.add_argument("file", nargs="?", default=None, help="dumpsys jobscheduler 的輸出檔；省略則透過 adb 直接讀取")
+    ap.add_argument("--pkg", default=None, help="只列名稱含此字串的 job / 套件（不分大小寫）")
+    ap.add_argument("--min", type=float, default=0.0, help="只列執行時間 >= N 秒的項目（預設全部）")
+    ap.add_argument("--top", type=int, default=20, help="每一節最多列幾筆（預設 20）")
+    ap.add_argument("--strict-mask", action="store_true", help="信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）")
+    ap.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+    args = ap.parse_args()
+
+    STRICT_MASK = args.strict_mask
+
+    if args.file:
+        p = Path(args.file)
+        if not p.is_file():
+            sys.exit(f"找不到檔案：{args.file}")
+        raw_text = p.read_text(encoding="utf-8", errors="replace")
+    else:
+        try:
+            res = subprocess.run(
+                ["adb", "shell", "dumpsys", "jobscheduler"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+            )
+        except FileNotFoundError:
+            sys.exit("找不到 adb；請指定檔案或確認已安裝 adb。")
+        except subprocess.TimeoutExpired:
+            sys.exit("ADB 讀取 dumpsys jobscheduler 逾時（60 秒）。")
+        if res.returncode != 0 or not res.stdout.strip():
+            sys.exit(f"ADB 讀取失敗：{res.stderr.strip() or '無輸出（多裝置時請指定 ANDROID_SERIAL）'}")
+        raw_text = res.stdout
+
+    lines = raw_text.replace("\r", "").splitlines()
+    needle = args.pkg.lower() if args.pkg else None
+    min_ms = int(args.min * 1000)
+
+    runs = parse_history(lines)
+    if needle:
+        runs = [r for r in runs if needle in r["service"].lower()]
+    runs = [r for r in runs if (r["duration_ms"] is None or r["duration_ms"] >= min_ms)]
+    runs.sort(key=lambda r: (r["duration_ms"] is None, -(r["duration_ms"] or 0)))
+
+    flt = f"，已篩選 ≥{args.min:g} 秒" if args.min > 0 else ""
+    reasons = Counter(
+        "(未結束)" if r["duration_ms"] is None else ("jobFinished" if "jobFinished" in r["reason"] else r["reason"].split()[0] if r["reason"].strip() else "(無)")
+        for r in runs
+    )
+    print(f"=== Job history：執行時間（共 {len(runs)} 筆{flt}，列前 {args.top}）===")
+    if not runs:
+        print("  查無符合項目（Job history 只保留最近一段時間，較舊的紀錄會被擠掉）。")
+    for r in runs[: args.top]:
+        dur = fmt_ms(r["duration_ms"]) if r["duration_ms"] is not None else "未結束"
+        print(f"  {dur:>10}｜{fmt_ms(r['start_ago_ms'])} 前開始｜#{r['key']} {r['service']}｜{r['reason']}")
+
+    if reasons:
+        print("  停止原因統計：" + "｜".join(f"{k} {v}" for k, v in reasons.most_common()))
+    sessions = parse_sessions(lines)
+    if needle:
+        sessions = [s for s in sessions if needle in s["pkg"].lower()]
+    sessions = [s for s in sessions if s["duration_ms"] >= max(min_ms, 1)]
+    sessions.sort(key=lambda s: -s["duration_ms"])
+    print(f"\n=== Quota 的 Saved sessions（共 {len(sessions)} 筆{flt}，列前 {args.top}）===")
+    if not sessions:
+        print("  查無符合項目。")
+    for s in sessions[: args.top]:
+        flag = "  ← 接近 10 分鐘（可能是 JobScheduler 執行逾時；以 Job history 的 timeout 原因確認）" if 590_000 <= s["duration_ms"] <= 620_000 else ""
+        print(f"  {fmt_ms(s['duration_ms']):>10}｜{s['pkg']}｜{s['jobs']} 個 bg job｜elapsed {s['start']}→{s['end']}{flag}")
+
+
+if __name__ == "__main__":
+    main()

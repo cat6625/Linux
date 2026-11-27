@@ -2,8 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 battery_extract.py - 從 dumpsys batterystats 擷取精華並遮蔽識別資訊，方便分享給 AI 分析
-版本：v2.2.0
-日期：2026-11-24
+版本：v2.3.0
+日期：2026-11-27
+
+v2.3.0：
+- 耗電排名固定保留系統列（Idle / Screen / Wifi / Over-counted / Unaccounted ...），不再因排名被省略
+- 新增 Amount discharged 上下限、Cellular 摘要（第 1 節）
+- 新增第 6 節喚醒原因（All wakeup reasons）、第 7 節 Battery History 的電量級距與 charge counter
+- 遮蔽：來源檔名的 IP:port、*sync*/*job* 的帳號類型（如 Telegram）、已被遮蔽的 s***w@x.com、殘留的 com.
+- 截斷（缺少時間與次數）的 wakelock 行不列入；省略統計改為分項
 
 v2.2.0：新增第 5 節 Wi‑Fi 統計（Wifi Statistics：kernel active / Rx / Tx / 流量 / 封包 / 狀態 / RSSI）
 
@@ -23,8 +30,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-__version__ = "v2.2.0"
-__date__ = "2026-11-24"
+__version__ = "v2.3.0"
+__date__ = "2026-11-27"
 
 STATS_HEADER = "Statistics since last charge:"
 STATS_END_MARKERS = ("Statistics since last unplugged:",)
@@ -61,6 +68,15 @@ SUMMARY_LABELS = (
     "Total partial wakelock time",
     "Total WiFi Multicast wakelock Count",
     "Total WiFi Multicast wakelock time",
+    "Amount discharged (lower bound)",
+    "Amount discharged (upper bound)",
+    "Amount discharged while screen on",
+    "Amount discharged while screen off",
+    "Amount discharged while screen doze",
+    "Cellular kernel active time",
+    "Cellular Sleep time",
+    "Cellular Idle time",
+    "Cellular Rx time",
 )
 BLOCK_LABELS = {"Screen brightnesses", "Screen refresh rate"}  # 後面縮排更深的子行一併保留
 
@@ -81,12 +97,15 @@ class Masker:
     """依序遮蔽 account -> email -> timestamp -> package，並統計替換次數。"""
 
     ACCOUNT_RE = re.compile(r"@[^\s/@:]+@(?=[A-Za-z0-9_.]+)")
-    EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+    EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+*-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
     TIMESTAMP_RE = re.compile(
         r"\b\d{4}-\d{2}-\d{2}(?:[-\sT]\d{2}[-:]\d{2}(?:[-:]\d{2})?(?:\.\d+)?)?\b"
     )
     # 至少兩個點的 Java 風格識別字（com.foo.bar），前面不能是 [ . 或字元
-    PKG_RE = re.compile(r"(?<![\[\w])(?:[A-Za-z_]\w*\.){2,}[A-Za-z_][\w$]*")
+    PKG_RE = re.compile(r"(?<!\w)(?:[A-Za-z_]\w*\.){2,}[A-Za-z_][\w$]*")
+
+    # *job* / *sync* 名稱第三段（帳號類型，如 Telegram）；須在 pkg 遮蔽後執行
+    ACCT_RE = re.compile(r"(?<=\[PKG\]/\[PKG\]/)(?!\[)[^\s:]+")
 
     def __init__(self, enabled: bool = True) -> None:
         self.enabled = enabled
@@ -104,7 +123,16 @@ class Masker:
         text = self._sub("email", self.EMAIL_RE, "[EMAIL]", text)
         text = self._sub("timestamp", self.TIMESTAMP_RE, "[TIMESTAMP]", text)
         text = self._sub("pkg", self.PKG_RE, "[PKG]", text)
+        text = self._sub("acct", self.ACCT_RE, "[ACCT]", text)
         return text
+
+
+HOST_RE = re.compile(r"\d{1,3}(?:[_.]\d{1,3}){3}(?:[_:]\d{2,5})?")
+
+
+def mask_source(name: str) -> str:
+    """來源檔名常含區網 IP 與無線偵錯 port，分享前一律遮蔽。"""
+    return HOST_RE.sub("[HOST]", name)
 
 
 # ---------------------------------------------------------------- 讀取 ----
@@ -178,6 +206,10 @@ POWER_ITEM_RE = re.compile(
     r"^\s*(?:UID|Uid)\s+\S+:|^\s*(?:Capacity|Global)\b|^\s*[A-Za-z][\w ./-]*:\s*-?[\d.]+"
 )
 POWER_GLOBAL_ROW_RE = re.compile(r"\bapps:\s*-?[\d.]+")
+SYSTEM_ROW_RE = re.compile(
+    r"^(?:Idle|Screen|Over-counted|Unaccounted|Wifi|Cell standby|Phone calls|Bluetooth|Flashlight|Camera|Ambient display|Memory)\b",
+    re.IGNORECASE,
+)
 
 
 def extract_power(lines: list[str], top_n: int) -> tuple[list[str], int, int]:
@@ -221,7 +253,8 @@ def extract_power(lines: list[str], top_n: int) -> tuple[list[str], int, int]:
             or first.lower() == "global"
             or bool(POWER_GLOBAL_ROW_RE.search(first))
         )
-        if not is_header:
+        is_system = bool(SYSTEM_ROW_RE.match(first))
+        if not is_header and not is_system:
             if counted >= top_n:
                 omitted_items += 1
                 omitted_lines += len(it)
@@ -252,6 +285,77 @@ def extract_wifi(lines: list[str]) -> list[str]:
     return out
 
 
+WAKEUP_HEADER_RE = re.compile(r"^\s*All wakeup reasons:\s*$", re.IGNORECASE)
+
+
+def extract_wakeup_reasons(lines: list[str], top_n: int) -> tuple[list[str], int]:
+    idx = next((i for i, l in enumerate(lines) if WAKEUP_HEADER_RE.match(l)), None)
+    if idx is None:
+        return [], 0
+    entries: list[str] = []
+    for l in lines[idx + 1:]:
+        if not l.strip():
+            continue
+        if not re.match(r"^\s*Wakeup reason\s", l, re.IGNORECASE):
+            break
+        if "times)" not in l:
+            continue
+        entries.append("  " + l.strip())
+    return entries[:top_n], max(0, len(entries) - top_n)
+
+
+HIST_LINE_RE = re.compile(
+    r"^\s*(0|\+?(?:\d+d)?(?:\d+h)?(?:\d+m)?(?:\d+s)?\d+ms)\s+\(\d+\)\s+(\d{3})\s+(.*)$"
+)
+
+
+def _hist_hours(tok: str) -> float:
+    if tok == "0":
+        return 0.0
+    mm = re.match(r"\+?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms", tok)
+    d, h, m, s, ms = (int(x or 0) for x in mm.groups()) if mm else (0, 0, 0, 0, 0)
+    return d * 24 + h + m / 60 + s / 3600 + ms / 3600000
+
+
+def extract_charge_steps(text: str, max_rows: int = 40) -> list[str]:
+    """從 Battery History 取所有 charge= 取樣（charge 與 level 更新時間可能錯開，不依 level 去重），換算每筆 Δ 與 mAh/h。"""
+    lines = text.splitlines()
+    idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Battery History", l)), None)
+    if idx is None:
+        return []
+    samples: list[tuple[int, int, float]] = []
+    for l in lines[idx + 1:]:
+        m = HIST_LINE_RE.match(l)
+        if not m:
+            continue
+        ch = re.search(r"\bcharge=(\d+)", m.group(3))
+        if not ch:
+            continue
+        lvl = int(m.group(2))
+        samples.append((lvl, int(ch.group(1)), _hist_hours(m.group(1))))
+    if len(samples) < 2:
+        return []
+    out: list[str] = []
+    (l0, c0, t0), (l1, c1, t1) = samples[0], samples[-1]
+    dl, dc, dt = l0 - l1, c0 - c1, t1 - t0
+    if dl > 0 and dt > 0:
+        out.append(
+            f"  起訖：L{l0} {c0} mAh → L{l1} {c1} mAh｜下降 {dc} mAh / {dl}% / {dt:.2f} h"
+            f"｜每 1% ≈ {dc / dl:.1f} mAh（隱含滿電 ≈ {dc / dl * 100:.0f} mAh）｜平均 {dc / dt:.1f} mAh/h"
+        )
+    rows = []
+    for a, b in zip(samples, samples[1:]):
+        h = b[2] - a[2]
+        d = a[1] - b[1]
+        rate = f"{d / h:.1f}" if h > 0 else "N/A"
+        rows.append(f"  L{b[0]} {b[1]} mAh @ +{b[2]:.2f} h｜Δ{d} mAh / {h:.2f} h = {rate} mAh/h")
+    if len(rows) > max_rows:
+        out.append(f"  ...（僅列最後 {max_rows} 級，前面省略 {len(rows) - max_rows} 級）")
+        rows = rows[-max_rows:]
+    return out + rows
+
+
+
 def extract_wakelocks(
     lines: list[str], header_re: re.Pattern, line_re: re.Pattern, top_n: int
 ) -> tuple[list[str], int]:
@@ -270,6 +374,8 @@ def extract_wakelocks(
             entry_indent = indent_of(l)
         elif indent_of(l) != entry_indent:
             break
+        if "times)" not in l:  # 截斷行（缺少時間與次數）不列入
+            continue
         entries.append("  " + l.strip())
     omitted = max(0, len(entries) - top_n)
     return entries[:top_n], omitted
@@ -286,6 +392,8 @@ def build_report(text: str, source: str, mask: Masker, args: argparse.Namespace)
     partial, partial_omit = extract_wakelocks(lines, PARTIAL_HEADER_RE, PARTIAL_LINE_RE, args.top_wl)
     kernel, kernel_omit = extract_wakelocks(lines, KERNEL_HEADER_RE, KERNEL_LINE_RE, args.top_kernel)
     wifi = extract_wifi(lines)
+    wakeup, wakeup_omit = extract_wakeup_reasons(lines, args.top_wakeup)
+    charge_steps = extract_charge_steps(text)
 
     mode = (
         "安全分享模式（已隱藏 App 名稱並遮蔽部分識別資訊，仍須人工確認）"
@@ -294,7 +402,7 @@ def build_report(text: str, source: str, mask: Masker, args: argparse.Namespace)
     out: list[str] = [
         "=== Android 電量分析精華摘要 ===",
         f"工具版本：battery_extract {__version__}",
-        f"來源檔案：{source}",
+        f"來源檔案：{source if (not mask.enabled or args.show_source) else mask_source(source)}",
         f"輸出模式：{mode}",
     ]
     if mask.enabled:
@@ -316,15 +424,17 @@ def build_report(text: str, source: str, mask: Masker, args: argparse.Namespace)
     section("## 4. 底層硬體驅動喚醒鎖 (All kernel wake locks)", kernel, kernel_omit)
     section("## 5. Wi‑Fi 統計 (Wifi Statistics)", wifi, 0, "  （查無 Wi‑Fi 統計）")
 
-    total_omit_lines = power_omit_lines + partial_omit + kernel_omit
+    section("## 6. 喚醒原因 (All wakeup reasons)", wakeup, wakeup_omit, "  （查無喚醒原因）")
+    section("## 7. 電量級距與 charge counter (Battery History)", charge_steps, 0, "  （查無 Battery History 的 charge= 取樣）")
+
     out.append("")
     out.append("## 處理統計")
     if mask.enabled:
         out.append(f"  遮蔽替換總次數：{sum(mask.counts.values())}")
-        for key in ("pkg", "email", "account", "timestamp"):
+        for key in ("pkg", "acct", "email", "account", "timestamp"):
             if mask.counts[key]:
                 out.append(f"    - {key}：{mask.counts[key]}")
-    out.append(f"  省略行數：{total_omit_lines}")
+    out.append(f"  省略項目：耗電 {power_omit_items}｜partial wakelock {partial_omit}｜kernel wakelock {kernel_omit}｜wakeup reason {wakeup_omit}")
     return "\n".join(out) + "\n"
 
 
@@ -335,6 +445,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--raw", action="store_true", help="不遮蔽（僅供自己查看）")
     ap.add_argument("--top-power", type=int, default=25, help="耗電排名保留項目數（預設 25）")
     ap.add_argument("--top-wl", type=int, default=35, help="Partial wakelock 保留筆數（預設 35）")
+    ap.add_argument("--top-wakeup", type=int, default=10, help="喚醒原因保留筆數（預設 10）")
+    ap.add_argument("--show-source", action="store_true", help="輸出時保留來源檔名（預設遮蔽 IP:port）")
     ap.add_argument("--top-kernel", type=int, default=35, help="Kernel wakelock 保留筆數（預設 35）")
     ap.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__} ({__date__})")
     return ap.parse_args()

@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.5
+# 版本資訊：v1.9.7
 # 更新日期：2026-11-27
 #
+# v1.9.7：
+#   - 固定 Port 優先（FIXED_PORT，預設 5555；m12/m14 這類會自動關閉無線偵錯的裝置，插一次 USB 執行 adb -s <序號> tcpip 5555 後拔線）
+#   - 已連線的 IP 直接略過掃描；IP 無回應（裝置關機／離開區網）略過 20,000 port 掃描（FORCE_SCAN=1 可強制）
+#   - 互動模式：含 | ; & < > $ ` 或引號的指令仍交給本機 shell（管線／awk／grep 在本機執行，與 v1.9.4 相同），單純指令才用陣列傳參
+# v1.9.6：
+#   - 新增 AUTO_SCAN_DEFAULT_IPS（預設 1）：執行 all / a 批次抓檔前自動掃描 DEFAULT_IPS 補連裝置
+#   - 延續 v1.9.5 預設 IP 清單（192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167）、命中即停掃描與防呆修正
+
 # v1.9.5：
 #   - 預設 IP 更新為 192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167，提示改為「預設 IP」不限紅米
 #   - scan_open_ports 改為併發命中即停（找到可用 port 立即取消其餘任務），加快連線速度
@@ -11,14 +19,41 @@
 #   - interactive_adb_loop 一般 ADB 指令改用陣列傳遞參數，降低 eval 風險
 #   - get_model 增加短暫重試與型號 fallback，避免剛連上抓空值而整台跳過
 #   - 關鍵字比對改為收集所有符合裝置；batch_jobhist 拆開執行與存檔判斷；暫存檔改用安全字元命名
+
+# v1.9.4：輸出檔名不再含 IP:port（改為 dev+serial 雜湊，KEEP_SERIAL_IN_NAME=1 可還原）；
+#         新增 _props.txt（機型/Android 版本）、_battery.txt（dumpsys battery）、_meta.txt（擷取時間；含序號，請勿分享）；
+#         report 一律加 --strict-mask 並帶 --props；選單 1 不再於第一個空行截斷；選單 5/6 暫存檔不再殘留
+
+# 用法說明：
+#   1. 批次抓取 batterystats 報告（預設模式）：
+#        ./dump_battery.sh [all|a|<IP或Port關鍵字>]
+#   2. 互動式裝置選單與單機下達 ADB 指令模式（秒開，不自動慢速掃 port）：
+#        ./dump_battery.sh -i | --interactive
+#   3. 批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）：
+#        ./dump_battery.sh -q | --quick-report
+#   4. 批次執行 jobhist.py 長任務與逾時分析（--min 10 --top 10）：
+#        ./dump_battery.sh -j | --jobhist
+#   5. 顯示說明：
+#        ./dump_battery.sh -h | --help
+#
+# 環境變數（可選）：
+#   DEFAULT_IPS="192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167"  # 常用裝置固定 IP（按 c 時可直接選或一鍵全掃）
+#   SCAN_RANGES="5555 30000-49999"             # 裝置重連時掃描的 port 範圍
+#   SCAN_TIMEOUT=0.15                          # 單一 port 連線逾時秒數
+#   SCAN_WORKERS=200                           # Python 併發掃描執行緒數
+#   SKIP_PORT_SCAN=0                           # 設為 1 可跳過掃描（僅嘗試原 port）
+#   OUT_DIR="reports"                          # 報告輸出資料夾
 # ==============================================================================
 
 set -u
 
-SCRIPT_VERSION="v1.9.5"
+SCRIPT_VERSION="v1.9.7"
 SCRIPT_DATE="2026-11-27"
 OUT_DIR="${OUT_DIR:-reports}"
 DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
+AUTO_SCAN_DEFAULT_IPS="${AUTO_SCAN_DEFAULT_IPS:-1}"
+FIXED_PORT="${FIXED_PORT:-5555}"   # 優先嘗試的固定 port；設為空字串可停用
+FORCE_SCAN="${FORCE_SCAN:-0}"      # 1 = IP 無回應時仍強制掃描
 SCAN_RANGES="${SCAN_RANGES:-5555 30000-49999}"
 SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.12}"
 SCAN_WORKERS="${SCAN_WORKERS:-200}"
@@ -53,15 +88,27 @@ ADB Doze 測試與裝置管理工具 (${SCRIPT_VERSION} | 更新日期: ${SCRIPT
   -i, --interactive   列出裝置型號並選擇單一裝置，下達 ADB 指令或使用快捷指令選單
   -q, --quick-report  批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）
   -j, --jobhist       批次執行 jobhist.py 長任務/逾時檢查（--min 10 --top 10）
-  all, a              批次抓取所有正常連線裝置的 batterystats
+  all, a              批次抓取所有正常連線裝置的 batterystats（預設會先自動掃描預設 IP）
   <關鍵字>            批次抓取符合 IP 或 Port 關鍵字的裝置
+
+環境變數（可選）：
+  DEFAULT_IPS="192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167"
+  AUTO_SCAN_DEFAULT_IPS=1   # 執行 all / a 時自動掃描 DEFAULT_IPS（設為 0 可停用）
+  SCAN_RANGES="5555 30000-49999"
+  SCAN_TIMEOUT=0.12
+  SCAN_WORKERS=200
+  SKIP_PORT_SCAN=0
+  FIXED_PORT=5555           # 先試固定 port，成功就不掃描
+  FORCE_SCAN=0              # 1 = IP 無回應時仍強制掃描
+  OUT_DIR="reports"
 
 範例：
   $0                  互動選擇抓取 batterystats（若 offline 會快速掃 port 重連）
-  $0 all              一次抓取所有連線裝置的 batterystats（raw + extract + report + js/jobhist/power）
+  $0 all              自動掃描預設 IP 後一次抓取所有連線裝置的 batterystats
+  AUTO_SCAN_DEFAULT_IPS=0 $0 all   跳過預設 IP 自動掃描，直接抓目前已連線裝置
   $0 -q               批次輸出所有連線裝置的 battery.py 精簡報告
   $0 -j               批次輸出所有連線裝置的 jobhist.py 分析
-  $0 -i               進入互動式裝置選擇與 ADB 指令模式（支援預設 IP 與指定 IP/Port 掃描連線）
+  $0 -i               進入互動式裝置選擇與 ADB 指令模式
 EOF
 }
 
@@ -128,7 +175,6 @@ expand_ports() {
   done
 }
 
-# 併發掃描指定 IP 的開放 port，找到第一個可 adb connect 的 port 即停止其餘任務
 scan_and_connect_ports() {
   local ip="$1"
   if [ -z "$PYTHON_BIN" ]; then
@@ -195,6 +241,36 @@ sys.exit(1)
 PY
 }
 
+# 該 IP 是否已有 ip:port 形式、狀態為 device 的 ADB 連線
+ip_already_connected() {
+  local ip="$1"
+  adb devices 2>/dev/null | tr -d '\r' | awk -v ip="$ip" '$2 == "device" && index($1, ip ":") == 1 { f = 1 } END { exit !f }'
+}
+
+# IP 是否有回應：TCP 連 5555，「連上」或「被拒絕（RST）」都代表主機在線；逾時才視為無回應
+host_alive() {
+  local ip="$1"
+  [ "$FORCE_SCAN" = "1" ] && return 0
+  if [ -n "$PYTHON_BIN" ]; then
+    "$PYTHON_BIN" - "$ip" <<'PY'
+import errno, socket, sys
+ip = sys.argv[1]
+for _ in range(2):
+    s = socket.socket()
+    s.settimeout(1.5)
+    try:
+        rc = s.connect_ex((ip, 5555))
+    finally:
+        s.close()
+    if rc in (0, errno.ECONNREFUSED):
+        sys.exit(0)
+sys.exit(1)
+PY
+    return $?
+  fi
+  ping -c 1 -W 1 "$ip" >/dev/null 2>&1
+}
+
 connect_by_ip() {
   local target_input="$1"
   local force_scan="${2:-0}"
@@ -218,6 +294,23 @@ connect_by_ip() {
     echo "⚠️  指定埠 ${ip}:${hint_port} 無法連線，改嘗試掃描 ${ip}..."
   fi
 
+  if [ -z "$hint_port" ] && ip_already_connected "$ip"; then
+    echo "✅ ${ip} 已有連線，略過掃描"
+    return 0
+  fi
+
+  if [ -n "$FIXED_PORT" ] && [ "$FIXED_PORT" != "$hint_port" ]; then
+    if check_tcp_port "$ip" "$FIXED_PORT" && adb connect "${ip}:${FIXED_PORT}" 2>/dev/null | grep -q "connected"; then
+      echo "✅ 已連線至固定 port ${ip}:${FIXED_PORT}"
+      return 0
+    fi
+  fi
+
+  if ! host_alive "$ip"; then
+    echo "❌ ${ip} 無回應（裝置未開機、離開區網或 Wi‑Fi 休眠），略過 port 掃描；FORCE_SCAN=1 可強制掃描"
+    return 1
+  fi
+
   if [ "$SKIP_PORT_SCAN" = "1" ] && [ "$force_scan" != "1" ]; then
     echo "⏭️  已設定 SKIP_PORT_SCAN=1，略過 port 掃描。"
     return 1
@@ -231,9 +324,22 @@ connect_by_ip() {
     echo "✅ 掃描成功！已連線至 ${ip}:${found_port}"
     return 0
   else
-    echo "❌ 無法自動連上 ${ip}（請確認手機已開啟「無線偵錯」，且螢幕處於喚醒狀態）"
+    echo "❌ 無法自動連上 ${ip}（請確認裝置已開啟「無線偵錯」，且螢幕處於喚醒狀態）"
     return 1
   fi
+}
+
+scan_default_ips_batch() {
+  local def_arr=() dip
+  read -ra def_arr <<< "$DEFAULT_IPS"
+  [ ${#def_arr[@]} -eq 0 ] && return 0
+
+  echo "🔍 批次前自動掃描預設 IP（${DEFAULT_IPS}）..."
+  for dip in "${def_arr[@]}"; do
+    echo "------------------------------------------"
+    connect_by_ip "$dip" 1
+  done
+  echo ""
 }
 
 prompt_manual_ip_connect() {
@@ -272,7 +378,7 @@ prompt_manual_ip_connect() {
     fi
   else
     local manual_ip
-    read -rp "請輸入手機區網 IP（例如 192.168.1.112，直接按 Enter 取消）: " manual_ip
+    read -rp "請輸入裝置區網 IP（例如 192.168.1.112，直接按 Enter 取消）: " manual_ip
     manual_ip=$(echo "$manual_ip" | xargs)
     if [ -z "$manual_ip" ]; then
       echo "已取消。"
@@ -725,9 +831,17 @@ interactive_adb_loop() {
       fi
 
       cmd_input="${cmd_input#adb }"
-      local adb_args=()
-      read -ra adb_args <<< "$cmd_input"
-      adb -s "$target_dev" "${adb_args[@]}"
+      case "$cmd_input" in
+        *[\|\;\&\<\>\$\`\"\']*)
+          # 含管線／重導向／引號：交給本機 shell 解析（grep、awk、head 在本機執行；只在你自己的終端使用）
+          eval "adb -s \"$target_dev\" $cmd_input"
+          ;;
+        *)
+          local adb_args=()
+          read -ra adb_args <<< "$cmd_input"
+          adb -s "$target_dev" "${adb_args[@]}"
+          ;;
+      esac
       echo "(exit code: $?)"
     done
   done
@@ -834,6 +948,13 @@ case "${1:-}" in
 esac
 
 mkdir -p "$OUT_DIR"
+
+if [[ "${1:-}" == "a" || "${1:-}" == "A" || "${1:-}" == "all" ]]; then
+  if [ "${AUTO_SCAN_DEFAULT_IPS:-1}" = "1" ]; then
+    scan_default_ips_batch
+  fi
+fi
+
 recover_offline_devices
 refresh_online_devices
 
@@ -860,24 +981,40 @@ if [ -n "${1:-}" ]; then
 elif [ ${#DEVICES[@]} -eq 1 ]; then
   TARGETS=("${DEVICES[0]}")
 else
-  echo "偵測到多台正常連線裝置，請選擇要擷取的目標（${SCRIPT_VERSION}）："
-  print_device_table
-  echo "  a) 全部抓取 (共 ${#DEVICES[@]} 台裝置)"
-
   while true; do
-    read -rp "請輸入編號 (1-${#DEVICES[@]}) 或 a: " CHOICE
-    [[ -z "$CHOICE" ]] && continue
-    break
-  done
+    echo "偵測到多台正常連線裝置，請選擇要擷取的目標（${SCRIPT_VERSION}）："
+    print_device_table
+    echo "  a) 全部抓取 (共 ${#DEVICES[@]} 台裝置)"
+    echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP/IP:Port 連線"
+    echo "  q) 離開程式"
 
-  if [[ "$CHOICE" == "a" || "$CHOICE" == "A" ]]; then
-    TARGETS=("${DEVICES[@]}")
-  elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le ${#DEVICES[@]} ]; then
-    TARGETS=("${DEVICES[$((CHOICE-1))]}")
-  else
-    echo "錯誤：無效的選項。"
-    exit 1
-  fi
+    while true; do
+      read -rp "請輸入編號 (1-${#DEVICES[@]})、a、c 或 q: " CHOICE
+      [[ -z "$CHOICE" ]] && continue
+      break
+    done
+
+    if [[ "$CHOICE" == "q" || "$CHOICE" == "Q" ]]; then
+      echo "已離開。"
+      exit 0
+    elif [[ "$CHOICE" == "c" || "$CHOICE" == "C" ]]; then
+      prompt_manual_ip_connect
+      refresh_online_devices
+      if [ ${#DEVICES[@]} -eq 0 ]; then
+        echo "錯誤：目前沒有任何正常連線 (device) 的 ADB 裝置。"
+        exit 1
+      fi
+      continue
+    elif [[ "$CHOICE" == "a" || "$CHOICE" == "A" ]]; then
+      TARGETS=("${DEVICES[@]}")
+      break
+    elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le ${#DEVICES[@]} ]; then
+      TARGETS=("${DEVICES[$((CHOICE-1))]}")
+      break
+    else
+      echo "錯誤：無效的選項，請重新輸入。"
+    fi
+  done
 fi
 
 BATCH_TS=$(date +%Y%m%d_%H%M%S)

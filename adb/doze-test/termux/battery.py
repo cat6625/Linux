@@ -2,8 +2,27 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.1.10
-日期：2026-11-25
+版本：v1.2.1
+日期：2026-11-27
+
+v1.2.1（依 4 台機型 quick 報告的審查意見與資料對照修正）：
+- 「Discharge ＝ 模型」的註解改依 Battery History 判斷哪個是量測值（Discharge 與 charge counter 下降量一致時，模型已被校正到 Discharge）
+- history 涵蓋不足（緩衝區被截斷）時不再與 Discharge 比對；最近級距改為「每 ≥1% 一個視窗」，不再列出幾 mAh 的雜訊取樣
+- 顯示 100% 對應的 charge counter 與設定檔容量不一致時，說明 actual = 電量% × 設定檔容量 會高估／低估，並用 history 每 1% 重算
+- 模型低於 actual 上限時不再稱 Over-counted，改為「模型低於 actual 上限」
+- 學習容量與 charge counter 換算的滿電容量比較（±8%）；取代以 Discharge 換算區間的誤判
+- Screen on（級距分項）與元件榜 Screen（模型估算）口徑差異說明；多 user UID（u0a / u10a / u10s）分列提示；常見系統 UID 角色標示
+- 新增「喚醒原因」Top N（All wakeup reasons）與高頻／長時間 kernel wakelock 標示
+
+v1.2.0（依 21061119DG 兩次 dump + Battery History 對照後修正）：
+- 新增「容量對照」：Amount discharged 上下限 → 隱含滿電容量；Battery History 的 charge= 取樣 → 每 1% mAh 與平均 mAh/h；
+  學習容量不在隱含區間時不再暗示「健康度」
+- 功耗模型比值同時列出「÷ actual 中點」「÷ Discharge」並說明 Over-counted = 模型 − actual 上限
+- 級距提醒門檻放寬（±0.1 級），並說明 Discharge 以電量級距為單位更新
+- 熄屏 CPU / Doze 占比標明欄位名稱（Device idling vs Idle mode）與分母差異
+- 排名註解改為「分攤後與未分攤基準混用」，移除誤導的「舊版輸出」字樣
+- partial wakelock：累計小於單次最長時一律顯示「實際持有」
+- mask_emails 冪等（已遮蔽的 s***w@x 不再變成 s***w***@x）；離線模式遮蔽來源檔名的 IP:port；新增 --props / --show-source
 
 v1.1.10：
 - 新增「統計結束（約）」＝ 起算時間 + 電池使用時長，可當作每台 dump 的實際擷取時間
@@ -67,8 +86,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.1.10"
-__date__ = "2026-11-25"
+__version__ = "v1.2.1"
+__date__ = "2026-11-27"
 
 STATS_HEADER = "Statistics since last charge:"
 STATS_NEXT_HEADER = "Statistics since last unplugged:"
@@ -241,7 +260,7 @@ def mask_email_match(match: re.Match) -> str:
 def mask_emails(text: str) -> str:
     """將電子信箱去識別化，例如 alice@gmail.com -> a***e@gmail.com。"""
     return re.sub(
-        r"(?<![@\w.%+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
+        r"(?<![@\w.%+-])([A-Za-z0-9._%+*-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b",
         mask_email_match,
         text,
     )
@@ -358,7 +377,8 @@ def format_uid_label(name: str, uid_pkgs_map: dict[str, list[str]]) -> str:
     _, num_uid = extract_uid_token(name)
     pkgs = uid_pkgs_map.get(num_uid or "")
     if not pkgs:
-        return name
+        aid = AID_NAMES.get(num_uid or "")
+        return f"{name} [AID {aid}]" if aid else name
     preview = ", ".join(pkgs[:2]) + (" 等" if len(pkgs) > 2 else "")
     return f"{name} [{preview}]"
 
@@ -726,6 +746,148 @@ def fmt_rate(
 
 # ------------------------------------------------------------- 輸出 ----
 
+HOST_RE = re.compile(r"\d{1,3}(?:[_.]\d{1,3}){3}(?:[_:]\d{2,5})?")
+HIST_LINE_RE = re.compile(
+    r"^\s*(0|\+?(?:\d+d)?(?:\d+h)?(?:\d+m)?(?:\d+s)?\d+ms)\s+\(\d+\)\s+(\d{3})\s+(.*)$"
+)
+
+
+def mask_source(name: str) -> str:
+    """來源檔名常含區網 IP 與無線偵錯 port，預設遮蔽。"""
+    return HOST_RE.sub("[HOST]", name)
+
+
+def read_props(path: str) -> dict[str, str | None]:
+    """讀 key=value 的 getprop 存檔（dump_battery.sh 產生），讓離線報告也有機型與 Android 版本。"""
+    props: dict[str, str] = {}
+    try:
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                props[k.strip()] = v.strip()
+    except OSError:
+        return {}
+    brand, model = props.get("ro.product.brand"), props.get("ro.product.model")
+    if brand and model and not model.lower().startswith(brand.lower()):
+        model_display = f"{brand.capitalize()} {model}"
+    else:
+        model_display = model or brand or props.get("ro.product.device")
+    rel, sdk = props.get("ro.build.version.release"), props.get("ro.build.version.sdk")
+    android = f"Android {rel} (API {sdk})" if rel and sdk else (f"Android {rel}" if rel else None)
+    return {"model": model_display or None, "android": android, "build": props.get("ro.build.display.id") or None}
+
+
+def parse_discharge_bounds(summary: str) -> tuple[int, int] | None:
+    lo = re.search(r"Amount discharged \(lower bound\):\s*(\d+)", summary)
+    hi = re.search(r"Amount discharged \(upper bound\):\s*(\d+)", summary)
+    if not (lo and hi):
+        return None
+    return int(lo.group(1)), int(hi.group(1))
+
+
+def _hist_hours(tok: str) -> float:
+    if tok == "0":
+        return 0.0
+    mm = re.match(r"\+?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms", tok)
+    d, h, m, s, ms = (int(x or 0) for x in mm.groups()) if mm else (0, 0, 0, 0, 0)
+    return d * 24 + h + m / 60 + s / 3600 + ms / 3600000
+
+
+def parse_history_charge(text: str) -> list[tuple[int, int, float]]:
+    """Battery History 的 (level, charge mAh, 距統計起點小時)；charge= 只在數值變動時出現。"""
+    lines = text.splitlines()
+    idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Battery History", l)), None)
+    if idx is None:
+        return []
+    out: list[tuple[int, int, float]] = []
+    for l in lines[idx + 1:]:
+        m = HIST_LINE_RE.match(l)
+        if not m:
+            continue
+        ch = re.search(r"\bcharge=(\d+)", m.group(3))
+        if ch:
+            out.append((int(m.group(2)), int(ch.group(1)), _hist_hours(m.group(1))))
+    return out
+
+
+AID_NAMES = {
+    "0": "root", "1000": "system", "1001": "radio", "1002": "bluetooth", "1013": "media",
+    "1021": "gps", "1036": "logd", "1041": "audioserver", "1047": "cameraserver",
+    "1051": "netd", "2000": "shell",
+}
+WAKEUP_HEADER_RE = re.compile(r"^\s*All wakeup reasons:\s*$", re.IGNORECASE)
+WAKEUP_ROW_RE = re.compile(r"^\s*Wakeup reason\s+(.+?):\s+((?:\d+(?:ms|d|h|m|s)\s*)+)\((\d+) times\)")
+
+
+def parse_wakeup_reasons(text: str, top_n: int = 10) -> list[dict]:
+    lines = text.splitlines()
+    idx = next((i for i, l in enumerate(lines) if WAKEUP_HEADER_RE.match(l)), None)
+    if idx is None:
+        return []
+    rows: list[dict] = []
+    for l in lines[idx + 1:]:
+        if not l.strip():
+            continue
+        if not re.match(r"^\s*Wakeup reason\s", l):
+            break
+        m = WAKEUP_ROW_RE.match(l)
+        if not m:
+            continue
+        hours = parse_duration_to_hours(m.group(2).strip())
+        if hours is None:
+            continue
+        rows.append({"name": m.group(1).strip(), "hours": hours, "count": int(m.group(3))})
+    rows.sort(key=lambda r: r["hours"], reverse=True)
+    return rows[:top_n]
+
+
+def history_stats(hist: list[tuple[int, int, float]], battery_hours: float | None) -> dict | None:
+    if len(hist) < 2:
+        return None
+    (l0, c0, t0), (l1, c1, t1) = hist[0], hist[-1]
+    dl, dc, dt = l0 - l1, c0 - c1, t1 - t0
+    if dl <= 0 or dt <= 0 or dc <= 0:
+        return None
+    per1 = dc / dl
+    return {
+        "l0": l0, "c0": c0, "l1": l1, "c1": c1, "dl": dl, "dc": dc, "dt": dt,
+        "per1": per1, "cap100": per1 * 100.0, "reliable": dl >= 5,
+        "coverage": (dt / battery_hours) if battery_hours else 1.0,
+    }
+
+
+def history_windows(hist: list[tuple[int, int, float]], per1: float, n: int = 5) -> list[str]:
+    """每累積 ≥0.9 個 1% 級距（約 per1 mAh）取一個視窗，避免把幾 mAh 的細碎取樣當成級距。"""
+    if len(hist) < 2 or per1 <= 0:
+        return []
+    out: list[str] = []
+    anchor = hist[0]
+    for s in hist[1:]:
+        d = anchor[1] - s[1]
+        if d >= per1 * 0.9:
+            h = s[2] - anchor[2]
+            if h > 0:
+                out.append(f"L{s[0]} {d} mAh/{h:.2f} h = {d / h:.1f} mAh/h")
+            anchor = s
+    return out[-n:]
+
+
+def multiuser_note(names: list[str]) -> str | None:
+    """同一 appId 在不同 user（u0a / u10a / u10s）分列時提示，避免當成不同程式或重複加總。"""
+    seen: dict[tuple[str, str], set[str]] = {}
+    for nm in names:
+        m = re.search(r"\bu(\d+)([ais])(\d+)\b", nm)
+        if m:
+            seen.setdefault((m.group(2), m.group(3)), set()).add(f"u{m.group(1)}{m.group(2)}{m.group(3)}")
+    dup = [sorted(v) for v in seen.values() if len(v) > 1]
+    if not dup:
+        return None
+    ex = "；".join(" / ".join(d) for d in dup[:3])
+    return (
+        f"※ 同一 App 在不同 user（工作設定檔、Secure Folder、雙開等）會分列：{ex}。"
+        "它們是同一個 appId 的不同副本，不是不同程式；加總前請先合併。"
+    )
+
 def _size_to_bytes(num: str, unit: str) -> float:
     mult = {"B": 1.0, "KB": 1024.0, "MB": 1024.0**2, "GB": 1024.0**3}
     return float(num) * mult.get(unit.upper(), 1.0)
@@ -890,7 +1052,10 @@ def print_wakelock_ranking(
             mx_str = f"，單次最長 {sec / 60:.1f} 分鐘" if sec >= 60 else f"，單次最長 {sec:.0f} 秒"
         act_ms = item.get("actual_ms")
         act_str = ""
-        if act_ms is not None and act_ms >= 30000 and act_ms >= item["hours"] * 3600000 * 1.2:
+        if act_ms is not None and act_ms >= 30000 and (
+            act_ms >= item["hours"] * 3600000 * 1.2
+            or (item.get("max_ms") or 0) > item["hours"] * 3600000
+        ):
             act_str = f"｜實際持有 {act_ms / 60000:.1f} 分鐘" if act_ms >= 90000 else f"｜實際持有 {act_ms / 1000:.0f} 秒"
             shared_note[0] = True
         run_ms = item.get("running_ms")
@@ -911,6 +1076,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--merge-wl", action="store_true", help="合併背景喚醒（Partial Wake Lock）中的同名項目")
     parser.add_argument("--hide-wm", action="store_true", help="背景喚醒排行隱藏 WindowManager 項目")
     parser.add_argument("--strict-mask", action="store_true", help="信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）")
+    parser.add_argument("--props", type=str, default=None, help="離線模式用：getprop 的 key=value 存檔（機型 / Android 版本）")
+    parser.add_argument("--show-source", action="store_true", help="離線模式保留完整來源檔名（預設遮蔽 IP:port）")
     parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__} ({__date__})")
     return parser.parse_args()
 
@@ -922,7 +1089,7 @@ def main() -> None:
     top_n = max(1, args.top_n_pos if args.top_n_pos is not None else args.top)
 
     offline = bool(args.file)
-    device_info = {} if offline else get_device_info()
+    device_info = (read_props(args.props) if args.props else {}) if offline else get_device_info()
     raw_text = read_stats_from_file(args.file) if offline else get_stats_from_adb()
 
     if STATS_HEADER not in raw_text and "Estimated power use" not in raw_text:
@@ -953,14 +1120,13 @@ def main() -> None:
 
     print(f"=== 裝置與系統資訊（{__version__} / {__date__}）===")
     if offline:
-        print(f"資料來源：離線檔案（{args.file}）")
-    else:
-        if device_info.get("model"):
-            print(f"機型：{device_info['model']}")
-        if device_info.get("android"):
-            print(f"系統版本：{device_info['android']}")
-        if device_info.get("build"):
-            print(f"韌體版本：{device_info['build']}")
+        print(f"資料來源：離線檔案（{args.file if args.show_source else mask_source(args.file)}）")
+    if device_info.get("model"):
+        print(f"機型：{device_info['model']}")
+    if device_info.get("android"):
+        print(f"系統版本：{device_info['android']}")
+    if device_info.get("build"):
+        print(f"韌體版本：{device_info['build']}")
 
     print("\n=== 電池與統計週期資訊 ===")
     if start_clock:
@@ -986,7 +1152,7 @@ def main() -> None:
                     "不代表電池健康度；容量需以實測確認）"
                 )
             else:
-                ratio_s = f"（健康度約 {ratio * 100:.1f}%）"
+                ratio_s = f"（學習/估計 = {ratio * 100:.1f}%；是否為電池健康度需另行驗證，見「容量對照」）"
         print(f"學習容量範圍：{min_s} ~ {max_s} mAh{ratio_s}")
     prof = find_profile_capacity(summary)
     if prof:
@@ -996,6 +1162,9 @@ def main() -> None:
         print(f"電源設定檔容量：{prof[0]:.0f} mAh{extra_cap}")
     if battery_hours is not None:
         print(f"電池使用總時長：{battery_hours:.2f} 小時")
+
+    hist = parse_history_charge(raw_text)
+    hinfo = history_stats(hist, battery_hours)
 
     print("\n=== 整體耗電摘要 ===")
     if discharge is not None:
@@ -1015,12 +1184,43 @@ def main() -> None:
                 act_s = f"{act_lo:.0f}–{act_hi:.0f} mAh"
             print(f"功耗模型估算：{computed:.0f} mAh｜系統實際（電量級距 × 設定檔容量）：{act_s}")
             act_mid = (act_lo + act_hi) / 2
+            if computed > 0 and act_hi > 0 and discharge > 0:
+                diff_hi = computed - act_hi
+                oc = (
+                    f"Over-counted ≈ 模型 − actual 上限（{act_hi:.0f}）= {diff_hi:.0f} mAh"
+                    if diff_hi >= 0
+                    else f"模型低於 actual 上限 {-diff_hi:.0f} mAh（不是 Over-counted；actual 的容量基準若偏高會造成負差，見下）"
+                )
+                print(
+                    f"※ 比值基準：模型 ÷ actual 中點（{act_mid:.0f}）= {computed / act_mid * 100:.0f}%｜"
+                    f"模型 ÷ Discharge = {computed / discharge * 100:.0f}%｜{oc}"
+                )
             aligned = discharge > 0 and abs(computed - discharge) <= max(1.0, discharge * 0.01)
             if aligned:
-                print("※ Discharge 與功耗模型估算相同（Android 13+ 的放電值已與模型對齊，不是獨立量測）。")
+                if hinfo and hinfo["coverage"] >= 0.95 and abs(hinfo["dc"] - discharge) <= max(3.0, discharge * 0.01):
+                    print(
+                        "※ Discharge = 模型估算，且與 Battery History 的 charge counter 下降量一致："
+                        "Discharge 是量測值，模型已被校正到該值，「模型 ÷ Discharge = 100%」不代表模型準確。"
+                    )
+                elif hinfo and hinfo["coverage"] < 0.95:
+                    print("※ Discharge = 模型估算；Battery History 只涵蓋部分統計期間，無法確認哪一個是量測值。")
+                else:
+                    print("※ Discharge 與功耗模型估算相同（Android 13+ 常見）；本檔無法判斷哪一個是量測值，不能用 100% 當作模型準確的證據。")
+            scale_printed = False
+            ref_cap = prof[0] if prof else est_cap
+            if hinfo and hinfo["reliable"] and ref_cap and act_hi > 0 and abs(hinfo["cap100"] / ref_cap - 1) > 0.08:
+                lo_p, hi_p = act_lo / ref_cap * 100.0, act_hi / ref_cap * 100.0
+                direction = "高估" if hinfo["cap100"] < ref_cap else "低估"
+                print(
+                    f"※ 顯示 100% 對應的 charge counter 約 {hinfo['cap100']:.0f} mAh（每 1% ≈ {hinfo['per1']:.1f} mAh），"
+                    f"是設定檔容量 {ref_cap:.0f} 的 {hinfo['cap100'] / ref_cap * 100:.0f}%：「actual = 電量% × 設定檔容量」會{direction}；"
+                    f"以 history 每 1% 重算 actual ≈ {lo_p * hinfo['per1']:.0f}–{hi_p * hinfo['per1']:.0f} mAh。"
+                    "可能對應充電上限、電池保護或容量計校正偏移（本檔無法區分）；此時 %/h 會被低估，請以 mAh/h 為準。"
+                )
+                scale_printed = True
             if computed > 0 and act_mid > 0:
                 ratio = computed / act_mid
-                if aligned and (ratio < 0.9 or ratio > 1.1):
+                if aligned and not scale_printed and (ratio < 0.9 or ratio > 1.1):
                     gap_pct = abs(ratio - 1) * 100
                     gap_mah = abs(computed - act_mid)
                     cap_ratio = (est_cap / prof[0]) if (prof and est_cap and prof[0] > 0) else None
@@ -1048,14 +1248,17 @@ def main() -> None:
                                 f"需要同時記錄起訖電量才能確認。"
                             )
                 elif not aligned and ratio < 0.8:
-                    print(f"※ 功耗模型只解釋實際放電的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
+                    print(f"※ 功耗模型只解釋 actual drain 中點的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
                 elif not aligned and ratio > 1.2:
-                    print(f"※ 功耗模型約為實際放電的 {ratio * 100:.0f}%，估算偏高，只適合看相對排名。")
+                    print(f"※ 功耗模型約為 actual drain 中點的 {ratio * 100:.0f}%，估算偏高，只適合看相對排名。")
         if est_cap and discharge > 0:
             step = est_cap / 100.0
             q = discharge / step
-            if abs(q - round(q)) < 0.02 and round(q) >= 1:
-                print(f"※ 放電值恰為 1% 級距的整數倍（每級約 {step:.1f} mAh，共 {round(q)} 級），短時間內的 mAh/h 誤差很大。")
+            if abs(q - round(q)) < 0.1 and round(q) >= 1:
+                print(
+                    f"※ 放電值接近 1% 級距的整數倍（每級約 {step:.1f} mAh，約 {q:.2f} 級）：Discharge 與 Doze 分項以電量級距為單位更新，"
+                    f"單項 mAh 與 mAh/h 的誤差可達 ±1 級（約 {step:.0f} mAh）。"
+                )
         if discharge == 0:
             print("※ 累計放電為 0：此檔沒有放電計數，mAh/h 與佔比皆不具意義，只能看時間分布與相對排名。")
         if screen_on_mah is not None and screen_off_mah is not None:
@@ -1063,6 +1266,50 @@ def main() -> None:
             print(f"亮屏 + 熄屏合計：{screen_on_mah + screen_off_mah:.0f} mAh（與 Discharge 差值：{diff:+.0f} mAh）")
     else:
         print("找不到累計放電（Discharge）資料。")
+
+    bounds = parse_discharge_bounds(summary)
+    if discharge and (bounds or hinfo):
+        print("\n=== 容量對照（放電量 vs 電量級距）===")
+        cap_lo = cap_hi = None
+        if bounds and bounds[1] > 0:
+            lo_p, hi_p = bounds
+            cap_hi = discharge / (lo_p / 100.0) if lo_p > 0 else None
+            cap_lo = discharge / (hi_p / 100.0)
+            rng = f"{cap_lo:.0f}–{cap_hi:.0f}" if cap_hi else f"≥ {cap_lo:.0f}"
+            print(f"電量下降 {lo_p}–{hi_p}%｜Discharge {discharge:.0f} mAh → 隱含滿電容量 {rng} mAh（以 Discharge 換算；Discharge 若為模型值則不可靠）")
+        if hinfo:
+            print(
+                f"Battery History：L{hinfo['l0']} {hinfo['c0']} mAh → L{hinfo['l1']} {hinfo['c1']} mAh｜下降 {hinfo['dc']} mAh / {hinfo['dl']}% / {hinfo['dt']:.2f} h"
+                f"｜每 1% ≈ {hinfo['per1']:.1f} mAh（隱含滿電 ≈ {hinfo['cap100']:.0f} mAh）｜平均 {hinfo['dc'] / hinfo['dt']:.1f} mAh/h"
+            )
+            if hinfo["coverage"] < 0.95 and battery_hours:
+                print(
+                    f"※ Battery History 只涵蓋 {hinfo['dt']:.1f} h / 統計 {battery_hours:.1f} h（緩衝區已截斷，起點 L{hinfo['l0']} 非統計起點）："
+                    "每 1% 的 mAh 仍可用，但下降量不能與 Discharge 直接比較。"
+                )
+            elif abs(hinfo["dc"] - discharge) <= max(3.0, discharge * 0.01):
+                print(
+                    f"※ Discharge 與 charge counter 下降量一致（差 {hinfo['dc'] - discharge:+.0f} mAh）：Discharge 是量測值；"
+                    "dump 當下尚未記錄的取樣不計入，可能少算最多一個取樣間隔。"
+                )
+            else:
+                print(f"※ history 下降量 {hinfo['dc']} mAh 與 Discharge {discharge:.0f} mAh 差 {hinfo['dc'] - discharge:+.0f} mAh（兩者取樣時間點不同）。")
+            if not hinfo["reliable"]:
+                print(f"※ history 只有 {hinfo['dl']}% 的電量變化，每 1% 的 mAh 換算受級距邊界影響（±1 級），不用於容量判斷。")
+            elif max_learned and abs(max_learned / hinfo["cap100"] - 1) > 0.08:
+                print(
+                    f"※ 學習容量 {max_learned:.0f} mAh 與 charge counter 換算的滿電容量 {hinfo['cap100']:.0f} mAh 差 "
+                    f"{(max_learned / hinfo['cap100'] - 1) * 100:+.0f}%：兩者互相不吻合，不能據此判定電池健康度（需充放電實測或 charge counter 長期紀錄）。"
+                )
+            tail = history_windows(hist, hinfo["per1"])
+            if tail:
+                print("最近 1% 視窗：" + "｜".join(tail))
+        else:
+            if max_learned and cap_lo and (max_learned < cap_lo or (cap_hi and max_learned > cap_hi)):
+                print(
+                    f"※ 學習容量 {max_learned:.0f} mAh 不在隱含區間內（無 Battery History 可交叉驗證，Discharge 若為模型值此判斷不可靠）。"
+                )
+            print("（無 Battery History 的 charge= 取樣，只能用 Amount discharged 上下限對照）")
 
     print("\n=== 亮屏與熄屏耗電率 ===")
     if screen_on_mah is not None and screen_on_hours:
@@ -1077,12 +1324,14 @@ def main() -> None:
         )
     if screen_on_hours is not None and screen_on_hours < 0.5:
         print(f"※ 亮屏時間只有 {screen_on_hours * 60:.0f} 分鐘，亮屏耗電率不具代表性。")
+    if screen_on_mah is not None and est_cap and screen_on_hours and screen_on_mah < est_cap / 100.0 * 0.5:
+        print("※ Screen on 的 mAh 取自電量級距分項（未跨過 1% 級距會顯示 0）；元件榜的 Screen 是功耗模型估算，兩者口徑不同，可並存。")
     if screen_off_hours is not None and screen_off_hours < 1.0:
         print(f"※ 熄屏時間只有 {screen_off_hours * 60:.0f} 分鐘，熄屏耗電率不具代表性。")
     if screen_off_hours and screen_off_uptime_hours is not None:
         print(
             f"熄屏期間 CPU 醒來（uptime）：{screen_off_uptime_hours:.2f} h"
-            f"（佔熄屏 {fmt_pct(screen_off_uptime_hours, screen_off_hours)}）"
+            f"（佔熄屏 {fmt_pct(screen_off_uptime_hours, screen_off_hours)}；raw 以總電池時長為分母 {fmt_pct(screen_off_uptime_hours, battery_hours)}）"
         )
     if (est_cap or max_learned) and (screen_on_mah is not None or screen_off_mah is not None):
         print("※ 註：若開啟充電上限（如 80% 保護）或學習容量偏移，實際體感掉電%會高於標準值，跨機型建議優先比對 mAh/h。")
@@ -1093,10 +1342,15 @@ def main() -> None:
     if deep_doze_mah is not None:
         print(f"深睡耗電（Deep doze）：{deep_doze_mah:.1f} mAh")
     if screen_off_hours and screen_off_hours > 0:
+        light_mode_hours = find_duration_hours(summary, "Idle mode light time")
+        full_mode_hours = find_duration_hours(summary, "Idle mode full time")
         if light_idle_hours is not None:
-            print(f"淺睡待機時長：{light_idle_hours:.2f} h（佔熄屏 {fmt_pct(light_idle_hours, screen_off_hours)}）")
+            alt = f"｜Idle mode light time {light_mode_hours:.2f} h" if light_mode_hours is not None else ""
+            print(f"淺睡待機時長（Device light idling）：{light_idle_hours:.2f} h（佔熄屏 {fmt_pct(light_idle_hours, screen_off_hours)}）{alt}")
         if full_idle_hours is not None:
-            print(f"深睡待機時長：{full_idle_hours:.2f} h（佔熄屏 {fmt_pct(full_idle_hours, screen_off_hours)}）")
+            alt = f"｜Idle mode full time {full_mode_hours:.2f} h" if full_mode_hours is not None else ""
+            print(f"深睡待機時長（Device full idling）：{full_idle_hours:.2f} h（佔熄屏 {fmt_pct(full_idle_hours, screen_off_hours)}）{alt}")
+        print("※ 占比分母為熄屏時間；raw 括號內以總電池時長為分母，數字可能差 0.1–0.2 個百分點。Doze 分項 mAh 受 1% 級距量化，僅供量級參考。")
     if full_wake_hours is not None:
         print(f"Full wakelock 累計：{full_wake_hours * 60:.1f} 分鐘")
     if partial_wake_hours is not None:
@@ -1127,6 +1381,23 @@ def main() -> None:
         top_kernel_locks,
         battery_hours,
     )
+    all_kernel = parse_kernel_wakelocks(summary, top_n=100000)
+    flags = [
+        f"{k['name']}（{k['count']:,} 次 / {fmt_pct(k['hours'], battery_hours)}）"
+        for k in all_kernel
+        if k["count"] >= 100000 or (battery_hours and k["hours"] / battery_hours >= 0.05)
+    ]
+    if flags:
+        print("※ 高頻／長時間 kernel wakelock（次數 ≥ 100,000 或占使用時長 ≥ 5%）：" + "；".join(flags[:6]))
+    wake_rows = parse_wakeup_reasons(summary, top_n=top_n)
+    if wake_rows:
+        print(f"\n=== 喚醒原因（All wakeup reasons）Top {len(wake_rows)} ===")
+        for i, w in enumerate(wake_rows, start=1):
+            share = f"｜占熄屏 CPU uptime {fmt_pct(w['hours'], screen_off_uptime_hours)}" if screen_off_uptime_hours else ""
+            mins = w["hours"] * 60
+            dur = f"{mins:.1f} 分鐘" if mins >= 1 else f"{mins * 60:.1f} 秒"
+            print(f"{i:>2}. {w['name']}：{dur}（{w['count']:,} 次）{share}")
+        print("※ 時間為喚醒後到再次睡眠的牆上時間；僅說明「被什麼喚醒」，不能單獨推論流量或程式來源，需搭配 dumpsys wifi／封包資料。")
     print_wakelock_ranking(
         f"=== 背景喚醒（Partial Wake Lock）Top {top_n} ===",
         top_partial_locks,
@@ -1148,7 +1419,14 @@ def main() -> None:
     if any(item["is_global"] for item in top_comp):
         print("※ [全域] 各列是各 App 與系統的分攤合計，與上方 UID 排名重疊，且估算加總可能超過實際放電，請只看相對大小。")
     if any_smeared:
-        print("※ 舊版輸出的 App 數值已含 Screen 等分攤，不可與 Screen / Cell standby 等元件相加。")
+        print(
+            "※ 排名混用兩種基準：u0a 項目為分攤後數值（括號內「分攤前」為原始值），"
+            "系統 UID（0 / 1000 / 1001 ... 標示 Excluded from smearing）為原始值；"
+            "兩者不可直接比較或相加，佔比分母皆為 Discharge，各榜加總可超過 100%。"
+        )
+    mu = multiuser_note([it["name"] for it in all_items])
+    if mu:
+        print(mu)
     print_ranking(
         f"=== 使用者 App（u0a）Top {top_n}（估算）===",
         top_u0a,

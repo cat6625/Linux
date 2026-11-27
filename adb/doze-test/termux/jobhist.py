@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，並列出配額（quota）裡的長 session
+版本：v1.3.0 (adb 讀取明確使用 UTF-8；事件依時間排序後再配對 START/STOP；Quota 只解析最後一個 QuotaController 區段；新增停止原因統計；標題標示 --min 篩選)
 版本：v1.2.1 (新增 adb 讀取 timeout=60 與逾時處理，支援無參數直接透過 adb 讀取)
 版本：v1.2.0 (新增精準信箱遮蔽與 --strict-mask，支援無參數直接透過 adb 讀取)
 版本：v1.1.0 (支援無參數直接透過 adb 讀取與 ANDROID_SERIAL)
@@ -22,12 +23,13 @@ jobhist.py - 從 dumpsys jobscheduler 算出每個 job 的實際執行時間，�
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.2.1"
+__version__ = "v1.3.0"
 
 STRICT_MASK = False
 
@@ -80,6 +82,7 @@ def parse_history(lines: list[str]) -> list[dict]:
         return []
     open_starts: dict[str, tuple[int, str]] = {}
     runs: list[dict] = []
+    events: list[tuple[int, re.Match]] = []
     for l in lines[start_idx + 1:]:
         if not l.strip():
             continue
@@ -88,7 +91,10 @@ def parse_history(lines: list[str]) -> list[dict]:
             if not l.startswith(" "):
                 break
             continue
-        off = offset_ms(m.group(1), m.group(2), m.group(3), m.group(4))
+        events.append((offset_ms(m.group(1), m.group(2), m.group(3), m.group(4)), m))
+    # offset 是「距 dump 多久以前」：越大越舊。排序後由舊到新配對，不依賴檔案列印順序
+    events.sort(key=lambda e: -e[0])
+    for off, m in events:
         kind, key, svc, reason = m.group(5), m.group(6), m.group(7), (m.group(8) or "").strip()
         if kind.startswith("START"):
             open_starts[key] = (off, svc)
@@ -116,7 +122,9 @@ def parse_history(lines: list[str]) -> list[dict]:
 def parse_sessions(lines: list[str]) -> list[dict]:
     out: list[dict] = []
     cur: str | None = None
-    for l in lines:
+    # 只解析最後一個頂層 QuotaController 區段（前面的 QuotaController 是 Settings 設定值）
+    q_start = max((i for i, l in enumerate(lines) if re.match(r"^QuotaController:\s*$", l)), default=0)
+    for l in lines[q_start:]:
         t = TIMER_RE.search(l)
         if t:
             cur = f"<{t.group(1)}>{t.group(2)}"
@@ -148,7 +156,7 @@ def main() -> None:
 
     if args.file:
         p = Path(args.file)
-        if not p.exists():
+        if not p.is_file():
             sys.exit(f"找不到檔案：{args.file}")
         raw_text = p.read_text(encoding="utf-8", errors="replace")
     else:
@@ -157,6 +165,7 @@ def main() -> None:
                 ["adb", "shell", "dumpsys", "jobscheduler"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 errors="replace",
                 timeout=60,
             )
@@ -178,23 +187,30 @@ def main() -> None:
     runs = [r for r in runs if (r["duration_ms"] is None or r["duration_ms"] >= min_ms)]
     runs.sort(key=lambda r: (r["duration_ms"] is None, -(r["duration_ms"] or 0)))
 
-    print(f"=== Job history：執行時間（共 {len(runs)} 筆，列前 {args.top}）===")
+    flt = f"，已篩選 ≥{args.min:g} 秒" if args.min > 0 else ""
+    reasons = Counter(
+        "(未結束)" if r["duration_ms"] is None else ("jobFinished" if "jobFinished" in r["reason"] else r["reason"].split()[0] if r["reason"].strip() else "(無)")
+        for r in runs
+    )
+    print(f"=== Job history：執行時間（共 {len(runs)} 筆{flt}，列前 {args.top}）===")
     if not runs:
         print("  查無符合項目（Job history 只保留最近一段時間，較舊的紀錄會被擠掉）。")
     for r in runs[: args.top]:
         dur = fmt_ms(r["duration_ms"]) if r["duration_ms"] is not None else "未結束"
         print(f"  {dur:>10}｜{fmt_ms(r['start_ago_ms'])} 前開始｜#{r['key']} {r['service']}｜{r['reason']}")
 
+    if reasons:
+        print("  停止原因統計：" + "｜".join(f"{k} {v}" for k, v in reasons.most_common()))
     sessions = parse_sessions(lines)
     if needle:
         sessions = [s for s in sessions if needle in s["pkg"].lower()]
     sessions = [s for s in sessions if s["duration_ms"] >= max(min_ms, 1)]
     sessions.sort(key=lambda s: -s["duration_ms"])
-    print(f"\n=== Quota 的 Saved sessions（共 {len(sessions)} 筆，列前 {args.top}）===")
+    print(f"\n=== Quota 的 Saved sessions（共 {len(sessions)} 筆{flt}，列前 {args.top}）===")
     if not sessions:
         print("  查無符合項目。")
     for s in sessions[: args.top]:
-        flag = "  ← 約等於 10 分鐘（JobScheduler 執行逾時）" if 590_000 <= s["duration_ms"] <= 620_000 else ""
+        flag = "  ← 接近 10 分鐘（可能是 JobScheduler 執行逾時；以 Job history 的 timeout 原因確認）" if 590_000 <= s["duration_ms"] <= 620_000 else ""
         print(f"  {fmt_ms(s['duration_ms']):>10}｜{s['pkg']}｜{s['jobs']} 個 bg job｜elapsed {s['start']}→{s['end']}{flag}")
 
 

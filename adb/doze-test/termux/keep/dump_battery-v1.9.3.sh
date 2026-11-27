@@ -17,7 +17,7 @@
 #        ./dump_battery.sh -h | --help
 #
 # 環境變數（可選）：
-#   DEFAULT_IPS="192.168.1.112 192.168.1.167"  # 常用紅米裝置固定 IP（按 c 時可直接選或一鍵全掃）
+#   DEFAULT_IPS="192.168.1.112 192.168.1.167"  # 常用裝置固定 IP（按 c 時可直接選或一鍵全掃）
 #   SCAN_RANGES="5555 30000-49999"             # 裝置重連時掃描的 port 範圍
 #   SCAN_TIMEOUT=0.15                          # 單一 port 連線逾時秒數
 #   SCAN_WORKERS=200                           # Python 併發掃描執行緒數
@@ -30,7 +30,7 @@ set -u
 SCRIPT_VERSION="v1.9.3"
 SCRIPT_DATE="2026-11-26"
 OUT_DIR="${OUT_DIR:-reports}"
-DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.167}"
+DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
 SCAN_RANGES="${SCAN_RANGES:-5555 30000-49999}"
 SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.15}"
 SCAN_WORKERS="${SCAN_WORKERS:-200}"
@@ -217,14 +217,14 @@ connect_by_ip() {
   fi
 }
 
-# 互動式選擇預設紅米 IP 或手動輸入 IP 並掃描連線
+# 互動式選擇預設 IP 或手動輸入 IP 並掃描連線
 prompt_manual_ip_connect() {
   local def_arr=()
   read -ra def_arr <<< "$DEFAULT_IPS"
 
   echo "------------------------------------------"
   if [ ${#def_arr[@]} -gt 0 ]; then
-    echo "預設紅米 IP 清單："
+    echo "預設 IP 清單："
     local idx
     for idx in "${!def_arr[@]}"; do
       echo "  $((idx+1))) ${def_arr[$idx]}"
@@ -629,7 +629,7 @@ interactive_adb_loop() {
       if [ ${#OFFLINE_DEVICES[@]} -gt 0 ]; then
         echo "⚠️  偵測到 offline 裝置：${OFFLINE_DEVICES[*]}"
       fi
-      echo "  c) 掃描預設紅米 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+      echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
       echo "  r) 重新掃描並嘗試重連 offline 裝置"
       echo "  q) 離開程式"
       read -rp "請輸入選項 (c/r/q 或直接按 Enter 重新整理): " retry_ans
@@ -647,7 +647,7 @@ interactive_adb_loop() {
     echo "=========================================="
     echo "請選擇要下達 ADB 指令的裝置（${SCRIPT_VERSION}）："
     print_device_table
-    echo "  c) 掃描預設紅米 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+    echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
     echo "  r) 重新掃描並嘗試重連 offline 裝置"
     echo "  q) 離開程式"
     echo "------------------------------------------"
@@ -864,3 +864,4 @@ if [ ${#CREATED_FILES[@]} -gt 0 ]; then
 else
   echo "(無產出檔案)"
 fi
+
