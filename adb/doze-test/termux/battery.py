@@ -2,8 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.2.4
+版本：v1.2.5
 日期：2026-11-27
+
+v1.2.5：
+- 喚醒原因占比改用「總 CPU uptime（含亮屏）」為分母並註明：喚醒後接著的亮屏使用也算在該原因的時間內（M146B 的 goodix_fp_irq 即為指紋解鎖後的使用）
+- 容量不一致說明依已有資料調整：已偵測到 counter 為固定單位換算時直接指向「電池服務狀態」；沒有 sys.* 回報時不再要求補 sysfs
 
 v1.2.4（依 SM-M146B 的 dumpsys battery 與 history 實測）：
 - 新增「電池服務狀態」：level / Charge counter、保護相關欄位原樣、BSOH / ASOC / FirstUseDate / cycle_count、charge counter 取樣的量化單位（gcd）
@@ -103,7 +107,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.2.4"
+__version__ = "v1.2.5"
 __date__ = "2026-11-27"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -694,6 +698,14 @@ def find_screen_off_uptime_hours(summary: str) -> float | None:
     return parse_duration_to_hours(m.group(1).strip())
 
 
+def find_total_uptime_hours(summary: str) -> float | None:
+    raw = find_raw_line(summary, "Time on battery")
+    if not raw:
+        return None
+    m = re.search(r"realtime,\s*(.+?)\s*\([\d.]+%\)\s*uptime", raw, re.IGNORECASE)
+    return parse_duration_to_hours(m.group(1).strip()) if m else None
+
+
 def find_power_model(text: str) -> tuple[float, float, float] | None:
     """從 Capacity 列取 (computed drain, actual 下限, actual 上限)。"""
     m = re.search(
@@ -1209,6 +1221,7 @@ def main() -> None:
     screen_on_hours = find_duration_hours(summary, "Screen on")
     screen_off_hours = find_duration_hours(summary, "Time on battery screen off")
     screen_off_uptime_hours = find_screen_off_uptime_hours(summary)
+    total_uptime_hours = find_total_uptime_hours(summary)
 
     light_idle_hours = find_duration_hours(summary, "Device light idling")
     full_idle_hours = find_duration_hours(summary, "Device full idling")
@@ -1356,7 +1369,16 @@ def main() -> None:
                     f"※ 顯示 100% 對應的 charge counter 約 {hinfo['cap100']:.0f} mAh（每 1% ≈ {hinfo['per1']:.1f} mAh），"
                     f"是設定檔容量 {ref_cap:.0f} 的 {hinfo['cap100'] / ref_cap * 100:.0f}%：「actual = 電量% × 設定檔容量」會{direction}；"
                     f"以 history 每 1% 重算 actual ≈ {lo_p * hinfo['per1']:.0f}–{hi_p * hinfo['per1']:.0f} mAh。"
-                    f"（history 起點 L{hinfo['l0']} = {hinfo['c0']} mAh）原因無法由 batterystats 判定，請對照標頭的「測試情境」與「裝置回報」，兩者都沒有時需補充充電上限／電池保護狀態與 sysfs 容量；此時 %/h 會被低估，請以 mAh/h 為準。"
+                    + (
+                        f"（history 起點 L{hinfo['l0']} = {hinfo['c0']} mAh）"
+                        + (
+                            "charge counter 為固定單位換算值，見「電池服務狀態」；"
+                            if any("固定容量換算" in ln for ln in bat_lines)
+                            else "原因無法由 batterystats 判定，請對照標頭的「測試情境」與「裝置回報」；"
+                            + ("" if any(k.startswith("settings.") or k.startswith("sys.") for k, _ in props_info.get("extras", [])) else "兩者都沒有時需補充充電上限／電池保護狀態；")
+                        )
+                        + "此時 %/h 會被低估，請以 mAh/h 為準。"
+                    )
                 )
                 scale_printed = True
             if computed > 0 and act_mid > 0:
@@ -1543,11 +1565,11 @@ def main() -> None:
     if wake_rows:
         print(f"\n=== 喚醒原因（All wakeup reasons）Top {len(wake_rows)} ===")
         for i, w in enumerate(wake_rows, start=1):
-            share = f"｜占熄屏 CPU uptime {fmt_pct(w['hours'], screen_off_uptime_hours)}" if screen_off_uptime_hours else ""
+            share = f"｜占總 CPU uptime {fmt_pct(w['hours'], total_uptime_hours)}" if total_uptime_hours else ""
             mins = w["hours"] * 60
             dur = f"{mins:.1f} 分鐘" if mins >= 1 else f"{mins * 60:.1f} 秒"
             print(f"{i:>2}. {w['name']}：{dur}（{w['count']:,} 次）{share}")
-        print("※ 時間為喚醒後到再次睡眠的牆上時間；僅說明「被什麼喚醒」，不能單獨推論流量或程式來源，需搭配 dumpsys wifi／封包資料。")
+        print("※ 時間為喚醒後到再次睡眠的牆上時間，喚醒後接著的亮屏使用也算在內（例如指紋／觸控喚醒）；僅說明「被什麼喚醒」，不能單獨推論流量或程式來源，需搭配 dumpsys wifi／封包資料。")
     print_wakelock_ranking(
         f"=== 背景喚醒（Partial Wake Lock）Top {top_n} ===",
         top_partial_locks,
