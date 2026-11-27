@@ -1,44 +1,31 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.3
-# 更新日期：2026-11-26
+# 版本資訊：v1.9.5
+# 更新日期：2026-11-27
 #
-# 用法說明：
-#   1. 批次抓取 batterystats 報告（預設模式）：
-#        ./dump_battery.sh [all|a|<IP或Port關鍵字>]
-#   2. 互動式裝置選單與單機下達 ADB 指令模式（秒開，不自動慢速掃 port）：
-#        ./dump_battery.sh -i | --interactive
-#   3. 批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）：
-#        ./dump_battery.sh -q | --quick-report
-#   4. 批次執行 jobhist.py 長任務與逾時分析（--min 10 --top 10）：
-#        ./dump_battery.sh -j | --jobhist
-#   5. 顯示說明：
-#        ./dump_battery.sh -h | --help
-#
-# 環境變數（可選）：
-#   DEFAULT_IPS="192.168.1.112 192.168.1.167"  # 常用裝置固定 IP（按 c 時可直接選或一鍵全掃）
-#   SCAN_RANGES="5555 30000-49999"             # 裝置重連時掃描的 port 範圍
-#   SCAN_TIMEOUT=0.15                          # 單一 port 連線逾時秒數
-#   SCAN_WORKERS=200                           # Python 併發掃描執行緒數
-#   SKIP_PORT_SCAN=0                           # 設為 1 可跳過掃描（僅嘗試原 port）
-#   OUT_DIR="reports"                          # 報告輸出資料夾
+# v1.9.5：
+#   - 預設 IP 更新為 192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167，提示改為「預設 IP」不限紅米
+#   - scan_open_ports 改為併發命中即停（找到可用 port 立即取消其餘任務），加快連線速度
+#   - connect_by_ip 支援先試指定 ip:port，失敗後再掃描，避免白等
+#   - interactive_adb_loop 一般 ADB 指令改用陣列傳遞參數，降低 eval 風險
+#   - get_model 增加短暫重試與型號 fallback，避免剛連上抓空值而整台跳過
+#   - 關鍵字比對改為收集所有符合裝置；batch_jobhist 拆開執行與存檔判斷；暫存檔改用安全字元命名
 # ==============================================================================
 
 set -u
 
-SCRIPT_VERSION="v1.9.3"
-SCRIPT_DATE="2026-11-26"
+SCRIPT_VERSION="v1.9.5"
+SCRIPT_DATE="2026-11-27"
 OUT_DIR="${OUT_DIR:-reports}"
 DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
 SCAN_RANGES="${SCAN_RANGES:-5555 30000-49999}"
-SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.15}"
+SCAN_TIMEOUT="${SCAN_TIMEOUT:-0.12}"
 SCAN_WORKERS="${SCAN_WORKERS:-200}"
 SKIP_PORT_SCAN="${SKIP_PORT_SCAN:-0}"
 TMP_BSTATS=""
 CREATED_FILES=()
 
-# 統一偵測 Python 執行檔（優先使用 python3，避免新版 Ubuntu 無 python 軟連結）
 if command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN="python3"
 elif command -v python >/dev/null 2>&1; then
@@ -67,14 +54,14 @@ ADB Doze 測試與裝置管理工具 (${SCRIPT_VERSION} | 更新日期: ${SCRIPT
   -q, --quick-report  批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）
   -j, --jobhist       批次執行 jobhist.py 長任務/逾時檢查（--min 10 --top 10）
   all, a              批次抓取所有正常連線裝置的 batterystats
-  <關鍵字>            批次抓取符合 IP 或 Port 關鍵字的單一裝置
+  <關鍵字>            批次抓取符合 IP 或 Port 關鍵字的裝置
 
 範例：
   $0                  互動選擇抓取 batterystats（若 offline 會快速掃 port 重連）
   $0 all              一次抓取所有連線裝置的 batterystats（raw + extract + report + js/jobhist/power）
   $0 -q               批次輸出所有連線裝置的 battery.py 精簡報告
   $0 -j               批次輸出所有連線裝置的 jobhist.py 分析
-  $0 -i               進入互動式裝置選擇與 ADB 指令模式（秒開，支援預設 IP 與指定 IP 掃描連線）
+  $0 -i               進入互動式裝置選擇與 ADB 指令模式（支援預設 IP 與指定 IP/Port 掃描連線）
 EOF
 }
 
@@ -86,9 +73,32 @@ require_python() {
   return 0
 }
 
+sanitize_id() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_-' '_'
+}
+
 get_model() {
   local serial="$1"
-  adb -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\r' | xargs
+  local attempt m
+  for attempt in 1 2 3; do
+    m=$(adb -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\r' | xargs)
+    if [ -n "$m" ]; then
+      printf '%s\n' "$m"
+      return 0
+    fi
+    sleep 0.25
+  done
+  m=$(adb -s "$serial" shell getprop ro.product.device 2>/dev/null | tr -d '\r' | xargs)
+  printf '%s\n' "$m"
+}
+
+anon_id() {
+  local serial="$1"
+  if [ "${KEEP_SERIAL_IN_NAME:-0}" = "1" ]; then
+    sanitize_id "$serial"
+    return
+  fi
+  printf 'dev%s' "$(printf '%s' "$serial" | cksum | cut -d' ' -f1 | cut -c1-6)"
 }
 
 check_tcp_port() {
@@ -118,14 +128,26 @@ expand_ports() {
   done
 }
 
-# 快速併發掃描指定 IP 的開放 TCP port（優先使用 Python socket，無 Python 則退回 bash）
-scan_open_ports() {
+# 併發掃描指定 IP 的開放 port，找到第一個可 adb connect 的 port 即停止其餘任務
+scan_and_connect_ports() {
   local ip="$1"
-  if [ -n "$PYTHON_BIN" ]; then
-    "$PYTHON_BIN" - "$ip" "$SCAN_RANGES" "$SCAN_TIMEOUT" "$SCAN_WORKERS" <<'PY'
+  if [ -z "$PYTHON_BIN" ]; then
+    local p
+    while read -r p; do
+      [ -z "$p" ] && continue
+      if check_tcp_port "$ip" "$p" && adb connect "${ip}:${p}" 2>/dev/null | grep -q "connected"; then
+        echo "$p"
+        return 0
+      fi
+    done < <(expand_ports)
+    return 1
+  fi
+
+  "$PYTHON_BIN" - "$ip" "$SCAN_RANGES" "$SCAN_TIMEOUT" "$SCAN_WORKERS" <<'PY'
 import socket
+import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ip = sys.argv[1]
 ranges = sys.argv[2].split()
@@ -143,34 +165,36 @@ for tok in ranges:
     elif tok.isdigit():
         ports.append(int(tok))
 
-def probe(p: int):
+def try_port(p: int):
     try:
         with socket.create_connection((ip, p), timeout=timeout):
-            return p
+            res = subprocess.run(
+                ["adb", "connect", f"{ip}:{p}"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+            if "connected" in (res.stdout or ""):
+                return p
     except OSError:
-        return None
+        pass
+    return None
 
-with ThreadPoolExecutor(max_workers=workers) as ex:
-    for res in ex.map(probe, ports, chunksize=64):
-        if res is not None:
-            print(res)
+executor = ThreadPoolExecutor(max_workers=workers)
+try:
+    futures = [executor.submit(try_port, p) for p in ports]
+    for fut in as_completed(futures):
+        found = fut.result()
+        if found is not None:
+            print(found)
+            sys.exit(0)
+finally:
+    executor.shutdown(wait=False, cancel_futures=True)
+
+sys.exit(1)
 PY
-    return 0
-  fi
-
-  local count=0 p
-  while read -r p; do
-    count=$((count + 1))
-    if (( count % 2000 == 0 )); then
-      echo "   ...已掃描 ${count} 個 port (目前: ${p})" >&2
-    fi
-    if check_tcp_port "$ip" "$p"; then
-      echo "$p"
-    fi
-  done < <(expand_ports)
 }
 
-# 針對指定 IP（或 IP:Port）進行掃描並嘗試 ADB 連線
 connect_by_ip() {
   local target_input="$1"
   local force_scan="${2:-0}"
@@ -191,6 +215,7 @@ connect_by_ip() {
         return 0
       fi
     fi
+    echo "⚠️  指定埠 ${ip}:${hint_port} 無法連線，改嘗試掃描 ${ip}..."
   fi
 
   if [ "$SKIP_PORT_SCAN" = "1" ] && [ "$force_scan" != "1" ]; then
@@ -198,15 +223,9 @@ connect_by_ip() {
     return 1
   fi
 
-  local found_port="" p
+  local found_port=""
   echo "🔍 正在快速掃描 ${ip} 的 ADB port (${SCAN_RANGES})..."
-  while read -r p; do
-    [ -z "$p" ] && continue
-    if adb connect "${ip}:${p}" 2>/dev/null | grep -q "connected"; then
-      found_port="$p"
-      break
-    fi
-  done < <(scan_open_ports "$ip")
+  found_port=$(scan_and_connect_ports "$ip" 2>/dev/null | head -n 1 | xargs)
 
   if [ -n "$found_port" ]; then
     echo "✅ 掃描成功！已連線至 ${ip}:${found_port}"
@@ -217,14 +236,13 @@ connect_by_ip() {
   fi
 }
 
-# 互動式選擇預設 IP 或手動輸入 IP 並掃描連線
 prompt_manual_ip_connect() {
   local def_arr=()
   read -ra def_arr <<< "$DEFAULT_IPS"
 
   echo "------------------------------------------"
   if [ ${#def_arr[@]} -gt 0 ]; then
-    echo "預設 IP 清單："
+    echo "預設裝置 IP 清單："
     local idx
     for idx in "${!def_arr[@]}"; do
       echo "  $((idx+1))) ${def_arr[$idx]}"
@@ -269,13 +287,12 @@ recover_offline_devices() {
   mapfile -t offline_list < <(adb devices | awk '$2 == "offline" {print $1}')
 
   if [ ${#offline_list[@]} -eq 0 ]; then
-    echo "ℹ️  目前清單中沒有 offline 裝置（若手機剛重開無線偵錯，請按 c 掃描預設 IP）。"
+    echo "ℹ️  目前清單中沒有 offline 裝置（若裝置剛重開無線偵錯，請按 c 掃描預設 IP）。"
     return 0
   fi
 
   echo "⚠️  偵測到 ${#offline_list[@]} 台裝置處於 offline 狀態，開始嘗試重連..."
   local dev
-
   for dev in "${offline_list[@]}"; do
     echo "------------------------------------------"
     echo "處理 offline 裝置：$dev"
@@ -291,7 +308,7 @@ refresh_online_devices() {
 
 print_device_table() {
   local i model
-  printf "  %-4s %-22s %-24s\n" "編號" "ADB 位址/序號" "手機型號"
+  printf "  %-4s %-22s %-24s\n" "編號" "ADB 位址/序號" "裝置型號"
   echo "  --------------------------------------------------------"
   for i in "${!DEVICES[@]}"; do
     model=$(get_model "${DEVICES[$i]}")
@@ -328,8 +345,8 @@ batch_quick_report() {
       echo "❌ 錯誤：裝置 ($dev) 回應逾時或已斷線，跳過。"
       continue
     fi
-    safe_model=$(echo "$model" | tr ' /' '_')
-    safe_id=$(echo "$dev" | tr '.:' '_')
+    safe_model=$(sanitize_id "$model")
+    safe_id=$(anon_id "$dev")
     out_file="${OUT_DIR}/${safe_model}_${safe_id}_${ts}_quick.txt"
 
     echo "=========================================="
@@ -352,28 +369,29 @@ batch_jobhist() {
   for dev in "${DEVICES[@]}"; do
     model=$(get_model "$dev")
     model="${model:-未知型號}"
-    safe_model=$(echo "$model" | tr ' /' '_')
-    safe_id=$(echo "$dev" | tr '.:' '_')
+    safe_model=$(sanitize_id "$model")
+    safe_id=$(anon_id "$dev")
     out_file="${OUT_DIR}/${safe_model}_${safe_id}_${ts}_jobhist.txt"
 
     echo "=========================================="
     echo "📱 裝置：[$model] ($dev)"
-    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" jobhist.py --min 10 --top 10 | tee "$out_file"; then
-      if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-        echo "✅ 已存檔：$out_file"
-      else
-        echo "❌ 執行失敗：$out_file"
-        rm -f "$out_file"
-      fi
+    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" jobhist.py --min 10 --top 10 > "$out_file"; then
+      cat "$out_file"
+      echo "✅ 已存檔：$out_file"
+    else
+      echo "❌ 執行失敗：$out_file"
+      rm -f "$out_file"
     fi
   done
 }
 
-# 擷取 batterystats 到本機暫存檔，供快速分析使用
 fetch_batterystats_cache() {
   local target_dev="$1"
   local safe_id
-  safe_id=$(echo "$target_dev" | tr '.:' '_')
+  safe_id=$(sanitize_id "$target_dev")
+  if [ -n "${TMP_BSTATS:-}" ] && [ -f "$TMP_BSTATS" ]; then
+    rm -f "$TMP_BSTATS"
+  fi
   TMP_BSTATS="/tmp/bstats_${safe_id}_$$.txt"
 
   echo "正在擷取 batterystats 資料..."
@@ -387,7 +405,6 @@ fetch_batterystats_cache() {
   return 0
 }
 
-# 解析 WakeLock 總覽與排行（委派 battery.py，避免重複實作時間解析）
 show_wakelock_ranking() {
   local file="$1"
   require_python || return 1
@@ -412,7 +429,6 @@ show_wakelock_ranking() {
   return 0
 }
 
-# 解析 Wakeup Alarm 喚醒次數排行（依 Apk package 彙總，無 Apk 則退回 UID）
 show_alarm_ranking() {
   local file="$1"
   echo "--- 2. Wakeup Alarm 喚醒次數排行 (Top 20) ---"
@@ -516,7 +532,7 @@ run_quick_command() {
   case "$choice" in
     1)
       echo "▶ 執行：Statistics since last charge 摘要"
-      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^$/ || /^[^[:space:]]/) exit; print }'" 2>/dev/null
+      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^[^[:space:]]/) exit; print }'" 2>/dev/null
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
     2)
@@ -619,7 +635,6 @@ run_quick_command() {
 }
 
 interactive_adb_loop() {
-  # 互動模式首次進入直接列出線上裝置，不主動進行耗時的 port 掃描
   refresh_online_devices
 
   while true; do
@@ -629,7 +644,7 @@ interactive_adb_loop() {
       if [ ${#OFFLINE_DEVICES[@]} -gt 0 ]; then
         echo "⚠️  偵測到 offline 裝置：${OFFLINE_DEVICES[*]}"
       fi
-      echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+      echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP/IP:Port 連線"
       echo "  r) 重新掃描並嘗試重連 offline 裝置"
       echo "  q) 離開程式"
       read -rp "請輸入選項 (c/r/q 或直接按 Enter 重新整理): " retry_ans
@@ -647,7 +662,7 @@ interactive_adb_loop() {
     echo "=========================================="
     echo "請選擇要下達 ADB 指令的裝置（${SCRIPT_VERSION}）："
     print_device_table
-    echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP 連線"
+    echo "  c) 掃描預設 IP (${DEFAULT_IPS}) 或手動輸入 IP/IP:Port 連線"
     echo "  r) 重新掃描並嘗試重連 offline 裝置"
     echo "  q) 離開程式"
     echo "------------------------------------------"
@@ -655,7 +670,6 @@ interactive_adb_loop() {
     local dev_choice=""
     while true; do
       read -rp "請輸入選項: " dev_choice
-      # 忽略誤按的空白 Enter
       if [[ -z "$dev_choice" ]]; then
         continue
       fi
@@ -711,7 +725,9 @@ interactive_adb_loop() {
       fi
 
       cmd_input="${cmd_input#adb }"
-      eval "adb -s \"$target_dev\" $cmd_input"
+      local adb_args=()
+      read -ra adb_args <<< "$cmd_input"
+      adb -s "$target_dev" "${adb_args[@]}"
       echo "(exit code: $?)"
     done
   done
@@ -720,7 +736,7 @@ interactive_adb_loop() {
 dump_device() {
   local SERIAL="$1"
   local TS="$2"
-  local MODEL SAFE_MODEL SAFE_ID PREFIX
+  local MODEL SAFE_MODEL SAFE_ID PREFIX T0 p
 
   MODEL=$(get_model "$SERIAL")
   if [ -z "$MODEL" ]; then
@@ -729,12 +745,13 @@ dump_device() {
     return 1
   fi
 
-  SAFE_MODEL=$(echo "$MODEL" | tr ' /' '_')
-  SAFE_ID=$(echo "$SERIAL" | tr '.:' '_')
+  SAFE_MODEL=$(sanitize_id "$MODEL")
+  SAFE_ID=$(anon_id "$SERIAL")
   PREFIX="${OUT_DIR}/${SAFE_MODEL}_${SAFE_ID}_${TS}"
 
   echo "=========================================="
   echo "目標裝置：[${MODEL}] (${SERIAL})"
+  T0=$(date '+%Y-%m-%d %H:%M:%S')
   echo "正在擷取 batterystats..."
   adb -s "$SERIAL" shell dumpsys batterystats > "${PREFIX}_raw.txt" 2>/dev/null
 
@@ -744,6 +761,18 @@ dump_device() {
     return 1
   fi
   CREATED_FILES+=("${PREFIX}_raw.txt")
+
+  : > "${PREFIX}_props.txt"
+  for p in ro.product.brand ro.product.model ro.product.device ro.build.version.release ro.build.version.sdk ro.build.display.id; do
+    echo "${p}=$(adb -s "$SERIAL" shell getprop "$p" 2>/dev/null | tr -d '\r')" >> "${PREFIX}_props.txt"
+  done
+  CREATED_FILES+=("${PREFIX}_props.txt")
+  if adb -s "$SERIAL" shell dumpsys battery 2>/dev/null | tr -d '\r' > "${PREFIX}_battery.txt" && [ -s "${PREFIX}_battery.txt" ]; then
+    CREATED_FILES+=("${PREFIX}_battery.txt")
+  else
+    rm -f "${PREFIX}_battery.txt"
+  fi
+  { echo "serial=$SERIAL"; echo "model=$MODEL"; echo "batterystats_start=$T0"; echo "batterystats_end=$(date '+%Y-%m-%d %H:%M:%S')"; } > "${PREFIX}_meta.txt"
 
   echo "正在同步擷取 jobscheduler 與 power 狀態..."
   if adb -s "$SERIAL" shell dumpsys jobscheduler > "${PREFIX}_js.txt" 2>/dev/null && [ -s "${PREFIX}_js.txt" ]; then
@@ -775,7 +804,7 @@ dump_device() {
   fi
 
   if [ -n "$PYTHON_BIN" ] && [ -f "battery.py" ]; then
-    if "$PYTHON_BIN" battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl > "${PREFIX}_report.txt" && [ -s "${PREFIX}_report.txt" ]; then
+    if "$PYTHON_BIN" battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl --strict-mask --props "${PREFIX}_props.txt" > "${PREFIX}_report.txt" && [ -s "${PREFIX}_report.txt" ]; then
       CREATED_FILES+=("${PREFIX}_report.txt")
     else
       rm -f "${PREFIX}_report.txt"
@@ -821,7 +850,6 @@ if [ -n "${1:-}" ]; then
     for dev in "${DEVICES[@]}"; do
       if [[ "$dev" == *"$1"* ]]; then
         TARGETS+=("$dev")
-        break
       fi
     done
     if [ ${#TARGETS[@]} -eq 0 ]; then
