@@ -2,8 +2,25 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.2.1
+版本：v1.2.4
 日期：2026-11-27
+
+v1.2.4（依 SM-M146B 的 dumpsys battery 與 history 實測）：
+- 新增「電池服務狀態」：level / Charge counter、保護相關欄位原樣、BSOH / ASOC / FirstUseDate / cycle_count、charge counter 取樣的量化單位（gcd）
+- charge counter 全為某單位（如 4.5 mAh）的整數倍且約等於 電量% × 10 倍單位時，標註「100% = N mAh 為回報換算值（推論），不是實測容量」
+- 熄屏 %/h 在 charge counter 每 1% 與估計容量不一致時，額外列出以 counter 每 1% 換算的 %/h
+- threshold / recharge_level / prev_ 類設定標註「設定值或歷史值，不代表目前狀態」
+- 新增 --battery-file；線上模式自動讀取 dumpsys battery
+
+v1.2.3：
+v1.2.3：
+- 報告標頭新增「測試情境」（--context 或 props 的 test_context，使用者記錄）、「統計起點」（Battery History 的 RESET:TIME 與起點 L/charge）、「裝置回報」（props 的 sys.* / settings.*，原樣顯示）
+- 不再把「100% 只對應 4500 mAh」歸因為充電上限／電池保護：batterystats 看不到該設定，改為明列「原因未判定」並列出需補的資料
+
+v1.2.2：
+- 級距提醒改用 Battery History 的每 1% mAh（M146B 實為 43.9 mAh，原用估計容量 58.3 mAh 誤判 12.04 級，實際 16.0 級）
+- 模型與 actual 上限差距在誤差內時寫「≈」，不再出現沒有對應說明的「見下」；負差只在確有容量基準不一致時才指向它
+- [全域] 元件榜加總超過 Discharge 110% 時直接列出加總與比值
 
 v1.2.1（依 4 台機型 quick 報告的審查意見與資料對照修正）：
 - 「Discharge ＝ 模型」的註解改依 Battery History 判斷哪個是量測值（Discharge 與 charge counter 下降量一致時，模型已被校正到 Discharge）
@@ -86,7 +103,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.2.1"
+__version__ = "v1.2.4"
 __date__ = "2026-11-27"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -774,7 +791,14 @@ def read_props(path: str) -> dict[str, str | None]:
         model_display = model or brand or props.get("ro.product.device")
     rel, sdk = props.get("ro.build.version.release"), props.get("ro.build.version.sdk")
     android = f"Android {rel} (API {sdk})" if rel and sdk else (f"Android {rel}" if rel else None)
-    return {"model": model_display or None, "android": android, "build": props.get("ro.build.display.id") or None}
+    extras = [(k, v) for k, v in props.items() if (k.startswith("sys.") or k.startswith("settings.")) and v]
+    return {
+        "model": model_display or None,
+        "android": android,
+        "build": props.get("ro.build.display.id") or None,
+        "context": props.get("test_context") or None,
+        "extras": extras,
+    }
 
 
 def parse_discharge_bounds(summary: str) -> tuple[int, int] | None:
@@ -887,6 +911,82 @@ def multiuser_note(names: list[str]) -> str | None:
         f"※ 同一 App 在不同 user（工作設定檔、Secure Folder、雙開等）會分列：{ex}。"
         "它們是同一個 appId 的不同副本，不是不同程式；加總前請先合併。"
     )
+
+def parse_dumpsys_battery(text: str) -> dict:
+    """Samsung 與 AOSP 的 dumpsys battery；每個欄位缺少都安全略過。"""
+    out: dict = {}
+    m = re.search(r"^\s*level:\s*(\d+)", text, re.M)
+    out["level"] = int(m.group(1)) if m else None
+    m = re.search(r"^\s*Charge counter:\s*(\d+)", text, re.M | re.I)
+    out["counter_uah"] = int(m.group(1)) if m else None
+    log_cc = [int(x) for x in re.findall(r"\bcc:(\d+)", text)]
+    log_lv = [int(x) for x in re.findall(r"ACTION_BATTERY_CHANGED:\s*level:(\d+)", text)]
+    out["cc_samples"] = log_cc
+    out["levels"] = log_lv
+    out["protection_log"] = sorted(set(re.findall(r"\bprotection:(-?\d+)", text)))
+    out["cycle_log"] = sorted(set(re.findall(r"\bcycle_count:(-?\d+)", text)))
+    cur = [int(x) for x in re.findall(r"\bcurrent_avg:(-?\d+)", text)]
+    out["current_avg"] = cur
+    for key, pat in (
+        ("protect_mode", r"mProtectBatteryMode:\s*(\S+)"),
+        ("protect_threshold", r"mProtectionThreshold:\s*(\S+)"),
+        ("protect_threshold_max", r"mMaximumProtectionThreshold:\s*(\S+)"),
+        ("full_capacity_enable", r"mFullCapacityEnable:\s*(\S+)"),
+        ("bsoh", r"mSavedBatteryBsoh:\s*(\S+)"),
+        ("asoc", r"mSavedBatteryAsoc:\s*\[?(\S+?)\]?\s*$"),
+        ("first_use", r"battery FirstUseDate:\s*\[?(\S+?)\]?\s*$"),
+        ("usage", r"mSavedBatteryUsage:\s*\[?(\S+?)\]?\s*$"),
+    ):
+        mm = re.search(pat, text, re.M)
+        out[key] = mm.group(1) if mm else None
+    return out
+
+
+def battery_service_lines(info: dict) -> list[str]:
+    from math import gcd
+    lines: list[str] = []
+    lvl, cnt = info.get("level"), info.get("counter_uah")
+    if lvl and cnt:
+        lines.append(f"目前 level {lvl}%｜Charge counter {cnt / 1000:.1f} mAh → 每 1% ≈ {cnt / 1000 / lvl:.1f} mAh（隱含 100% ≈ {cnt / 1000 / lvl * 100:.0f} mAh）")
+    samples = [c for c in info.get("cc_samples", []) if c > 0]
+    if cnt:
+        samples = samples + [cnt]
+    if len(samples) >= 3:
+        g = 0
+        for c in samples:
+            g = gcd(g, c)
+        if g >= 1000 and lvl:
+            k = cnt / g if cnt else None
+            lines.append(f"Charge counter 取樣 {len(samples)} 筆全為 {g / 1000:g} mAh 的整數倍")
+            if k and abs(k / 10.0 - lvl) <= 2:
+                lines.append(
+                    f"※ counter ≈ 電量千分比 × {g / 1000:g} mAh（每 1% = {g / 100:g} mAh，100% = {g * 1000 / 1000:.0f} mAh）：推論這是回報端以固定容量換算的值，"
+                    "不是實測容量；mAh 與 mAh/h 以此為單位，與設定檔容量（Rated/Typical）無法直接互換。"
+                )
+    prot = []
+    if info.get("protect_mode") is not None:
+        prot.append(f"mProtectBatteryMode={info['protect_mode']}")
+    if info.get("full_capacity_enable") is not None:
+        prot.append(f"mFullCapacityEnable={info['full_capacity_enable']}")
+    if info.get("protection_log"):
+        prot.append("BATTERY_CHANGED 的 protection=" + "/".join(info["protection_log"]))
+    if info.get("protect_threshold") is not None:
+        prot.append(f"mProtectionThreshold={info['protect_threshold']}（設定值，非目前狀態）")
+    if prot:
+        lines.append("保護相關（原樣）：" + "｜".join(prot))
+    health = []
+    for key, label in (("bsoh", "BSOH"), ("asoc", "ASOC"), ("first_use", "FirstUseDate"), ("usage", "SavedBatteryUsage")):
+        if info.get(key):
+            health.append(f"{label}={info[key]}")
+    if info.get("cycle_log"):
+        health.append("cycle_count=" + "/".join(info["cycle_log"]) + "（0 可能代表未回報）")
+    if health:
+        lines.append("健康相關（原樣）：" + "｜".join(health))
+    cur = info.get("current_avg") or []
+    low = sorted(abs(c) for c in cur if abs(c) < 100)
+    if low:
+        lines.append(f"current_avg：{len(cur)} 筆，|電流| < 100 mA 共 {len(low)} 筆，中位數 {low[len(low) // 2]} mA（瞬時取樣，不能直接換算成平均 mAh/h）")
+    return lines
 
 def _size_to_bytes(num: str, unit: str) -> float:
     mult = {"B": 1.0, "KB": 1024.0, "MB": 1024.0**2, "GB": 1024.0**3}
@@ -1077,6 +1177,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hide-wm", action="store_true", help="背景喚醒排行隱藏 WindowManager 項目")
     parser.add_argument("--strict-mask", action="store_true", help="信箱完整遮成 [EMAIL]（預設保留首尾字元與網域）")
     parser.add_argument("--props", type=str, default=None, help="離線模式用：getprop 的 key=value 存檔（機型 / Android 版本）")
+    parser.add_argument("--battery-file", type=str, default=None, help="dumpsys battery 輸出檔（離線模式用；線上模式會自動讀取）")
+    parser.add_argument("--context", type=str, default=None, help="測試情境（例如：充電 100%%、未開電池保護、已 batterystats --reset），會原樣印在報告標頭")
     parser.add_argument("--show-source", action="store_true", help="離線模式保留完整來源檔名（預設遮蔽 IP:port）")
     parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__} ({__date__})")
     return parser.parse_args()
@@ -1089,7 +1191,8 @@ def main() -> None:
     top_n = max(1, args.top_n_pos if args.top_n_pos is not None else args.top)
 
     offline = bool(args.file)
-    device_info = (read_props(args.props) if args.props else {}) if offline else get_device_info()
+    props_info = read_props(args.props) if args.props else {}
+    device_info = props_info if offline else get_device_info()
     raw_text = read_stats_from_file(args.file) if offline else get_stats_from_adb()
 
     if STATS_HEADER not in raw_text and "Estimated power use" not in raw_text:
@@ -1166,6 +1269,37 @@ def main() -> None:
     hist = parse_history_charge(raw_text)
     hinfo = history_stats(hist, battery_hours)
 
+    ctx = args.context or props_info.get("context")
+    if ctx:
+        print(f"測試情境（使用者記錄，非裝置回報）：{ctx}")
+    else:
+        print("測試情境：未提供（充電上限／電池保護／是否剛 reset 無法由 batterystats 判斷；可用 --context 或 device_notes.txt 補上）")
+    reset_m = re.search(r"RESET:TIME:\s*(\S+)", raw_text)
+    if reset_m:
+        start_txt = f"｜起點 L{hist[0][0]} / charge {hist[0][1]} mAh" if hist else ""
+        print(f"統計起點：Battery History 以 RESET:TIME {reset_m.group(1)} 起算（batterystats --reset 或充飽拔電後重置）{start_txt}")
+    for k, v in props_info.get("extras", []):
+        note = "（設定值或歷史值，不代表目前狀態）" if re.search(r"threshold|recharge_level|prev_", k) else ""
+        print(f"裝置回報：{k} = {v}{note}")
+
+    bat_text = ""
+    if args.battery_file:
+        try:
+            bat_text = Path(args.battery_file).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            bat_text = ""
+    elif not offline:
+        try:
+            bat_text = subprocess.run(["adb", "shell", "dumpsys", "battery"], capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace", timeout=15).stdout
+        except (OSError, subprocess.SubprocessError):
+            bat_text = ""
+    bat_lines = battery_service_lines(parse_dumpsys_battery(bat_text)) if bat_text else []
+    if bat_lines:
+        print("\n=== 電池服務狀態（dumpsys battery）===")
+        for ln in bat_lines:
+            print(ln)
+
     print("\n=== 整體耗電摘要 ===")
     if discharge is not None:
         print(
@@ -1186,11 +1320,18 @@ def main() -> None:
             act_mid = (act_lo + act_hi) / 2
             if computed > 0 and act_hi > 0 and discharge > 0:
                 diff_hi = computed - act_hi
-                oc = (
-                    f"Over-counted ≈ 模型 − actual 上限（{act_hi:.0f}）= {diff_hi:.0f} mAh"
-                    if diff_hi >= 0
-                    else f"模型低於 actual 上限 {-diff_hi:.0f} mAh（不是 Over-counted；actual 的容量基準若偏高會造成負差，見下）"
+                ref_cap0 = prof[0] if prof else est_cap
+                scale_hint = bool(
+                    hinfo and hinfo["reliable"] and ref_cap0 and abs(hinfo["cap100"] / ref_cap0 - 1) > 0.08
                 )
+                if diff_hi >= 0:
+                    oc = f"Over-counted ≈ 模型 − actual 上限（{act_hi:.0f}）= {diff_hi:.0f} mAh"
+                elif -diff_hi <= max(discharge * 0.01, 10):
+                    oc = f"模型 ≈ actual 上限（差 {diff_hi:.0f} mAh，在級距誤差內）"
+                else:
+                    oc = f"模型低於 actual 上限 {-diff_hi:.0f} mAh（不是 Over-counted" + (
+                        "；actual 以設定檔容量換算，與 charge counter 的每 1% 不一致，見下）" if scale_hint else "）"
+                    )
                 print(
                     f"※ 比值基準：模型 ÷ actual 中點（{act_mid:.0f}）= {computed / act_mid * 100:.0f}%｜"
                     f"模型 ÷ Discharge = {computed / discharge * 100:.0f}%｜{oc}"
@@ -1215,7 +1356,7 @@ def main() -> None:
                     f"※ 顯示 100% 對應的 charge counter 約 {hinfo['cap100']:.0f} mAh（每 1% ≈ {hinfo['per1']:.1f} mAh），"
                     f"是設定檔容量 {ref_cap:.0f} 的 {hinfo['cap100'] / ref_cap * 100:.0f}%：「actual = 電量% × 設定檔容量」會{direction}；"
                     f"以 history 每 1% 重算 actual ≈ {lo_p * hinfo['per1']:.0f}–{hi_p * hinfo['per1']:.0f} mAh。"
-                    "可能對應充電上限、電池保護或容量計校正偏移（本檔無法區分）；此時 %/h 會被低估，請以 mAh/h 為準。"
+                    f"（history 起點 L{hinfo['l0']} = {hinfo['c0']} mAh）原因無法由 batterystats 判定，請對照標頭的「測試情境」與「裝置回報」，兩者都沒有時需補充充電上限／電池保護狀態與 sysfs 容量；此時 %/h 會被低估，請以 mAh/h 為準。"
                 )
                 scale_printed = True
             if computed > 0 and act_mid > 0:
@@ -1251,8 +1392,9 @@ def main() -> None:
                     print(f"※ 功耗模型只解釋 actual drain 中點的約 {ratio * 100:.0f}%，估算的絕對 mAh 偏低，只適合看相對排名。")
                 elif not aligned and ratio > 1.2:
                     print(f"※ 功耗模型約為 actual drain 中點的 {ratio * 100:.0f}%，估算偏高，只適合看相對排名。")
-        if est_cap and discharge > 0:
-            step = est_cap / 100.0
+        step_src = hinfo["per1"] if (hinfo and hinfo["reliable"]) else (est_cap / 100.0 if est_cap else None)
+        if step_src and discharge > 0:
+            step = step_src
             q = discharge / step
             if abs(q - round(q)) < 0.1 and round(q) >= 1:
                 print(
@@ -1322,6 +1464,14 @@ def main() -> None:
             f"熄屏（Screen off）：{screen_off_mah:.0f} mAh / {screen_off_hours:.2f} h"
             f" -> {fmt_rate(screen_off_mah, screen_off_hours, est_cap, max_learned)}"
         )
+    if (
+        hinfo and hinfo["reliable"] and est_cap and abs(hinfo["per1"] * 100 / est_cap - 1) > 0.08
+        and screen_off_mah is not None and screen_off_hours
+    ):
+        print(
+            f"熄屏以 charge counter 每 1%（{hinfo['per1']:.1f} mAh）換算：{screen_off_mah / screen_off_hours / hinfo['per1']:.2f}%/h"
+            "（估計容量與 counter 的每 1% 不一致時，以此為準；上列標準／學習 %/h 以估計／學習容量換算）"
+        )
     if screen_on_hours is not None and screen_on_hours < 0.5:
         print(f"※ 亮屏時間只有 {screen_on_hours * 60:.0f} 分鐘，亮屏耗電率不具代表性。")
     if screen_on_mah is not None and est_cap and screen_on_hours and screen_on_mah < est_cap / 100.0 * 0.5:
@@ -1334,7 +1484,7 @@ def main() -> None:
             f"（佔熄屏 {fmt_pct(screen_off_uptime_hours, screen_off_hours)}；raw 以總電池時長為分母 {fmt_pct(screen_off_uptime_hours, battery_hours)}）"
         )
     if (est_cap or max_learned) and (screen_on_mah is not None or screen_off_mah is not None):
-        print("※ 註：若開啟充電上限（如 80% 保護）或學習容量偏移，實際體感掉電%會高於標準值，跨機型建議優先比對 mAh/h。")
+        print("※ 註：標準 %/h 以估計容量換算；若 charge counter 每 1% 的 mAh 與估計容量不一致（見「容量對照」），%/h 會失真，跨機型請優先比對 mAh/h。")
 
     print("\n=== 待機、Doze 與喚醒細節 ===")
     if light_doze_mah is not None:
@@ -1417,7 +1567,11 @@ def main() -> None:
         uid_pkgs_map,
     )
     if any(item["is_global"] for item in top_comp):
-        print("※ [全域] 各列是各 App 與系統的分攤合計，與上方 UID 排名重疊，且估算加總可能超過實際放電，請只看相對大小。")
+        comp_sum = sum(i["mah"] for i in top_comp if i["is_global"])
+        sum_txt = ""
+        if discharge and comp_sum > discharge * 1.1:
+            sum_txt = f"本榜 [全域] 各列加總 {comp_sum:.0f} mAh = Discharge 的 {comp_sum / discharge * 100:.0f}%，各列互相重疊，單列（例如 idle）的占比不能解讀為純閒置漏電。"
+        print("※ [全域] 各列是各 App 與系統的分攤合計，與上方 UID 排名重疊，且估算加總可能超過實際放電，請只看相對大小。" + sum_txt)
     if any_smeared:
         print(
             "※ 排名混用兩種基準：u0a 項目為分攤後數值（括號內「分攤前」為原始值），"

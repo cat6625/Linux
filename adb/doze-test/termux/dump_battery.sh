@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.7
+# 版本資訊：v1.9.10
 # 更新日期：2026-11-27
 #
+# v1.9.10：完整 report 帶入 _battery.txt（--battery-file）；quick 由 battery.py 線上自動讀 dumpsys battery
+# v1.9.9：報告標頭帶入測試情境與裝置回報（quick 與完整 report 都有）：
+#   - device_notes.txt（可用 DEVICE_NOTES 指定路徑；每行「機型或IP|說明」，# 開頭為註解），例：SM-M146B|充電100% 未開電池保護 已 batterystats --reset
+#   - 讀取 /sys/class/power_supply/battery/ 的 capacity、charge_full、charge_full_design、batt_full_capacity、cycle_count 與 settings 中含 protect／charge_limit 的鍵（原樣輸出，不做解讀；讀不到就略過）
+# v1.9.8：檔名裝置代號只依 IP 計算（M14 這類無線偵錯 port 每次變動的裝置，檔名代號不再每次不同；舊檔名的代號會與先前版本不同）
 # v1.9.7：
 #   - 固定 Port 優先（FIXED_PORT，預設 5555；m12/m14 這類會自動關閉無線偵錯的裝置，插一次 USB 執行 adb -s <序號> tcpip 5555 後拔線）
 #   - 已連線的 IP 直接略過掃描；IP 無回應（裝置關機／離開區網）略過 20,000 port 掃描（FORCE_SCAN=1 可強制）
@@ -47,7 +52,7 @@
 
 set -u
 
-SCRIPT_VERSION="v1.9.7"
+SCRIPT_VERSION="v1.9.10"
 SCRIPT_DATE="2026-11-27"
 OUT_DIR="${OUT_DIR:-reports}"
 DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
@@ -145,7 +150,42 @@ anon_id() {
     sanitize_id "$serial"
     return
   fi
-  printf 'dev%s' "$(printf '%s' "$serial" | cksum | cut -d' ' -f1 | cut -c1-6)"
+  # 只用 IP（去掉 :port）計算，無線偵錯 port 每次變動也能得到同一個代號
+  printf 'dev%s' "$(printf '%s' "${serial%%:*}" | cksum | cut -d' ' -f1 | cut -c1-6)"
+}
+
+# 讀取 device_notes.txt：每行「機型或IP|說明」，回傳第一個符合者
+device_note_for() {
+  local f="${DEVICE_NOTES:-device_notes.txt}" line key note
+  [ -f "$f" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    key="${line%%|*}"
+    note="${line#*|}"
+    key="${key//[[:space:]]/}"
+    if [ -n "$key" ] && { [ "$key" = "$2" ] || [ "$key" = "$3" ]; }; then
+      printf '%s' "$note"
+      return 0
+    fi
+  done < "$f"
+}
+
+# 產生 props 檔：getprop、電池 sysfs、含 protect／charge_limit 的 settings、使用者備註（test_context）
+write_props_file() {
+  local serial="$1" out="$2" model="$3" p f v note
+  : > "$out"
+  for p in ro.product.brand ro.product.model ro.product.device ro.build.version.release ro.build.version.sdk ro.build.display.id; do
+    echo "${p}=$(adb -s "$serial" shell getprop "$p" 2>/dev/null | tr -d '\r')" >> "$out"
+  done
+  for f in capacity charge_full charge_full_design batt_full_capacity cycle_count health status; do
+    v=$(adb -s "$serial" shell "cat /sys/class/power_supply/battery/$f 2>/dev/null" 2>/dev/null | tr -d '\r' | head -n 1)
+    [ -n "$v" ] && echo "sys.${f}=${v}" >> "$out"
+  done
+  adb -s "$serial" shell "settings list global; settings list secure; settings list system" 2>/dev/null \
+    | tr -d '\r' | grep -iE '^[^=]*(protect|charge_limit|full_charge)[^=]*=' | head -n 20 | sed 's/^/settings./' >> "$out"
+  note=$(device_note_for "" "$model" "${serial%%:*}")
+  [ -n "$note" ] && echo "test_context=${note}" >> "$out"
+  return 0
 }
 
 check_tcp_port() {
@@ -457,12 +497,15 @@ batch_quick_report() {
 
     echo "=========================================="
     echo "📱 裝置：[$model] ($dev)"
-    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" battery.py --merge-wl --hide-wm --strict-mask > "$out_file"; then
+    props_tmp=$(mktemp)
+    write_props_file "$dev" "$props_tmp" "$model"
+    if ANDROID_SERIAL="$dev" "$PYTHON_BIN" battery.py --merge-wl --hide-wm --strict-mask --props "$props_tmp" > "$out_file"; then
       echo "✅ 已產生：$out_file"
     else
       echo "❌ 產生失敗：$out_file"
       rm -f "$out_file"
     fi
+    rm -f "$props_tmp"
   done
 }
 
@@ -876,10 +919,7 @@ dump_device() {
   fi
   CREATED_FILES+=("${PREFIX}_raw.txt")
 
-  : > "${PREFIX}_props.txt"
-  for p in ro.product.brand ro.product.model ro.product.device ro.build.version.release ro.build.version.sdk ro.build.display.id; do
-    echo "${p}=$(adb -s "$SERIAL" shell getprop "$p" 2>/dev/null | tr -d '\r')" >> "${PREFIX}_props.txt"
-  done
+  write_props_file "$SERIAL" "${PREFIX}_props.txt" "$MODEL"
   CREATED_FILES+=("${PREFIX}_props.txt")
   if adb -s "$SERIAL" shell dumpsys battery 2>/dev/null | tr -d '\r' > "${PREFIX}_battery.txt" && [ -s "${PREFIX}_battery.txt" ]; then
     CREATED_FILES+=("${PREFIX}_battery.txt")
@@ -918,7 +958,7 @@ dump_device() {
   fi
 
   if [ -n "$PYTHON_BIN" ] && [ -f "battery.py" ]; then
-    if "$PYTHON_BIN" battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl --strict-mask --props "${PREFIX}_props.txt" > "${PREFIX}_report.txt" && [ -s "${PREFIX}_report.txt" ]; then
+    if "$PYTHON_BIN" battery.py -f "${PREFIX}_raw.txt" -n 20 -m --merge-wl --strict-mask --props "${PREFIX}_props.txt" $( [ -s "${PREFIX}_battery.txt" ] && printf -- "--battery-file %s" "${PREFIX}_battery.txt" ) > "${PREFIX}_report.txt" && [ -s "${PREFIX}_report.txt" ]; then
       CREATED_FILES+=("${PREFIX}_report.txt")
     else
       rm -f "${PREFIX}_report.txt"
