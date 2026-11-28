@@ -661,9 +661,6 @@ show_quick_menu() {
   echo "    2) 查看電池即時狀態 (dumpsys battery)"
   echo "    3) 查看 Doze 狀態與歷史 (dumpsys deviceidle)"
   echo "    4) 查看 Total PSS 記憶體排行前 25 名 (meminfo)"
-  echo "    5) 查看 WakeLock 總覽與排行 (Top 20)"
-  echo "    6) 查看 Wakeup Alarm 喚醒次數排行 (Top 20)"
-  echo "    7) 分析 JobScheduler 長任務/逾時 (jobhist.py --min 10 --top 10)"
   echo "   [螢幕與狀態變更 - 需防呆]"
   echo "    8) 關閉/喚醒螢幕 (input keyevent 26)"
   echo "    9) 模擬拔線 (dumpsys battery unplug)"
@@ -681,7 +678,7 @@ run_quick_command() {
   case "$choice" in
     1)
       echo "▶ 執行：Statistics since last charge 摘要"
-      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f{ if (/^[^[:space:]]/) exit; print }'" 2>/dev/null
+      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f && /CONNECTIVITY POWER SUMMARY START/{exit} f{print}'" 2>/dev/null
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
     2)
@@ -699,27 +696,7 @@ run_quick_command() {
       adb -s "$target_dev" shell dumpsys meminfo | tr -d '\r' | sed -n '/Total PSS by process:/,$p' | grep -E "^ +[0-9,]+K: .*\(pid [0-9]+\)" | head -n 25
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
-    5)
-      echo "▶ 執行：WakeLock 排行"
-      if fetch_batterystats_cache "$target_dev"; then
-        show_wakelock_ranking "$TMP_BSTATS"
-        echo "(exit code: $?)"
-      else
-        echo "(exit code: 1)"
-      fi
-      ;;
-    6)
-      echo "▶ 執行：Alarm 排行"
-      if fetch_batterystats_cache "$target_dev"; then
-        show_alarm_ranking "$TMP_BSTATS"
-        echo "(exit code: $?)"
-      else
-        echo "(exit code: 1)"
-      fi
-      ;;
-    7)
-      run_jobhist_check "$target_dev"
-      ;;
+
     8)
       if confirm_action "⚠️  即將對 [$target_dev] 送出電源鍵事件（關閉或喚醒螢幕）。"; then
         echo "▶ 執行：input keyevent 26"
