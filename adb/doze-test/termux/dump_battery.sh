@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 腳本名稱：dump_battery.sh
-# 版本資訊：v1.9.10
+# 版本資訊：v1.9.11
 # 更新日期：2026-11-27
 #
+# v1.9.11：
+#   - 新增 full-wake-history 開關：互動選單 6)/7)，或 --wake-history-on / --wake-history-off 對所有連線裝置批次執行
+#     （adb shell dumpsys batterystats --enable|--disable full-wake-history）
+#   - 選單 1) 摘要的 awk 加保護：遇到 CONNECTIVITY POWER SUMMARY START、下一個頂層標題，或超過 150 行就停止，避免其他機型沒有該標記時印出整份 dump
+#   - 移除已不使用的 fetch_batterystats_cache／show_wakelock_ranking／show_alarm_ranking／run_jobhist_check
 # v1.9.10：完整 report 帶入 _battery.txt（--battery-file）；quick 由 battery.py 線上自動讀 dumpsys battery
 # v1.9.9：報告標頭帶入測試情境與裝置回報（quick 與完整 report 都有）：
 #   - device_notes.txt（可用 DEVICE_NOTES 指定路徑；每行「機型或IP|說明」，# 開頭為註解），例：SM-M146B|充電100% 未開電池保護 已 batterystats --reset
@@ -52,7 +57,7 @@
 
 set -u
 
-SCRIPT_VERSION="v1.9.10"
+SCRIPT_VERSION="v1.9.11"
 SCRIPT_DATE="2026-11-27"
 OUT_DIR="${OUT_DIR:-reports}"
 DEFAULT_IPS="${DEFAULT_IPS:-192.168.1.112 192.168.1.113 192.168.1.142 192.168.1.167}"
@@ -93,6 +98,8 @@ ADB Doze 測試與裝置管理工具 (${SCRIPT_VERSION} | 更新日期: ${SCRIPT
   -i, --interactive   列出裝置型號並選擇單一裝置，下達 ADB 指令或使用快捷指令選單
   -q, --quick-report  批次產生 battery.py 精簡報告（--merge-wl --hide-wm --strict-mask）
   -j, --jobhist       批次執行 jobhist.py 長任務/逾時檢查（--min 10 --top 10）
+  --wake-history-on   對所有連線裝置開啟 full-wake-history（記錄每次 wakelock，history 會更快寫滿）
+  --wake-history-off  對所有連線裝置關閉 full-wake-history
   all, a              批次抓取所有正常連線裝置的 batterystats（預設會先自動掃描預設 IP）
   <關鍵字>            批次抓取符合 IP 或 Port 關鍵字的裝置
 
@@ -509,6 +516,22 @@ batch_quick_report() {
   done
 }
 
+batch_wake_history() {
+  local mode="$1" flag dev model
+  if [ "$mode" = "on" ]; then flag="--enable"; else flag="--disable"; fi
+  prepare_batch_devices || exit 1
+  if [ "$mode" = "on" ]; then
+    echo "⚠️  開啟後 history 會記錄每次 wakelock，緩衝區（預設 4096KB）預期更快寫滿；請縮短擷取間隔。"
+  fi
+  for dev in "${DEVICES[@]}"; do
+    model=$(get_model "$dev")
+    echo "=========================================="
+    echo "📱 裝置：[${model:-未知}] ($dev)"
+    adb -s "$dev" shell dumpsys batterystats "$flag" full-wake-history
+    echo "(exit code: $?)"
+  done
+}
+
 batch_jobhist() {
   require_python || exit 1
   prepare_batch_devices || exit 1
@@ -534,117 +557,6 @@ batch_jobhist() {
   done
 }
 
-fetch_batterystats_cache() {
-  local target_dev="$1"
-  local safe_id
-  safe_id=$(sanitize_id "$target_dev")
-  if [ -n "${TMP_BSTATS:-}" ] && [ -f "$TMP_BSTATS" ]; then
-    rm -f "$TMP_BSTATS"
-  fi
-  TMP_BSTATS="/tmp/bstats_${safe_id}_$$.txt"
-
-  echo "正在擷取 batterystats 資料..."
-  adb -s "$target_dev" shell dumpsys batterystats 2>/dev/null | tr -d '\r' > "$TMP_BSTATS"
-  if [ ! -s "$TMP_BSTATS" ]; then
-    echo "❌ 無法取得 batterystats 輸出。"
-    rm -f "$TMP_BSTATS"
-    TMP_BSTATS=""
-    return 1
-  fi
-  return 0
-}
-
-show_wakelock_ranking() {
-  local file="$1"
-  require_python || return 1
-  if [ ! -f "battery.py" ]; then
-    echo "❌ 錯誤：目前目錄找不到 battery.py。"
-    return 1
-  fi
-
-  echo "--- 1. WakeLock 總覽與排行 (Top 20) ---"
-  local output
-  if ! output=$("$PYTHON_BIN" battery.py -f "$file" -n 20 --merge-wl 2>&1); then
-    echo "❌ battery.py 執行失敗："
-    echo "$output"
-    return 1
-  fi
-
-  echo "$output" | awk '
-    /^=== 電池與統計週期資訊 ===/ { show=1 }
-    /^=== 最耗電 UID \/ 系統項目/ { exit }
-    show { print }
-  '
-  return 0
-}
-
-show_alarm_ranking() {
-  local file="$1"
-  echo "--- 2. Wakeup Alarm 喚醒次數排行 (Top 20) ---"
-  awk '
-  BEGIN { cur_uid = "unknown"; cur_apk = "" }
-  /^[[:space:]]*(UID|Uid)[[:space:]]+/ {
-    line = $0
-    sub(/^[[:space:]]*(UID|Uid)[[:space:]]+/, "", line)
-    sub(/:.*$/, "", line)
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-    if (line != "") {
-      cur_uid = line
-      cur_apk = ""
-    }
-  }
-  /^[[:space:]]*Apk[[:space:]]+/ {
-    line = $0
-    sub(/^[[:space:]]*Apk[[:space:]]+/, "", line)
-    sub(/:[[:space:]]*$/, "", line)
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-    if (line != "") cur_apk = line
-  }
-  /Wakeup alarm/ {
-    src = (cur_apk != "" ? cur_apk : cur_uid)
-    cnt = 0
-    if (match($0, /[0-9]+ times/)) {
-      s = substr($0, RSTART, RLENGTH)
-      split(s, a, " ")
-      cnt = a[1] + 0
-    }
-    if (cnt > 0) {
-      alarm_cnt[src] += cnt
-    }
-  }
-  END {
-    n = 0
-    for (k in alarm_cnt) {
-      n++
-      keys[n] = k
-    }
-    for (i = 1; i <= n; i++) {
-      for (j = i + 1; j <= n; j++) {
-        if (alarm_cnt[keys[j]] > alarm_cnt[keys[i]]) {
-          tmp = keys[i]
-          keys[i] = keys[j]
-          keys[j] = tmp
-        }
-      }
-    }
-    limit = (n < 20 ? n : 20)
-    printf "%-6s %-10s %s\n", "排名", "喚醒次數", "Package / 來源"
-    for (i = 1; i <= limit; i++) {
-      k = keys[i]
-      printf "%-6d %-10d %s\n", i, alarm_cnt[k], k
-    }
-  }
-  ' "$file"
-}
-
-run_jobhist_check() {
-  local target_dev="$1"
-  require_python || return 1
-  echo "▶ 執行：jobhist.py --min 10 --top 10"
-  ANDROID_SERIAL="$target_dev" "$PYTHON_BIN" jobhist.py --min 10 --top 10
-  echo "(exit code: $?)"
-}
-
 confirm_action() {
   local prompt_msg="$1"
   local ans
@@ -662,6 +574,9 @@ show_quick_menu() {
   echo "    3) 查看 Doze 狀態與歷史 (dumpsys deviceidle)"
   echo "    4) 查看 Total PSS 記憶體排行前 25 名 (meminfo)"
   echo "    5) 查看 RAM 摘要 (meminfo)"
+  echo "   [資料收集設定 - 需防呆]"
+  echo "    6) 開啟 full-wake-history (dumpsys batterystats --enable full-wake-history)"
+  echo "    7) 關閉 full-wake-history (dumpsys batterystats --disable full-wake-history)"
   echo "   [螢幕與狀態變更 - 需防呆]"
   echo "    8) 關閉/喚醒螢幕 (input keyevent 26)"
   echo "    9) 模擬拔線 (dumpsys battery unplug)"
@@ -679,7 +594,7 @@ run_quick_command() {
   case "$choice" in
     1)
       echo "▶ 執行：Statistics since last charge 摘要"
-      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f && /CONNECTIVITY POWER SUMMARY START/{exit} f{print}'" 2>/dev/null
+      adb -s "$target_dev" shell "dumpsys batterystats | tr -d '\r' | awk '/^Statistics since last charge:/{f=1; print; next} f && (/CONNECTIVITY POWER SUMMARY START/ || /^[^[:space:]]/ || ++n > 150){exit} f{print}'" 2>/dev/null
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
     2)
@@ -705,6 +620,24 @@ run_quick_command() {
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
 
+    6)
+      if confirm_action "⚠️  即將對 [$target_dev] 開啟 full-wake-history（預期 history 會記錄每次 wakelock，緩衝區更快寫滿；M146B 未開啟時約 50 小時就已用滿 4096KB，開啟後請縮短擷取間隔）。"; then
+        echo "▶ 執行：dumpsys batterystats --enable full-wake-history"
+        adb -s "$target_dev" shell dumpsys batterystats --enable full-wake-history
+        echo "(exit code: $?)"
+      else
+        echo "已取消。"
+      fi
+      ;;
+    7)
+      if confirm_action "⚠️  即將對 [$target_dev] 關閉 full-wake-history。"; then
+        echo "▶ 執行：dumpsys batterystats --disable full-wake-history"
+        adb -s "$target_dev" shell dumpsys batterystats --disable full-wake-history
+        echo "(exit code: $?)"
+      else
+        echo "已取消。"
+      fi
+      ;;
     8)
       if confirm_action "⚠️  即將對 [$target_dev] 送出電源鍵事件（關閉或喚醒螢幕）。"; then
         echo "▶ 執行：input keyevent 26"
@@ -968,6 +901,14 @@ case "${1:-}" in
     ;;
   -j|--jobhist)
     batch_jobhist
+    exit 0
+    ;;
+  --wake-history-on)
+    batch_wake_history on
+    exit 0
+    ;;
+  --wake-history-off)
+    batch_wake_history off
     exit 0
     ;;
 esac

@@ -3,9 +3,15 @@
 """
 history_blocks.py - 把 dumpsys batterystats 的 Battery History 切成固定時間區塊，
 並列出每個區塊的耗電（charge counter）、亮屏、CPU 醒著（+running）與最多的 wake_reason。
-版本：v1.1.1
+版本：v1.1.2
 日期：2026-11-27
 
+v1.1.2：
+- 「持有聯集」欄直接列出：聯集分鐘／CPU 醒著分鐘／未對應分鐘（醒著 − 聯集）；聯集只含 job 與 wake_lock_in 兩種有名稱可配對的標籤，
+  具名 wake_lock 的移除在 history 中是不帶名稱的 -wake_lock，無法配對，所以「未對應」可能包含具名 wake_lock
+- 新增 --jobs N：每區塊列出持有時間前 N 名（預設 1）
+
+v1.1.1：
 v1.1.1（依 M146B 真實 raw 的輸出修正）：
 - 「最久的 job/wake_lock_in」不再把 uid -1 的 "screen" 螢幕鎖算進去（亮屏時它永遠最久，蓋掉真正的 job）
 - 「前景 top」只統計亮屏期間：熄屏時 top 仍是桌面（launcher），不代表有人在使用
@@ -39,7 +45,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-__version__ = "v1.1.1"
+__version__ = "v1.1.2"
 
 LINE_RE = re.compile(
     r"^\s*(0|\+?(?:\d+d)?(?:\d+h)?(?:\d+m)?(?:\d+s)?\d+ms)\s+\(\d+\)\s+(\d{3})\s+(.*)$"
@@ -91,6 +97,7 @@ def main() -> None:
     ap.add_argument("file")
     ap.add_argument("--block", type=float, default=6.0, help="區塊長度（小時，預設 6）")
     ap.add_argument("--start", default=None, help='起點時間 "YYYY-MM-DD HH:MM:SS"（沒有 RESET:TIME 時使用）')
+    ap.add_argument("--jobs", type=int, default=1, help="每區塊列出持有時間前幾名 job / wake_lock_in（預設 1）")
     ap.add_argument("--top", type=int, default=1, help="每區塊列出前幾名 wake_reason（預設 1）")
     ap.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     args = ap.parse_args()
@@ -187,7 +194,7 @@ def main() -> None:
             total += cur_e - cur_s
         return total * 60
 
-    def top_overlap(items: list[tuple[float, float, str]], x: float, y: float, only_screen_on: bool = False) -> str:
+    def top_overlap(items: list[tuple[float, float, str]], x: float, y: float, only_screen_on: bool = False, n: int = 1) -> str:
         acc: Counter = Counter()
         for t0, t1, nm in items:
             a, b = max(t0, x), min(t1, y)
@@ -197,9 +204,11 @@ def main() -> None:
         acc = Counter({k: v for k, v in acc.items() if v > 0})
         if not acc:
             return "—"
-        nm, hrs = acc.most_common(1)[0]
-        short = nm if len(nm) <= 70 else nm[:67] + "..."
-        return f"{short}（{hrs * 60:.0f} 分）"
+        parts = []
+        for nm, hrs in acc.most_common(n):
+            short = nm if len(nm) <= 70 else nm[:67] + "..."
+            parts.append(f"{short}（{hrs * 60:.0f} 分）")
+        return "；".join(parts)
 
     wake_events = [(h, m.group(1)) for h, _l, rest in events for m in re.finditer(r'wake_reason=\d+:"([^"]+)"', rest)]
 
@@ -227,8 +236,13 @@ def main() -> None:
         top = "；".join(f"{n}×{c}（{c / tot_wr * 100:.0f}%）" for n, c in wr.most_common(args.top)) or "—"
         label = (start + timedelta(hours=x)).strftime("%m-%d %H:%M") if start else f"+{x:.1f} h"
         wr_cnt = str(sum(wr.values())) if wake_events else "N/A"
-        job_txt = top_overlap(hold, x, y) if hold else "N/A"
-        uni_txt = f"{union_minutes(hold, x, y):.0f} 分" if hold else "N/A"
+        job_txt = top_overlap(hold, x, y, n=args.jobs) if hold else "N/A"
+        if hold:
+            uni = union_minutes(hold, x, y)
+            awake = run_h * 60
+            uni_txt = f"聯集 {uni:.0f} 分／醒著 {awake:.0f} 分／未對應 {max(0.0, awake - uni):.0f} 分" if has_running else f"聯集 {uni:.0f} 分"
+        else:
+            uni_txt = "N/A"
         fg_txt = top_overlap(fg, x, y, only_screen_on=True) if fg else "N/A"
         print(f"{label}｜{rate}｜{scr_txt}｜{run_txt}｜{wr_cnt}｜{top if wake_events else 'N/A'}｜{job_txt}｜{uni_txt}｜{fg_txt}")
         x = y
