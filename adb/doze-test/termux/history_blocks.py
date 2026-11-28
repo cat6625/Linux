@@ -3,8 +3,19 @@
 """
 history_blocks.py - 把 dumpsys batterystats 的 Battery History 切成固定時間區塊，
 並列出每個區塊的耗電（charge counter）、亮屏、CPU 醒著（+running）與最多的 wake_reason。
-版本：v1.0.0
+版本：v1.1.1
 日期：2026-11-27
+
+v1.1.1（依 M146B 真實 raw 的輸出修正）：
+- 「最久的 job/wake_lock_in」不再把 uid -1 的 "screen" 螢幕鎖算進去（亮屏時它永遠最久，蓋掉真正的 job）
+- 「前景 top」只統計亮屏期間：熄屏時 top 仍是桌面（launcher），不代表有人在使用
+- 新增「持有聯集」：job / wake_lock_in 持有時間的聯集（分），可與「CPU 醒著」比較：聯集遠小於醒著時間，代表醒著不是由這些標籤造成
+
+v1.1.0：
+v1.1.0：
+- 起點自動判斷：RESET:TIME，或（history 被截斷、第一行是 TIME:）以 TIME 行的時間減去該行的偏移；多個 TIME 行互相差超過 60 秒會警告
+- 新增每區塊「最久的 job / wake_lock_in」與「前景 top 應用」（只統計 +/- 都有名稱的標籤；bare 的 -wake_lock 無法配對，不列入）
+- wake_reason 欄位加上最多原因占該區塊全部喚醒的比例
 
 用法：
     python3 history_blocks.py raw.txt                 # 預設每 6 小時一區塊
@@ -28,10 +39,13 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-__version__ = "v1.0.0"
+__version__ = "v1.1.1"
 
 LINE_RE = re.compile(
     r"^\s*(0|\+?(?:\d+d)?(?:\d+h)?(?:\d+m)?(?:\d+s)?\d+ms)\s+\(\d+\)\s+(\d{3})\s+(.*)$"
+)
+ANCHOR_RE = re.compile(
+    r"^\s*(0|\+?(?:\d+d)?(?:\d+h)?(?:\d+m)?(?:\d+s)?\d+ms)\s+\(\d+\)\s+(RESET:TIME|TIME):\s*(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})-(\d{2})"
 )
 TOK_RE = re.compile(r"\+?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(\d+)ms")
 
@@ -51,15 +65,25 @@ def parse(text: str):
     idx = next((i for i, l in enumerate(lines) if re.match(r"^\s*Battery History", l)), None)
     body = lines[idx + 1:] if idx is not None else lines
     reset = None
+    anchors: list[tuple[float, datetime, bool]] = []  # (偏移小時, 該行時間, 是否 RESET:TIME)
     events = []  # (hours, level, rest)
     for l in body:
-        r = re.search(r"RESET:TIME:\s*(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})-(\d{2})", l)
-        if r and reset is None:
-            reset = datetime.strptime(f"{r.group(1)} {r.group(2)}:{r.group(3)}:{r.group(4)}", "%Y-%m-%d %H:%M:%S")
         m = LINE_RE.match(l)
         if m:
             events.append((to_hours(m.group(1)), int(m.group(2)), m.group(3)))
-    return events, reset
+            continue
+        # RESET:TIME / TIME 行沒有電量欄位：「0 (20) RESET:TIME: 2026-11-25-21-19-06-970」
+        a = ANCHOR_RE.match(l)
+        if a:
+            ts = datetime.strptime(f"{a.group(3)} {a.group(4)}:{a.group(5)}:{a.group(6)}", "%Y-%m-%d %H:%M:%S")
+            anchors.append((to_hours(a.group(1)), ts, a.group(2) == "RESET:TIME"))
+    drift = None
+    if anchors:
+        reset_a = next((a for a in anchors if a[2]), anchors[0])
+        reset = reset_a[1] - timedelta(hours=reset_a[0])
+        offs = [(a[1] - timedelta(hours=a[0])) for a in anchors]
+        drift = max(abs((o - reset).total_seconds()) for o in offs)
+    return events, reset, drift, bool(anchors and anchors[0][2])
 
 
 def main() -> None:
@@ -74,7 +98,7 @@ def main() -> None:
     p = Path(args.file)
     if not p.is_file():
         sys.exit(f"找不到檔案：{args.file}")
-    events, reset = parse(p.read_text(encoding="utf-8", errors="replace"))
+    events, reset, drift, from_reset = parse(p.read_text(encoding="utf-8", errors="replace"))
     if len(events) < 2:
         sys.exit("找不到可解析的 Battery History。")
     start = datetime.strptime(args.start, "%Y-%m-%d %H:%M:%S") if args.start else reset
@@ -125,14 +149,69 @@ def main() -> None:
     has_screen = seen_toggle("screen")
     has_running = seen_toggle("running")
 
+    # 帶名稱的標籤：job / wake_lock_in（持有時間）與 top（前景應用）；兩端都要有名稱才配對
+    TAG_RE = re.compile(r'([+-])(job|wake_lock_in|top)=([^:\s]+):"([^"]*)"')
+    open_tags: dict[tuple[str, str, str], float] = {}
+    hold: list[tuple[float, float, str]] = []
+    fg: list[tuple[float, float, str]] = []
+    for h, _l, rest in events:
+        for m in TAG_RE.finditer(rest):
+            sign, kind, uid, name = m.groups()
+            key = (kind, uid, name)
+            if kind == "wake_lock_in" and (uid == "-1" or name == "screen"):
+                continue  # 螢幕鎖：亮屏期間持續持有，不是工作
+            if sign == "+":
+                open_tags.setdefault(key, h)
+            elif key in open_tags:
+                t0 = open_tags.pop(key)
+                (fg if kind == "top" else hold).append((t0, h, f"{uid} {name}"))
+    for (kind, uid, name), t0 in open_tags.items():
+        (fg if kind == "top" else hold).append((t0, end, f"{uid} {name}"))
+
+    screen_iv = [(s0, s1) for s0, s1, sc, _r in segs if sc]
+
+    def screen_overlap(t0: float, t1: float) -> float:
+        return sum(max(0.0, min(t1, b) - max(t0, a)) for a, b in screen_iv)
+
+    def union_minutes(items: list[tuple[float, float, str]], x: float, y: float) -> float:
+        iv = sorted((max(t0, x), min(t1, y)) for t0, t1, _n in items if min(t1, y) > max(t0, x))
+        total, cur_s, cur_e = 0.0, None, None
+        for a, b in iv:
+            if cur_e is None or a > cur_e:
+                if cur_e is not None:
+                    total += cur_e - cur_s
+                cur_s, cur_e = a, b
+            else:
+                cur_e = max(cur_e, b)
+        if cur_e is not None:
+            total += cur_e - cur_s
+        return total * 60
+
+    def top_overlap(items: list[tuple[float, float, str]], x: float, y: float, only_screen_on: bool = False) -> str:
+        acc: Counter = Counter()
+        for t0, t1, nm in items:
+            a, b = max(t0, x), min(t1, y)
+            if b <= a:
+                continue
+            acc[nm] += screen_overlap(a, b) if only_screen_on else (b - a)
+        acc = Counter({k: v for k, v in acc.items() if v > 0})
+        if not acc:
+            return "—"
+        nm, hrs = acc.most_common(1)[0]
+        short = nm if len(nm) <= 70 else nm[:67] + "..."
+        return f"{short}（{hrs * 60:.0f} 分）"
+
     wake_events = [(h, m.group(1)) for h, _l, rest in events for m in re.finditer(r'wake_reason=\d+:"([^"]+)"', rest)]
 
     print(f"=== Battery History 區塊統計（每 {args.block:g} h；{p.name}）===")
     if start:
-        print(f"起點：{start:%Y-%m-%d %H:%M:%S}（{'RESET:TIME' if (reset and not args.start) else '--start'}）｜總長 {end:.2f} h｜charge 取樣 {len(cs)} 筆")
+        src = "--start" if args.start else ("RESET:TIME" if from_reset else "TIME 行（history 已被截斷，起點為保留下來的最舊紀錄）")
+        print(f"起點：{start:%Y-%m-%d %H:%M:%S}（{src}）｜總長 {end:.2f} h｜charge 取樣 {len(cs)} 筆")
+        if drift and drift > 60 and not args.start:
+            print(f"※ 警告：history 內各 TIME 行推得的起點彼此差 {drift:.0f} 秒（可能調過系統時間），區塊時間標籤僅供參考。")
     else:
         print(f"起點：未知（無 RESET:TIME，可用 --start 指定）｜總長 {end:.2f} h｜charge 取樣 {len(cs)} 筆")
-    print("區塊｜耗電 mAh/h｜亮屏占比｜CPU 醒著占比｜wake_reason 次數｜最多的 wake_reason")
+    print("區塊｜耗電 mAh/h｜亮屏占比｜CPU 醒著占比｜wake_reason 次數｜最多的 wake_reason｜最久的 job/wake_lock_in｜持有聯集｜亮屏時的前景 top")
     x = 0.0
     while x < end - 1e-6:
         y = min(x + args.block, end)
@@ -144,10 +223,14 @@ def main() -> None:
         scr_txt = f"{scr_h / span * 100:.0f}%" if has_screen else "N/A"
         run_txt = f"{run_h / span * 100:.0f}%" if has_running else "N/A"
         wr = Counter(n for t, n in wake_events if x <= t < y)
-        top = "；".join(f"{n}×{c}" for n, c in wr.most_common(args.top)) or "—"
+        tot_wr = sum(wr.values())
+        top = "；".join(f"{n}×{c}（{c / tot_wr * 100:.0f}%）" for n, c in wr.most_common(args.top)) or "—"
         label = (start + timedelta(hours=x)).strftime("%m-%d %H:%M") if start else f"+{x:.1f} h"
         wr_cnt = str(sum(wr.values())) if wake_events else "N/A"
-        print(f"{label}｜{rate}｜{scr_txt}｜{run_txt}｜{wr_cnt}｜{top if wake_events else 'N/A'}")
+        job_txt = top_overlap(hold, x, y) if hold else "N/A"
+        uni_txt = f"{union_minutes(hold, x, y):.0f} 分" if hold else "N/A"
+        fg_txt = top_overlap(fg, x, y, only_screen_on=True) if fg else "N/A"
+        print(f"{label}｜{rate}｜{scr_txt}｜{run_txt}｜{wr_cnt}｜{top if wake_events else 'N/A'}｜{job_txt}｜{uni_txt}｜{fg_txt}")
         x = y
     print("※ 耗電以 charge counter 內插，單位為該機回報單位（Samsung M14 為 4.5 mAh 一階，見 battery.py「電池服務狀態」）；"
           "亮屏／CPU 醒著由 +screen/-screen、+running/-running 積分；欄位缺少顯示 N/A。")

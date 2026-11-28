@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 battery.py - Android dumpsys batterystats 耗電與喚醒分析工具
-版本：v1.2.5
+版本：v1.2.6
 日期：2026-11-27
+
+v1.2.6：
+- 新增 Battery History 緩衝區使用率提示（已用 ≥95% 或第一行已不是 RESET:TIME 時，標示最舊紀錄可能已被丟棄，容量與耗電趨勢不能從統計起點起算）
 
 v1.2.5：
 - 喚醒原因占比改用「總 CPU uptime（含亮屏）」為分母並註明：喚醒後接著的亮屏使用也算在該原因的時間內（M146B 的 goodix_fp_irq 即為指紋解鎖後的使用）
@@ -107,7 +110,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "v1.2.5"
+__version__ = "v1.2.6"
 __date__ = "2026-11-27"
 
 STATS_HEADER = "Statistics since last charge:"
@@ -1291,6 +1294,16 @@ def main() -> None:
     if reset_m:
         start_txt = f"｜起點 L{hist[0][0]} / charge {hist[0][1]} mAh" if hist else ""
         print(f"統計起點：Battery History 以 RESET:TIME {reset_m.group(1)} 起算（batterystats --reset 或充飽拔電後重置）{start_txt}")
+    hb = re.search(r"Battery History \((\d+)% used, (\d+)KB used of (\d+)KB", raw_text)
+    if hb:
+        full = int(hb.group(1)) >= 95
+        trunc = (not reset_m) and re.search(r"^\s*0 \(\d+\) TIME:", raw_text, re.M)
+        extra = ""
+        if trunc:
+            extra = " ← 第一行是 TIME 而非 RESET:TIME：最舊的紀錄已被丟棄，history 不再從統計起點起算"
+        elif full:
+            extra = " ← 緩衝區已滿，之後最舊的紀錄會被覆蓋，建議更早擷取或另存"
+        print(f"Battery History 緩衝區：已用 {hb.group(1)}%（{hb.group(2)}KB / {hb.group(3)}KB）{extra}")
     for k, v in props_info.get("extras", []):
         note = "（設定值或歷史值，不代表目前狀態）" if re.search(r"threshold|recharge_level|prev_", k) else ""
         print(f"裝置回報：{k} = {v}{note}")
