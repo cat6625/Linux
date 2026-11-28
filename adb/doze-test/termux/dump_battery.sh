@@ -661,6 +661,7 @@ show_quick_menu() {
   echo "    2) 查看電池即時狀態 (dumpsys battery)"
   echo "    3) 查看 Doze 狀態與歷史 (dumpsys deviceidle)"
   echo "    4) 查看 Total PSS 記憶體排行前 25 名 (meminfo)"
+  echo "    5) 查看 RAM 摘要 (meminfo)"
   echo "   [螢幕與狀態變更 - 需防呆]"
   echo "    8) 關閉/喚醒螢幕 (input keyevent 26)"
   echo "    9) 模擬拔線 (dumpsys battery unplug)"
@@ -694,6 +695,13 @@ run_quick_command() {
     4)
       echo "▶ 執行：dumpsys meminfo Total PSS 前 25 名"
       adb -s "$target_dev" shell dumpsys meminfo | tr -d '\r' | sed -n '/Total PSS by process:/,$p' | grep -E "^ +[0-9,]+K: .*\(pid [0-9]+\)" | head -n 25
+      echo "(exit code: ${PIPESTATUS[0]})"
+      ;;
+    5)
+      echo "▶ 執行：dumpsys meminfo RAM 摘要"
+      adb -s "$target_dev" shell dumpsys meminfo |
+        tr -d '\r' |
+        grep -E '^[[:space:]]*(Total|Free|Used) RAM:'
       echo "(exit code: ${PIPESTATUS[0]})"
       ;;
 
